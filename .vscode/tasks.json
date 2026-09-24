@@ -1,0 +1,12 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Check Docker installation",
+			"type": "shell",
+			"command": "command -v docker; docker --version; ls -d /Applications/Docker.app /Applications/OrbStack.app 2>/dev/null; command -v brew; uname -m; git status --short --branch",
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}
