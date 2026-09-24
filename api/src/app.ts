@@ -23,14 +23,17 @@ export function createApp(pool: Pick<Pool, 'query'>) {
         response.sendStatus(404);
         return;
       }
-      const ticket = await pool.query('SELECT * FROM support_tickets WHERE id = $1', [request.params.id]);
+      const ticket = await pool.query(
+        'SELECT * FROM support_tickets WHERE id = $1',
+        [request.params.id],
+      );
       if (!ticket.rows.length) {
         response.sendStatus(404);
         return;
       }
       const events = await pool.query(
         'SELECT id, description, created_at FROM ticket_events WHERE ticket_id = $1 ORDER BY created_at, id',
-        [request.params.id]
+        [request.params.id],
       );
       response.json({ ...ticket.rows[0], history: events.rows });
     } catch (error) {
