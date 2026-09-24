@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: support_desk
+      POSTGRES_USER: support
+      POSTGRES_PASSWORD: local_only
+    volumes:
+      - support_data:/var/lib/postgresql/data
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U support -d support_desk"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    environment:
+      DATABASE_URL: postgres://support:local_only@db:5432/support_desk
+      PORT: 3001
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    environment:
+      API_URL: http://api:3001
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
+volumes:
+  support_data:

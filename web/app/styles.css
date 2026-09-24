@@ -1,0 +1,55 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root { font-family: 'DM Sans', sans-serif; color: #212a28; background: #f6f8f6; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+a { color: inherit; text-decoration: none; }
+a:focus-visible { outline: 3px solid #207b70; outline-offset: -3px; }
+.topbar { height: 64px; display: flex; align-items: center; gap: 30px; padding: 0 clamp(20px, 3vw, 46px); background: #fff; border-bottom: 1px solid #dde4de; }
+.brand { display: flex; align-items: center; gap: 12px; font-size: 17px; font-weight: 700; white-space: nowrap; }
+.brandmark { width: 30px; height: 30px; display: grid; place-items: center; background: #16675d; color: #fff; border-radius: 5px; }
+.brand-suffix, .topbar-label { color: #62716c; font-weight: 500; }
+.topbar-label { font-size: 13px; }
+.demo-label { margin-left: auto; font: 500 11px 'IBM Plex Mono', monospace; text-transform: uppercase; color: #16675d; }
+.workspace { min-height: calc(100vh - 64px); background: #fff; }
+.inbox-view { max-width: 1200px; margin: 0 auto; padding: 44px clamp(20px, 4vw, 56px) 80px; background: #f6f8f6; }
+.inbox-intro { margin-bottom: 28px; }
+.queue { background: #fff; border: 1px solid #dde4de; border-radius: 5px; min-width: 0; }
+.queue-header { height: 78px; padding: 0 22px; display: flex; align-items: center; justify-content: space-between; font-size: 18px; font-weight: 700; border-bottom: 1px solid #dde4de; }
+.queue-header strong { font: 500 12px 'IBM Plex Mono', monospace; color: #60736a; background: #edf3ed; padding: 5px 8px; border-radius: 4px; }
+.request { display: block; padding: 19px 22px; border-bottom: 1px solid #e5ebe4; min-width: 0; }
+.request:last-child { border-bottom: 0; }
+.request:hover { background: #f0f6f2; }
+.request-top { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.request-top small { flex: none; color: #62716c; font: 11px 'IBM Plex Mono', monospace; }
+.subject { display: block; margin: 8px 0 14px; font-size: 14px; overflow-wrap: anywhere; }
+.request-meta { display: flex; align-items: center; gap: 10px; color: #62716c; font-size: 11px; text-transform: capitalize; }
+.priority, .status { display: inline-block; padding: 6px 9px; border-radius: 4px; background: #eaf2ed; color: #28634d; font: 500 11px 'IBM Plex Mono', monospace; text-transform: capitalize; }
+.priority.high { background: #fbece5; color: #a14b29; }
+.priority.low { background: #edf0f2; color: #4b636d; }
+.detail { max-width: 1100px; min-width: 0; margin: 0 auto; padding: clamp(28px, 5vw, 70px); }
+.eyebrow { font: 500 11px 'IBM Plex Mono', monospace; text-transform: uppercase; color: #62716c; }
+h1 { font-size: clamp(23px, 2.5vw, 32px); line-height: 1.25; margin: 12px 0 0; overflow-wrap: anywhere; }
+h2 { font-size: 13px; margin: 0 0 18px; text-transform: uppercase; color: #52695e; }
+.detail-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; padding-bottom: 36px; border-bottom: 1px solid #dde4de; }
+.badges { flex: none; display: flex; gap: 8px; }
+.question, .history { padding: 32px 0; border-bottom: 1px solid #dde4de; }
+.question p { max-width: 70ch; line-height: 1.7; white-space: pre-wrap; margin: 0; }
+.history ol { margin: 0; padding: 0 0 0 22px; border-left: 1px solid #dce4dd; list-style: none; }
+.history li { position: relative; padding: 0 0 23px; }
+.history li:last-child { padding-bottom: 0; }
+.history li::before { content: ''; position: absolute; left: -27px; top: 3px; width: 9px; height: 9px; background: #207866; border: 2px solid white; border-radius: 50%; }
+.history time { font: 11px 'IBM Plex Mono', monospace; color: #62716c; }
+.history p { margin: 7px 0 0; font-size: 14px; }
+.back { display: inline-block; margin-bottom: 36px; color: #16675d; font-size: 13px; font-weight: 700; }
+@media (max-width: 720px) {
+  .topbar { height: 56px; }
+  .topbar-label { display: none; }
+  .workspace { min-height: calc(100vh - 56px); }
+  .inbox-view { padding: 28px 16px 60px; }
+  .queue-header { height: 56px; }
+  .detail { padding: 28px 20px 50px; }
+  .detail-heading { display: block; }
+  .badges { margin-top: 20px; }
+  .back { margin-bottom: 26px; }
+}
