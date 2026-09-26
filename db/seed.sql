@@ -1,5 +1,6 @@
 CREATE TABLE support_tickets (
   id integer PRIMARY KEY,
+  session_id text,
   customer_name text NOT NULL,
   subject text NOT NULL,
   question text NOT NULL,
@@ -14,6 +15,9 @@ CREATE TABLE ticket_events (
   description text NOT NULL,
   created_at timestamptz NOT NULL
 );
+
+CREATE SEQUENCE support_ticket_ids START WITH 5;
+CREATE SEQUENCE ticket_event_ids START WITH 8;
 
 INSERT INTO support_tickets (id, customer_name, subject, question, status, priority, created_at) VALUES
   (1, 'Maya Chen', 'Team invitations are not arriving', 'I invited three teammates this morning, but none of them received an email. Can you help us get access before our onboarding call?', 'open', 'high', '2026-09-20T10:00:00Z'),

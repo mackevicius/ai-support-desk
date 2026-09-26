@@ -75,3 +75,33 @@ test('a visitor can inspect a request and its history', async () => {
   });
   assert.equal((await fetch(`${baseUrl}/tickets/999`)).status, 404);
 });
+
+test('a submitted request belongs only to its visitor session', async () => {
+  const firstInbox = await fetch(`${baseUrl}/tickets`);
+  const firstCookie = firstInbox.headers.get('set-cookie')?.split(';')[0];
+  assert.ok(firstCookie);
+  const secondInbox = await fetch(`${baseUrl}/tickets`);
+  const secondCookie = secondInbox.headers.get('set-cookie')?.split(';')[0];
+  assert.ok(secondCookie);
+  assert.notEqual(firstCookie, secondCookie);
+
+  const submitted = await fetch(`${baseUrl}/tickets`, {
+    method: 'POST',
+    headers: { cookie: firstCookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ question: 'How do I invite my team?' }),
+  });
+  assert.equal(submitted.status, 201);
+  const ticket = await submitted.json();
+  assert.equal(ticket.question, 'How do I invite my team?');
+  assert.equal(ticket.status, 'open');
+  assert.deepEqual(ticket.history.map((event: { description: string }) => event.description), ['Request received']);
+
+  const ownInbox = await fetch(`${baseUrl}/tickets`, { headers: { cookie: firstCookie } });
+  assert.ok((await ownInbox.json()).some((item: { id: number }) => item.id === ticket.id));
+  const ownDetail = await fetch(`${baseUrl}/tickets/${ticket.id}`, { headers: { cookie: firstCookie } });
+  assert.equal(ownDetail.status, 200);
+  assert.equal((await ownDetail.json()).question, ticket.question);
+  const otherInbox = await fetch(`${baseUrl}/tickets`, { headers: { cookie: secondCookie } });
+  assert.ok(!(await otherInbox.json()).some((item: { id: number }) => item.id === ticket.id));
+  assert.equal((await fetch(`${baseUrl}/tickets/${ticket.id}`, { headers: { cookie: secondCookie } })).status, 404);
+});
