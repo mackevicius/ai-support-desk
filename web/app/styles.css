@@ -110,7 +110,9 @@ a:focus-visible {
   border-radius: 4px;
   color: #fff;
   padding: 11px 16px;
-  font: 700 13px 'DM Sans', sans-serif;
+  font:
+    700 13px 'DM Sans',
+    sans-serif;
   cursor: pointer;
 }
 .request-form textarea:focus-visible,

@@ -95,16 +95,40 @@ test('a submitted request belongs only to its visitor session', async () => {
   const ticket = await submitted.json();
   assert.equal(ticket.question, 'How do I invite my team?');
   assert.equal(ticket.status, 'open');
-  assert.deepEqual(ticket.history.map((event: { description: string }) => event.description), ['Request received']);
+  assert.deepEqual(
+    ticket.history.map((event: { description: string }) => event.description),
+    ['Request received'],
+  );
 
-  const ownInbox = await fetch(`${baseUrl}/tickets`, { headers: { cookie: firstCookie } });
-  assert.ok((await ownInbox.json()).some((item: { id: number }) => item.id === ticket.id));
-  const ownDetail = await fetch(`${baseUrl}/tickets/${ticket.id}`, { headers: { cookie: firstCookie } });
+  const ownInbox = await fetch(`${baseUrl}/tickets`, {
+    headers: { cookie: firstCookie },
+  });
+  assert.ok(
+    (await ownInbox.json()).some(
+      (item: { id: number }) => item.id === ticket.id,
+    ),
+  );
+  const ownDetail = await fetch(`${baseUrl}/tickets/${ticket.id}`, {
+    headers: { cookie: firstCookie },
+  });
   assert.equal(ownDetail.status, 200);
   assert.equal((await ownDetail.json()).question, ticket.question);
-  const otherInbox = await fetch(`${baseUrl}/tickets`, { headers: { cookie: secondCookie } });
-  assert.ok(!(await otherInbox.json()).some((item: { id: number }) => item.id === ticket.id));
-  assert.equal((await fetch(`${baseUrl}/tickets/${ticket.id}`, { headers: { cookie: secondCookie } })).status, 404);
+  const otherInbox = await fetch(`${baseUrl}/tickets`, {
+    headers: { cookie: secondCookie },
+  });
+  assert.ok(
+    !(await otherInbox.json()).some(
+      (item: { id: number }) => item.id === ticket.id,
+    ),
+  );
+  assert.equal(
+    (
+      await fetch(`${baseUrl}/tickets/${ticket.id}`, {
+        headers: { cookie: secondCookie },
+      })
+    ).status,
+    404,
+  );
 });
 
 test('an existing inbox keeps its data when the session schema is installed', async () => {
@@ -132,19 +156,28 @@ test('an existing inbox keeps its data when the session schema is installed', as
   try {
     await new Promise<void>((resolve) => oldServer.once('listening', resolve));
     const address = oldServer.address();
-    if (!address || typeof address === 'string') throw new Error('No server address');
+    if (!address || typeof address === 'string')
+      throw new Error('No server address');
     const url = `http://127.0.0.1:${address.port}`;
     const inbox = await fetch(`${url}/tickets`);
     assert.equal((await inbox.json())[0].subject, 'Existing request');
     const submitted = await fetch(`${url}/tickets`, {
       method: 'POST',
-      headers: { cookie: inbox.headers.get('set-cookie')!.split(';')[0], 'content-type': 'application/json' },
+      headers: {
+        cookie: inbox.headers.get('set-cookie')!.split(';')[0],
+        'content-type': 'application/json',
+      },
       body: JSON.stringify({ question: 'A new question' }),
     });
     assert.equal(submitted.status, 201);
-    assert.equal((await submitted.json()).history[0].description, 'Request received');
+    assert.equal(
+      (await submitted.json()).history[0].description,
+      'Request received',
+    );
   } finally {
-    await new Promise<void>((resolve, reject) => oldServer.close((error) => error ? reject(error) : resolve()));
+    await new Promise<void>((resolve, reject) =>
+      oldServer.close((error) => (error ? reject(error) : resolve())),
+    );
     await oldPool.end();
   }
 });
@@ -153,18 +186,43 @@ test('an expired demo request cannot be retrieved and is removed on the next sub
   const inbox = await fetch(`${baseUrl}/tickets`);
   const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
   const first = await fetch(`${baseUrl}/tickets`, {
-    method: 'POST', headers: { cookie, 'content-type': 'application/json' },
+    method: 'POST',
+    headers: { cookie, 'content-type': 'application/json' },
     body: JSON.stringify({ question: 'Old question' }),
   });
   const { id } = await first.json();
-  await pool.query("UPDATE support_tickets SET created_at = '2020-01-01T00:00:00Z' WHERE id = $1", [id]);
-  assert.equal((await fetch(`${baseUrl}/tickets/${id}`, { headers: { cookie } })).status, 404);
-  const afterExpiry = await fetch(`${baseUrl}/tickets`, { headers: { cookie } });
-  assert.ok(!(await afterExpiry.json()).some((ticket: { id: number }) => ticket.id === id));
+  await pool.query(
+    "UPDATE support_tickets SET created_at = '2020-01-01T00:00:00Z' WHERE id = $1",
+    [id],
+  );
+  assert.equal(
+    (await fetch(`${baseUrl}/tickets/${id}`, { headers: { cookie } })).status,
+    404,
+  );
+  const afterExpiry = await fetch(`${baseUrl}/tickets`, {
+    headers: { cookie },
+  });
+  assert.ok(
+    !(await afterExpiry.json()).some(
+      (ticket: { id: number }) => ticket.id === id,
+    ),
+  );
   await fetch(`${baseUrl}/tickets`, {
-    method: 'POST', headers: { cookie, 'content-type': 'application/json' },
+    method: 'POST',
+    headers: { cookie, 'content-type': 'application/json' },
     body: JSON.stringify({ question: 'New question' }),
   });
-  assert.equal((await pool.query('SELECT id FROM support_tickets WHERE id = $1', [id])).rows.length, 0);
-  assert.equal((await pool.query('SELECT id FROM ticket_events WHERE ticket_id = $1', [id])).rows.length, 0);
+  assert.equal(
+    (await pool.query('SELECT id FROM support_tickets WHERE id = $1', [id]))
+      .rows.length,
+    0,
+  );
+  assert.equal(
+    (
+      await pool.query('SELECT id FROM ticket_events WHERE ticket_id = $1', [
+        id,
+      ])
+    ).rows.length,
+    0,
+  );
 });

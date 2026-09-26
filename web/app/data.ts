@@ -15,29 +15,47 @@ export type Ticket = TicketSummary & {
 export async function getTickets(sessionId?: string): Promise<TicketSummary[]> {
   const response = await fetch(
     `${process.env.API_URL ?? 'http://localhost:3001'}/tickets`,
-    { cache: 'no-store', headers: sessionId ? { cookie: `demo_session=${sessionId}` } : undefined },
+    {
+      cache: 'no-store',
+      headers: sessionId ? { cookie: `demo_session=${sessionId}` } : undefined,
+    },
   );
   if (!response.ok) throw new Error('Could not load the support inbox');
   return response.json();
 }
 
-export async function getTicket(id: string, sessionId?: string): Promise<Ticket | null> {
+export async function getTicket(
+  id: string,
+  sessionId?: string,
+): Promise<Ticket | null> {
   const response = await fetch(
     `${process.env.API_URL ?? 'http://localhost:3001'}/tickets/${encodeURIComponent(id)}`,
-    { cache: 'no-store', headers: sessionId ? { cookie: `demo_session=${sessionId}` } : undefined },
+    {
+      cache: 'no-store',
+      headers: sessionId ? { cookie: `demo_session=${sessionId}` } : undefined,
+    },
   );
   if (response.status === 404) return null;
   if (!response.ok) throw new Error('Could not load the support request');
   return response.json();
 }
 
-export async function submitQuestion(question: string, sessionId: string): Promise<number> {
-  const response = await fetch(`${process.env.API_URL ?? 'http://localhost:3001'}/tickets`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', cookie: `demo_session=${sessionId}` },
-    body: JSON.stringify({ question }),
-    cache: 'no-store',
-  });
+export async function submitQuestion(
+  question: string,
+  sessionId: string,
+): Promise<number> {
+  const response = await fetch(
+    `${process.env.API_URL ?? 'http://localhost:3001'}/tickets`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: `demo_session=${sessionId}`,
+      },
+      body: JSON.stringify({ question }),
+      cache: 'no-store',
+    },
+  );
   if (!response.ok) throw new Error('Could not submit the support request');
   const ticket: { id: number } = await response.json();
   return ticket.id;

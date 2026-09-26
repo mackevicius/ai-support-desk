@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start --hostname 0.0.0.0",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test test/*.test.tsx"
+    "test": "playwright test --config=playwright.config.ts"
   },
   "dependencies": {
     "next": "^15.5.0",
@@ -15,10 +15,10 @@
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
-    "tsx": "^4.20.0",
     "typescript": "^5.9.0"
   }
 }

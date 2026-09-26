@@ -14,4 +14,4 @@ Open http://localhost:3000 to browse or submit requests. The API is available at
 
 ## Checks
 
-With Node.js 24+, run `npm ci`, `npm run typecheck`, and `npm test`. Tests use an in-memory database and saved responses, so they need neither Docker nor credentials. Owner authentication, AI generation, and replies are later work.
+With Node.js 24+, run `npm ci`, `npx playwright install chromium`, `npm run typecheck`, and `npm test`. The browser test starts Next.js and an in-memory API on ports 3100 and 3101; it needs neither Docker nor credentials. Owner authentication, AI generation, and replies are later work.
