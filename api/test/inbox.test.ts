@@ -126,6 +126,8 @@ test('an existing inbox keeps its data when the session schema is installed', as
   const oldPool = new OldPool();
   await prepareDatabase(oldPool);
   await prepareDatabase(oldPool);
+  await oldPool.query('DROP SEQUENCE ticket_event_ids');
+  await prepareDatabase(oldPool);
   const oldServer = createApp(oldPool).listen(0);
   try {
     await new Promise<void>((resolve) => oldServer.once('listening', resolve));
