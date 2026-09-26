@@ -75,6 +75,57 @@ a:focus-visible {
 .inbox-intro {
   margin-bottom: 28px;
 }
+.request-form {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 28px;
+  padding: 22px;
+  background: #fff;
+  border: 1px solid #dde4de;
+  border-radius: 5px;
+}
+.request-form label {
+  font-size: 14px;
+  font-weight: 700;
+}
+.request-form textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid #a9bcb1;
+  border-radius: 4px;
+  font: inherit;
+}
+.form-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  color: #52695e;
+  font-size: 12px;
+}
+.form-footer button {
+  background: #16675d;
+  border: 0;
+  border-radius: 4px;
+  color: #fff;
+  padding: 11px 16px;
+  font:
+    700 13px 'DM Sans',
+    sans-serif;
+  cursor: pointer;
+}
+.request-form textarea:focus-visible,
+.form-footer button:focus-visible {
+  outline: 3px solid #207b70;
+  outline-offset: 2px;
+}
+.draft-notice {
+  padding: 24px 0;
+  border-bottom: 1px solid #dde4de;
+  color: #52695e;
+  font-size: 14px;
+}
 .queue {
   background: #fff;
   border: 1px solid #dde4de;
@@ -250,6 +301,10 @@ h2 {
   font-weight: 700;
 }
 @media (max-width: 720px) {
+  .form-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
   .topbar {
     height: 56px;
   }

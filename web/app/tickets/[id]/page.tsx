@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { getTicket } from '../../data';
 
@@ -9,7 +10,10 @@ export default async function TicketPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const ticket = await getTicket(id);
+  const ticket = await getTicket(
+    id,
+    (await cookies()).get('demo_session')?.value,
+  );
   if (!ticket) notFound();
 
   return (
@@ -36,6 +40,11 @@ export default async function TicketPage({
           <h2 id="question-title">Customer question</h2>
           <p>{ticket.question}</p>
         </section>
+        {ticket.customer_name === 'Visitor' && (
+          <section className="draft-notice" aria-label="Answer draft">
+            No answer draft has been generated for this request.
+          </section>
+        )}
         <section className="history" aria-labelledby="history-title">
           <h2 id="history-title">History</h2>
           <ol>
