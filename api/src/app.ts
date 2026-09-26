@@ -2,7 +2,7 @@ import express from 'express';
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 
-export function createApp(pool: Pick<Pool, 'query'>) {
+export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
   const app = express();
   app.use(express.json());
   app.use((request, response, next) => {
@@ -24,7 +24,7 @@ export function createApp(pool: Pick<Pool, 'query'>) {
       const result = await pool.query(`
         SELECT id, customer_name, subject, status, priority, created_at
         FROM support_tickets
-        WHERE session_id IS NULL OR session_id = $1
+        WHERE session_id IS NULL OR (session_id = $1 AND created_at > NOW() - INTERVAL '1 day')
         ORDER BY created_at DESC, id DESC
       `, [response.locals.session]);
       response.json(result.rows);
@@ -39,23 +39,33 @@ export function createApp(pool: Pick<Pool, 'query'>) {
       response.status(400).json({ error: 'Enter a question of up to 5000 characters.' });
       return;
     }
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');
+      await client.query(`DELETE FROM ticket_events WHERE ticket_id IN (
+        SELECT id FROM support_tickets WHERE session_id IS NOT NULL AND created_at <= NOW() - INTERVAL '1 day'
+      )`);
+      await client.query("DELETE FROM support_tickets WHERE session_id IS NOT NULL AND created_at <= NOW() - INTERVAL '1 day'");
       const createdAt = new Date().toISOString();
-      const ticket = await pool.query(
+      const ticket = await client.query(
         `INSERT INTO support_tickets (id, session_id, customer_name, subject, question, status, priority, created_at)
          VALUES (nextval('support_ticket_ids'), $1, 'Visitor', $2, $3, 'open', 'normal', $4)
          RETURNING id, customer_name, subject, question, status, priority, created_at`,
         [response.locals.session, question.trim().split('\n')[0].slice(0, 120), question.trim(), createdAt],
       );
-      const event = await pool.query(
+      const event = await client.query(
         `INSERT INTO ticket_events (id, ticket_id, description, created_at)
          VALUES (nextval('ticket_event_ids'), $1, 'Request received', $2)
          RETURNING id, description, created_at`,
         [ticket.rows[0].id, createdAt],
       );
+      await client.query('COMMIT');
       response.status(201).json({ ...ticket.rows[0], history: event.rows });
     } catch (error) {
+      await client.query('ROLLBACK');
       next(error);
+    } finally {
+      client.release();
     }
   });
 
@@ -67,7 +77,7 @@ export function createApp(pool: Pick<Pool, 'query'>) {
       }
       const ticket = await pool.query(
         `SELECT id, customer_name, subject, question, status, priority, created_at
-         FROM support_tickets WHERE id = $1 AND (session_id IS NULL OR session_id = $2)`,
+         FROM support_tickets WHERE id = $1 AND (session_id IS NULL OR (session_id = $2 AND created_at > NOW() - INTERVAL '1 day'))`,
         [request.params.id, response.locals.session],
       );
       if (!ticket.rows.length) {

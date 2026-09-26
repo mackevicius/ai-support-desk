@@ -10,7 +10,7 @@ With Docker Compose installed, run from the repository root:
 docker compose up --build
 ```
 
-Open http://localhost:3000 to browse or submit requests. The API is available at http://localhost:3001/tickets. The browser gets a 24-hour demo session cookie. On first start, Postgres loads fictional requests from `db/seed.sql`. A persistent Docker volume keeps later database changes; existing volumes created before the session schema need to be migrated or deliberately cleared with `docker compose down -v` before restarting.
+Open http://localhost:3000 to browse or submit requests. The API is available at http://localhost:3001/tickets. The browser gets a 24-hour demo session cookie; submitted requests stop appearing after 24 hours and expired rows are cleaned up on later submissions. On first start, Postgres loads fictional requests from `db/seed.sql`. The API also applies the additive session schema on startup, so existing Docker volumes keep their data.
 
 ## Checks
 
