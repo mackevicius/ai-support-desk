@@ -354,6 +354,30 @@ h2 {
   background: #edf3ed;
   color: #16675d;
 }
+.reset-button:disabled,
+.form-footer button:disabled,
+.draft button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+button[aria-busy='true']::before {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -2px;
+  animation: submit-spin 0.7s linear infinite;
+}
+@keyframes submit-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  button[aria-busy='true']::before { animation: none; }
+}
 .draft button:focus-visible,
 .review-form textarea:focus-visible,
 .review-form select:focus-visible {

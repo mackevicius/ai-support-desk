@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { reviewRequest } from '../../actions';
 import { getTicket, getTickets } from '../../data';
+import { ReviewButtons, SubmitButton } from '../../_components/submit-button';
 
 export default async function TicketPage({
   params,
@@ -81,7 +82,6 @@ export default async function TicketPage({
               <div className="review-controls">
                 <form action={reviewRequest} className="review-form">
                   <input type="hidden" name="id" value={ticket.id} />
-                  <input type="hidden" name="action" value="approve" />
                   <label htmlFor="reply">Reply</label>
                   <textarea
                     id="reply"
@@ -111,17 +111,8 @@ export default async function TicketPage({
                     <option value="normal">Normal</option>
                     <option value="high">High</option>
                   </select>
-                  <button type="submit">Approve in-app reply</button>
+                  <ReviewButtons showReject={ticket.draft.state === 'saved'} />
                 </form>
-                {ticket.draft.state === 'saved' && (
-                  <form action={reviewRequest}>
-                    <input type="hidden" name="id" value={ticket.id} />
-                    <input type="hidden" name="action" value="reject" />
-                    <button type="submit" className="secondary">
-                      Reject suggestion
-                    </button>
-                  </form>
-                )}
               </div>
             )}
             {ticket.draft.state === 'rejected' && (
@@ -140,9 +131,7 @@ export default async function TicketPage({
               <form action={reviewRequest}>
                 <input type="hidden" name="id" value={ticket.id} />
                 <input type="hidden" name="action" value="reopen" />
-                <button type="submit" className="secondary">
-                  Reopen request
-                </button>
+                <SubmitButton label="Reopen request" pendingLabel="Reopening request..." className="secondary" />
               </form>
             )}
           </section>
@@ -151,9 +140,7 @@ export default async function TicketPage({
           <form action={reviewRequest} className="draft">
             <input type="hidden" name="id" value={ticket.id} />
             <input type="hidden" name="action" value="reopen" />
-            <button type="submit" className="secondary">
-              Reopen request
-            </button>
+            <SubmitButton label="Reopen request" pendingLabel="Reopening request..." className="secondary" />
           </form>
         )}
         {!ticket.draft && ticket.review_state === 'reopened' && (
@@ -179,7 +166,7 @@ export default async function TicketPage({
               <option value="normal">Normal</option>
               <option value="high">High</option>
             </select>
-            <button type="submit">Approve in-app reply</button>
+            <SubmitButton label="Approve in-app reply" pendingLabel="Approving reply..." />
           </form>
         )}
         {!ticket.draft && ticket.approved_reply && (
