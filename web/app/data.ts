@@ -80,7 +80,10 @@ export async function reviewTicket(
     `${process.env.API_URL ?? 'http://localhost:3001'}/tickets/${encodeURIComponent(id)}/review`,
     {
       method: 'POST',
-      headers: { 'content-type': 'application/json', cookie: `demo_session=${sessionId}` },
+      headers: {
+        'content-type': 'application/json',
+        cookie: `demo_session=${sessionId}`,
+      },
       body: JSON.stringify({ action, reply, priority }),
       cache: 'no-store',
     },

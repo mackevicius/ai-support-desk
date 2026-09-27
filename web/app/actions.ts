@@ -23,11 +23,21 @@ export async function reviewRequest(formData: FormData) {
   const id = formData.get('id');
   const action = formData.get('action');
   const sessionId = (await cookies()).get('demo_session')?.value;
-  if (typeof id !== 'string' || !/^\d+$/.test(id) ||
-    typeof action !== 'string' || !['approve', 'reject', 'reopen'].includes(action) || !sessionId) {
+  if (
+    typeof id !== 'string' ||
+    !/^\d+$/.test(id) ||
+    typeof action !== 'string' ||
+    !['approve', 'reject', 'reopen'].includes(action) ||
+    !sessionId
+  ) {
     throw new Error('Invalid review request');
   }
-  await reviewTicket(id, sessionId, action,
-    formData.get('reply')?.toString(), formData.get('priority')?.toString());
+  await reviewTicket(
+    id,
+    sessionId,
+    action,
+    formData.get('reply')?.toString(),
+    formData.get('priority')?.toString(),
+  );
   redirect(`/tickets/${id}`);
 }

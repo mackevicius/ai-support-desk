@@ -16,8 +16,9 @@ export default async function TicketPage({
   if (!ticket) notFound();
   const queue = await getTickets(sessionId);
   const position = queue.findIndex((item) => item.id === ticket.id);
-  const next = [...queue.slice(position + 1), ...queue.slice(0, position)]
-    .find((item) => item.id !== ticket.id && item.status !== 'resolved');
+  const next = [...queue.slice(position + 1), ...queue.slice(0, position)].find(
+    (item) => item.id !== ticket.id && item.status !== 'resolved',
+  );
 
   return (
     <main className="workspace focus-view">
@@ -51,11 +52,22 @@ export default async function TicketPage({
         {ticket.draft && (
           <section className="draft" aria-label="Answer draft">
             <h2>Saved AI draft</h2>
-            <p className="draft-label">Saved result for this sample request. Nothing is sent without approval.</p>
-            <p>Suggested priority: <strong>{ticket.draft.suggested_priority}</strong></p>
-            <p className="source-links">Sources: {ticket.draft.sources.map((source) => (
-              <a key={source.id} href={`#source-${source.id}`}>{source.title}</a>
-            ))}</p>
+            <p className="draft-label">
+              Saved result for this sample request. Nothing is sent without
+              approval.
+            </p>
+            <p>
+              Suggested priority:{' '}
+              <strong>{ticket.draft.suggested_priority}</strong>
+            </p>
+            <p className="source-links">
+              Sources:{' '}
+              {ticket.draft.sources.map((source) => (
+                <a key={source.id} href={`#source-${source.id}`}>
+                  {source.title}
+                </a>
+              ))}
+            </p>
             <div className="sources">
               <h3>Supporting help articles</h3>
               {ticket.draft.sources.map((source) => (
@@ -71,9 +83,30 @@ export default async function TicketPage({
                   <input type="hidden" name="id" value={ticket.id} />
                   <input type="hidden" name="action" value="approve" />
                   <label htmlFor="reply">Reply</label>
-                  <textarea id="reply" name="reply" defaultValue={ticket.draft.state === 'saved' ? ticket.draft.reply : ticket.draft.state === 'reopened' ? ticket.approved_reply ?? '' : ''} required maxLength={5000} rows={5} />
+                  <textarea
+                    id="reply"
+                    name="reply"
+                    defaultValue={
+                      ticket.draft.state === 'saved'
+                        ? ticket.draft.reply
+                        : ticket.draft.state === 'reopened'
+                          ? (ticket.approved_reply ?? '')
+                          : ''
+                    }
+                    required
+                    maxLength={5000}
+                    rows={5}
+                  />
                   <label htmlFor="priority">Priority</label>
-                  <select id="priority" name="priority" defaultValue={ticket.draft.state === 'saved' ? ticket.draft.suggested_priority : ticket.priority}>
+                  <select
+                    id="priority"
+                    name="priority"
+                    defaultValue={
+                      ticket.draft.state === 'saved'
+                        ? ticket.draft.suggested_priority
+                        : ticket.priority
+                    }
+                  >
                     <option value="low">Low</option>
                     <option value="normal">Normal</option>
                     <option value="high">High</option>
@@ -84,12 +117,19 @@ export default async function TicketPage({
                   <form action={reviewRequest}>
                     <input type="hidden" name="id" value={ticket.id} />
                     <input type="hidden" name="action" value="reject" />
-                    <button type="submit" className="secondary">Reject suggestion</button>
+                    <button type="submit" className="secondary">
+                      Reject suggestion
+                    </button>
                   </form>
                 )}
               </div>
             )}
-            {ticket.draft.state === 'rejected' && <p>Suggestion rejected. No reply was delivered. Write your own reply to resolve the request.</p>}
+            {ticket.draft.state === 'rejected' && (
+              <p>
+                Suggestion rejected. No reply was delivered. Write your own
+                reply to resolve the request.
+              </p>
+            )}
             {ticket.approved_reply && (
               <div className="approved-reply">
                 <h3>Approved in-app reply</h3>
@@ -100,7 +140,9 @@ export default async function TicketPage({
               <form action={reviewRequest}>
                 <input type="hidden" name="id" value={ticket.id} />
                 <input type="hidden" name="action" value="reopen" />
-                <button type="submit" className="secondary">Reopen request</button>
+                <button type="submit" className="secondary">
+                  Reopen request
+                </button>
               </form>
             )}
           </section>
@@ -109,7 +151,9 @@ export default async function TicketPage({
           <form action={reviewRequest} className="draft">
             <input type="hidden" name="id" value={ticket.id} />
             <input type="hidden" name="action" value="reopen" />
-            <button type="submit" className="secondary">Reopen request</button>
+            <button type="submit" className="secondary">
+              Reopen request
+            </button>
           </form>
         )}
         {!ticket.draft && ticket.review_state === 'reopened' && (
@@ -118,9 +162,19 @@ export default async function TicketPage({
             <input type="hidden" name="id" value={ticket.id} />
             <input type="hidden" name="action" value="approve" />
             <label htmlFor="reply">Reply</label>
-            <textarea id="reply" name="reply" required maxLength={5000} rows={5} />
+            <textarea
+              id="reply"
+              name="reply"
+              required
+              maxLength={5000}
+              rows={5}
+            />
             <label htmlFor="priority">Priority</label>
-            <select id="priority" name="priority" defaultValue={ticket.priority}>
+            <select
+              id="priority"
+              name="priority"
+              defaultValue={ticket.priority}
+            >
               <option value="low">Low</option>
               <option value="normal">Normal</option>
               <option value="high">High</option>
@@ -129,7 +183,10 @@ export default async function TicketPage({
           </form>
         )}
         {!ticket.draft && ticket.approved_reply && (
-          <section className="approved-reply"><h2>Approved in-app reply</h2><p>{ticket.approved_reply}</p></section>
+          <section className="approved-reply">
+            <h2>Approved in-app reply</h2>
+            <p>{ticket.approved_reply}</p>
+          </section>
         )}
         <section className="history" aria-labelledby="history-title">
           <h2 id="history-title">History</h2>
@@ -149,7 +206,11 @@ export default async function TicketPage({
             ))}
           </ol>
         </section>
-        {next && <Link href={`/tickets/${next.id}`} className="next-request">Next request &rarr;</Link>}
+        {next && (
+          <Link href={`/tickets/${next.id}`} className="next-request">
+            Next request &rarr;
+          </Link>
+        )}
       </article>
     </main>
   );
