@@ -76,6 +76,32 @@ a:focus-visible {
 .owner-form .review-form {
   margin-top: 32px;
 }
+.articles-page {
+  max-width: 800px;
+}
+.article-section {
+  padding: 32px 0;
+  border-bottom: 1px solid #dde4de;
+}
+.article-editor {
+  padding: 24px 0;
+  border-bottom: 1px solid #dde4de;
+}
+.article-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.article-section button {
+  justify-self: start;
+  border: 0;
+  border-radius: 4px;
+  background: #16675d;
+  color: #fff;
+  padding: 11px 16px;
+  font: 700 13px 'DM Sans', sans-serif;
+  cursor: pointer;
+}
 .workspace {
   min-height: calc(100vh - 64px);
   background: #fff;

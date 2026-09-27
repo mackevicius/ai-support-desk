@@ -2,7 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { generateTicket, loginOwner, resetDemo, reviewTicket, submitQuestion } from './data';
+import { generateTicket, loginOwner, resetDemo, reviewTicket, saveHelpArticle, submitQuestion } from './data';
 
 export async function signInOwner(formData: FormData) {
   const password = formData.get('password');
@@ -31,6 +31,25 @@ export async function generateRequest(formData: FormData) {
   const status = await generateTicket(id, sessionId, ownerSession);
   if (status !== 200) redirect(`/tickets/${id}?generation=${status === 429 ? 'limit' : 'unavailable'}`);
   redirect(`/tickets/${id}`);
+}
+
+export async function saveArticle(formData: FormData) {
+  const jar = await cookies();
+  const sessionId = jar.get('demo_session')?.value;
+  const ownerSession = jar.get('owner_session')?.value;
+  const id = formData.get('id');
+  const title = formData.get('title');
+  const body = formData.get('body');
+  if (!sessionId || !ownerSession || typeof title !== 'string' || !title.trim() || title.length > 200 ||
+      typeof body !== 'string' || !body.trim() || body.length > 5000 ||
+      (id !== null && (typeof id !== 'string' || !/^\d+$/.test(id)))) {
+    throw new Error('Invalid help article');
+  }
+  await saveHelpArticle(sessionId, ownerSession, {
+    ...(id === null ? {} : { id: Number(id), retired: formData.get('retired') === 'on' }),
+    title, body,
+  });
+  redirect('/articles');
 }
 
 export async function resetWorkspace() {

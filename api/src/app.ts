@@ -4,6 +4,13 @@ import type { Pool } from 'pg';
 
 const ownerSessionAge = 8 * 60 * 60 * 1000;
 
+function validArticle(input: unknown): input is { title: string; body: string; retired?: boolean } {
+  if (!input || typeof input !== 'object') return false;
+  const { title, body } = input as { title?: unknown; body?: unknown };
+  return typeof title === 'string' && !!title.trim() && title.length <= 200 &&
+    typeof body === 'string' && !!body.trim() && body.length <= 5000;
+}
+
 function matchesSecret(provided: string, expected: string) {
   const actual = createHmac('sha256', 'owner-login').update(provided).digest();
   const target = createHmac('sha256', 'owner-login').update(expected).digest();
@@ -48,13 +55,13 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       [id, session],
     );
     const draft = await pool.query(
-      `SELECT d.reply, d.suggested_priority, a.id, a.title, a.body
+      `SELECT d.reply, d.suggested_priority, a.id, d.article_title AS title, d.article_body AS body
        FROM saved_drafts d JOIN help_articles a ON a.id = d.article_id WHERE d.ticket_id = $1`,
       [id],
     );
     const live = owner
       ? await pool.query(
-          'SELECT reply, suggested_priority, source_ids FROM session_drafts WHERE ticket_id = $1 AND session_id = $2',
+          'SELECT reply, suggested_priority, source_ids, source_articles FROM session_drafts WHERE ticket_id = $1 AND session_id = $2',
           [id, session],
         )
       : { rows: [] };
@@ -62,9 +69,11 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       ? await pool.query('SELECT id, title, body FROM help_articles')
       : null;
     const liveSources = live.rows.length
-      ? (JSON.parse(live.rows[0].source_ids) as number[]).map((sourceId) =>
-          articles!.rows.find((article) => article.id === sourceId),
-        )
+      ? live.rows[0].source_articles
+        ? JSON.parse(live.rows[0].source_articles)
+        : (JSON.parse(live.rows[0].source_ids) as number[]).map((sourceId) =>
+            articles!.rows.find((article) => article.id === sourceId),
+          )
       : [];
     const events = await pool.query(
       `SELECT id, description, created_at FROM ticket_events
@@ -148,6 +157,66 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     response.sendStatus(204);
   });
 
+  app.get('/help-articles', async (request, response, next) => {
+    if (!isOwner(request.headers.cookie, response.locals.session)) {
+      response.sendStatus(403);
+      return;
+    }
+    try {
+      const articles = await pool.query('SELECT id, title, body, retired FROM help_articles ORDER BY id');
+      response.json(articles.rows);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/help-articles', async (request, response, next) => {
+    if (!isOwner(request.headers.cookie, response.locals.session)) {
+      response.sendStatus(403);
+      return;
+    }
+    if (!validArticle(request.body)) {
+      response.status(400).json({ error: 'Enter a title and body within the allowed lengths.' });
+      return;
+    }
+    const { title, body } = request.body;
+    try {
+      const article = await pool.query(
+        "INSERT INTO help_articles (id, title, body) VALUES (nextval('help_article_ids'), $1, $2) RETURNING id, title, body, retired",
+        [title.trim(), body.trim()],
+      );
+      response.status(201).json(article.rows[0]);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.patch('/help-articles/:id', async (request, response, next) => {
+    if (!isOwner(request.headers.cookie, response.locals.session)) {
+      response.sendStatus(403);
+      return;
+    }
+    if (!/^\d+$/.test(request.params.id) || !validArticle(request.body) ||
+        typeof request.body.retired !== 'boolean') {
+      response.status(400).json({ error: 'Enter a valid article, title, body and status.' });
+      return;
+    }
+    const { title, body, retired } = request.body;
+    try {
+      const article = await pool.query(
+        'UPDATE help_articles SET title = $1, body = $2, retired = $3 WHERE id = $4 RETURNING id, title, body, retired',
+        [title.trim(), body.trim(), retired, request.params.id],
+      );
+      if (!article.rows.length) {
+        response.sendStatus(404);
+        return;
+      }
+      response.json(article.rows[0]);
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post('/tickets/:id/generate', async (request, response, next) => {
     if (!isOwner(request.headers.cookie, response.locals.session)) {
       response.sendStatus(403);
@@ -163,11 +232,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         response.sendStatus(404);
         return;
       }
-      const existing = await pool.query(
-        'SELECT ticket_id FROM session_drafts WHERE ticket_id = $1 AND session_id = $2',
-        [request.params.id, response.locals.session],
-      );
-      if (ticket.status === 'resolved' || ticket.review_state || existing.rows.length) {
+      if (ticket.status === 'resolved' || ticket.review_state) {
         response.status(409).json({ error: 'Generation is not available for this request' });
         return;
       }
@@ -175,9 +240,12 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         response.status(503).json({ error: 'Live generation is unavailable' });
         return;
       }
-      const articles = (await pool.query('SELECT id, title, body FROM help_articles ORDER BY id')).rows;
+      const articles = (await pool.query('SELECT id, title, body FROM help_articles WHERE retired = false ORDER BY id')).rows;
       const body = JSON.stringify({ question: ticket.question, articles });
-      const reservedTokens = Buffer.byteLength(body) * 6 + 4096 + 300;
+      const largestArticles = articles.map((article) => Buffer.byteLength(JSON.stringify(article)))
+        .sort((left, right) => right - left).slice(0, 3);
+      const reservedTokens = (Buffer.byteLength(JSON.stringify(ticket.question)) +
+        largestArticles.reduce((total, length) => total + length, 0)) * 3 + 4096 + 300;
       const day = new Date().toISOString().slice(0, 10);
       await pool.query(
         'INSERT INTO generation_usage (day, requests, reserved_tokens) VALUES ($1, 0, 0) ON CONFLICT (day) DO NOTHING',
@@ -218,9 +286,14 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         return;
       }
       await pool.query(
-        `INSERT INTO session_drafts (session_id, ticket_id, reply, suggested_priority, source_ids)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [response.locals.session, request.params.id, suggestion.reply.trim(), suggestion.suggested_priority, JSON.stringify(suggestion.source_ids)],
+        `INSERT INTO session_drafts (session_id, ticket_id, reply, suggested_priority, source_ids, source_articles)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (session_id, ticket_id) DO UPDATE SET reply = EXCLUDED.reply,
+         suggested_priority = EXCLUDED.suggested_priority, source_ids = EXCLUDED.source_ids,
+         source_articles = EXCLUDED.source_articles`,
+        [response.locals.session, request.params.id, suggestion.reply.trim(), suggestion.suggested_priority,
+          JSON.stringify(suggestion.source_ids), JSON.stringify(suggestion.source_ids.map((id: number) =>
+            articles.find((article) => article.id === id)))],
       );
       response.json(await detail(request.params.id, response.locals.session, true));
     } catch (error) {
