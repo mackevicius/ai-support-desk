@@ -62,6 +62,20 @@ a:focus-visible {
   text-transform: uppercase;
   color: #16675d;
 }
+.owner-link {
+  color: #16675d;
+  font: 700 12px 'DM Sans', sans-serif;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.owner-form {
+  max-width: 480px;
+}
+.owner-form .review-form {
+  margin-top: 32px;
+}
 .workspace {
   min-height: calc(100vh - 64px);
   background: #fff;
@@ -323,6 +337,7 @@ h2 {
   font-size: 13px;
   font-weight: 700;
 }
+.review-form input,
 .review-form textarea,
 .review-form select {
   font: inherit;
@@ -338,7 +353,9 @@ h2 {
 .review-form select {
   width: 170px;
 }
-.draft button {
+.draft button,
+.draft-notice button,
+.owner-form button {
   border: 0;
   border-radius: 4px;
   background: #16675d;
@@ -356,7 +373,9 @@ h2 {
 }
 .reset-button:disabled,
 .form-footer button:disabled,
-.draft button:disabled {
+.draft button:disabled,
+.draft-notice button:disabled,
+.owner-form button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
 }
@@ -379,6 +398,9 @@ button[aria-busy='true']::before {
   button[aria-busy='true']::before { animation: none; }
 }
 .draft button:focus-visible,
+.draft-notice button:focus-visible,
+.owner-form button:focus-visible,
+.review-form input:focus-visible,
 .review-form textarea:focus-visible,
 .review-form select:focus-visible {
   outline: 3px solid #207b70;

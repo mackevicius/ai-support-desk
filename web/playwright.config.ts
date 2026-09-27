@@ -8,6 +8,7 @@ export default defineConfig({
     {
       command: 'node --import tsx ../api/test/demo-server.ts',
       url: 'http://127.0.0.1:3101/tickets',
+      env: { OWNER_PASSWORD: 'test-password', OWNER_SESSION_SECRET: 'test-session-secret' },
       reuseExistingServer: false,
     },
     {

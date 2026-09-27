@@ -4,3 +4,4 @@ node_modules/
 .env*
 web/test-results/
 web/playwright-report/
+__pycache__/
