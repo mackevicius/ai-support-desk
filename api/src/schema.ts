@@ -57,6 +57,36 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
   await pool.query(
     'ALTER TABLE generation_usage ADD COLUMN IF NOT EXISTS reserved_tokens integer NOT NULL DEFAULT 0',
   );
+  await pool.query(
+    'ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS retired boolean NOT NULL DEFAULT false',
+  );
+  await pool.query('ALTER TABLE saved_drafts ADD COLUMN IF NOT EXISTS article_title text');
+  await pool.query('ALTER TABLE saved_drafts ADD COLUMN IF NOT EXISTS article_body text');
+  await pool.query('ALTER TABLE session_drafts ADD COLUMN IF NOT EXISTS source_articles text');
+  const unsnapshotted = await pool.query(
+    `SELECT d.ticket_id, a.title, a.body FROM saved_drafts d
+     JOIN help_articles a ON a.id = d.article_id WHERE d.article_title IS NULL`,
+  );
+  for (const draft of unsnapshotted.rows) {
+    await pool.query(
+      'UPDATE saved_drafts SET article_title = $1, article_body = $2 WHERE ticket_id = $3',
+      [draft.title, draft.body, draft.ticket_id],
+    );
+  }
+  const unsnapshottedLive = await pool.query(
+    'SELECT session_id, ticket_id, source_ids FROM session_drafts WHERE source_articles IS NULL',
+  );
+  if (unsnapshottedLive.rows.length) {
+    const articles = (await pool.query('SELECT id, title, body FROM help_articles')).rows;
+    for (const draft of unsnapshottedLive.rows) {
+      const sources = (JSON.parse(draft.source_ids) as number[])
+        .map((id) => articles.find((article) => article.id === id)).filter(Boolean);
+      await pool.query(
+        'UPDATE session_drafts SET source_articles = $1 WHERE session_id = $2 AND ticket_id = $3',
+        [JSON.stringify(sources), draft.session_id, draft.ticket_id],
+      );
+    }
+  }
   for (const [id, title, body] of [
     [
       1,
@@ -109,16 +139,18 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
       [ticketId],
     );
     if (seeded.rows.length) {
+      const article = await pool.query('SELECT title, body FROM help_articles WHERE id = $1', [articleId]);
       await pool.query(
-        `INSERT INTO saved_drafts (ticket_id, reply, suggested_priority, article_id)
-        VALUES ($1, $2, $3, $4) ON CONFLICT (ticket_id) DO NOTHING`,
-        [ticketId, reply, priority, articleId],
+        `INSERT INTO saved_drafts (ticket_id, reply, suggested_priority, article_id, article_title, article_body)
+        VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (ticket_id) DO NOTHING`,
+        [ticketId, reply, priority, articleId, article.rows[0].title, article.rows[0].body],
       );
     }
   }
   for (const [sequence, table] of [
     ['support_ticket_ids', 'support_tickets'],
     ['ticket_event_ids', 'ticket_events'],
+    ['help_article_ids', 'help_articles'],
   ]) {
     try {
       await pool.query(`CREATE SEQUENCE ${sequence}`);

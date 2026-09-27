@@ -1,5 +1,36 @@
 import { expect, test } from '@playwright/test';
 
+test('owner manages help articles while visitors cannot open the editor', async ({ page }) => {
+  await page.goto('/articles');
+  await expect(page.getByRole('heading', { name: 'Owner sign in' })).toBeVisible();
+  await page.getByLabel('Password').fill('test-password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('link', { name: 'Help articles' }).click();
+  await expect(page.getByRole('heading', { name: 'Help articles' })).toBeVisible();
+  const add = page.getByRole('region', { name: 'Add article' });
+  await add.getByLabel('Title').fill('Orbit access');
+  await add.getByLabel('Content').fill('Orbit access starts in Settings.');
+  await add.getByRole('button', { name: 'Add article' }).click();
+  const editor = page.locator('.article-editor').filter({ has: page.locator('input[value="Orbit access"]') });
+  await expect(editor).toBeVisible();
+  await editor.getByLabel('Content').fill('Orbit access requires owner approval.');
+  await Promise.all([
+    page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/articles'),
+    editor.getByRole('button', { name: 'Save article' }).click(),
+  ]);
+  await expect(editor.getByLabel('Content')).toHaveValue('Orbit access requires owner approval.');
+  await editor.getByRole('checkbox', { name: /Retired/ }).check();
+  await Promise.all([
+    page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/articles'),
+    editor.getByRole('button', { name: 'Save article' }).click(),
+  ]);
+  await expect(editor.getByRole('checkbox', { name: /Retired/ })).toBeChecked();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByRole('link', { name: 'Owner sign in' })).toBeVisible();
+  await page.goto('/articles');
+  await expect(page.getByRole('heading', { name: 'Owner sign in' })).toBeVisible();
+});
+
 test('only a signed-in owner sees live generation', async ({ page }) => {
   await page.goto('/tickets/1');
   await expect(page.getByRole('button', { name: 'Generate live draft' })).toHaveCount(0);

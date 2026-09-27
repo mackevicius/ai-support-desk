@@ -7,6 +7,33 @@ export type TicketSummary = {
   created_at: string;
 };
 
+export type HelpArticle = { id: number; title: string; body: string; retired: boolean };
+
+export async function getHelpArticles(sessionId: string, ownerSession: string): Promise<HelpArticle[] | null> {
+  const response = await fetch(`${process.env.API_URL ?? 'http://localhost:3001'}/help-articles`, {
+    cache: 'no-store',
+    headers: { cookie: `demo_session=${sessionId}; owner_session=${ownerSession}` },
+  });
+  if (response.status === 403) return null;
+  if (!response.ok) throw new Error('Could not load help articles');
+  return response.json();
+}
+
+export async function saveHelpArticle(
+  sessionId: string, ownerSession: string, article: { id?: number; title: string; body: string; retired?: boolean },
+) {
+  const response = await fetch(
+    `${process.env.API_URL ?? 'http://localhost:3001'}/help-articles${article.id ? `/${article.id}` : ''}`,
+    {
+      method: article.id ? 'PATCH' : 'POST',
+      headers: { 'content-type': 'application/json', cookie: `demo_session=${sessionId}; owner_session=${ownerSession}` },
+      body: JSON.stringify(article),
+      cache: 'no-store',
+    },
+  );
+  if (!response.ok) throw new Error('Could not save help article');
+}
+
 export type Ticket = TicketSummary & {
   question: string;
   approved_reply: string | null;

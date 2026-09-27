@@ -13,6 +13,17 @@ def terms(text):
     return {word.rstrip('s') for word in re.findall(r'[a-z]{3,}|\d+', text.lower()) if word not in STOP_WORDS}
 
 
+def is_instruction(sentence):
+    return bool(re.search(
+        r'\b(?:ignore|disregard|override|forget|follow|obey)\b.{0,80}\b'
+        r'(?:instructions?|prompts?|rules?|directions?|messages?)\b|'
+        r'\b(?:send|reveal|expose|print|leak)\b.{0,80}\b'
+        r'(?:credentials?|passwords?|secrets?|tokens?|api keys?)\b|'
+        r'\b(?:system|developer)\s+(?:prompt|message)\b',
+        sentence, re.IGNORECASE,
+    ))
+
+
 def generate(question, articles):
     keywords = terms(question)
     matches = sorted(
@@ -71,11 +82,18 @@ def generate(question, articles):
             'suggested_priority': 'normal',
             'source_ids': [],
         }
+    if is_instruction(answer['reply']):
+        return {
+            'reply': 'Could you clarify your request? The available help articles do not support an answer yet.',
+            'suggested_priority': 'normal',
+            'source_ids': [],
+        }
     if not terms(answer['reply']).issubset(terms(cited_text)):
         sentences = (
             (len(keywords & terms(sentence)), article['id'], sentence)
             for article in relevant if article['id'] in sources
             for sentence in re.split(r'(?<=[.!?])\s+', article['body'])
+            if not is_instruction(sentence)
         )
         score, source_id, sentence = max(sentences, key=lambda item: item[0], default=(0, None, None))
         if score >= min(2, len(keywords)) and score > 0:
@@ -106,7 +124,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get('Content-Length', '0'))
-            if length < 1 or length > 32768:
+            if length < 1 or length > 3200000:
                 self.send_error(400)
                 return
             body = json.loads(self.rfile.read(length))

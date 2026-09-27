@@ -29,7 +29,10 @@ export default async function RootLayout({
           <span className="topbar-label">Support workspace</span>
           <span className="demo-label">Demo inbox</span>
           {owner ? (
-            <form action={signOutOwner}><button className="owner-link">Sign out</button></form>
+            <>
+              <Link href="/articles" className="owner-link">Help articles</Link>
+              <form action={signOutOwner}><button className="owner-link">Sign out</button></form>
+            </>
           ) : (
             <Link href="/owner" className="owner-link">Owner sign in</Link>
           )}

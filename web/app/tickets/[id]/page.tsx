@@ -55,10 +55,10 @@ export default async function TicketPage({
             {generation === 'limit' ? 'Daily live generation limit reached.' : 'Live generation is unavailable. Please try again later.'}
           </p>
         )}
-        {owner && ticket.status === 'open' && !ticket.review_state && !ticket.draft?.live && (
+        {owner && ticket.status === 'open' && !ticket.review_state && (
           <form action={generateRequest} className="draft-notice">
             <input type="hidden" name="id" value={ticket.id} />
-            <SubmitButton label="Generate live draft" pendingLabel="Generating draft..." />
+            <SubmitButton label={ticket.draft?.live ? 'Regenerate live draft' : 'Generate live draft'} pendingLabel="Generating draft..." />
           </form>
         )}
         {ticket.customer_name === 'Visitor' && !ticket.draft && (

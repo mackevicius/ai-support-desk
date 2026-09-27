@@ -130,6 +130,156 @@ test('a visitor cannot request live generation', async () => {
   assert.equal(ticket.draft.state, 'saved');
 });
 
+test('owner edits and retires help articles without changing the guest demo', async () => {
+  const previous = {
+    password: process.env.OWNER_PASSWORD,
+    secret: process.env.OWNER_SESSION_SECRET,
+    python: process.env.PYTHON_URL,
+    serviceSecret: process.env.AI_SERVICE_SECRET,
+  };
+  const calls: { question: string; articles: { id: number; title: string; body: string }[] }[] = [];
+  const generator = createServer(async (request, response) => {
+    assert.equal(request.headers.authorization, 'Bearer test-service-secret');
+    let body = '';
+    for await (const chunk of request) body += chunk;
+    if (Buffer.byteLength(body) > 3200000) {
+      response.writeHead(413).end();
+      return;
+    }
+    const input = JSON.parse(body);
+    calls.push(input);
+    const article = input.articles.find((item: { title: string }) => item.title === 'Orbit access');
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify(article
+      ? { reply: article.body, suggested_priority: 'normal', source_ids: [article.id] }
+      : { reply: 'Could you clarify your request?', suggested_priority: 'normal', source_ids: [] }));
+  });
+  generator.listen(0);
+  await once(generator, 'listening');
+  const address = generator.address();
+  if (!address || typeof address === 'string') throw new Error('No generator address');
+  process.env.OWNER_PASSWORD = 'test-password';
+  process.env.OWNER_SESSION_SECRET = 'test-session-secret';
+  process.env.PYTHON_URL = `http://127.0.0.1:${address.port}`;
+  process.env.AI_SERVICE_SECRET = 'test-service-secret';
+  try {
+    const guestCookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
+    const before = await (await fetch(`${baseUrl}/tickets/1`, { headers: { cookie: guestCookie } })).json();
+    assert.equal((await fetch(`${baseUrl}/help-articles`, { headers: { cookie: guestCookie } })).status, 403);
+    assert.equal((await fetch(`${baseUrl}/help-articles`, {
+      method: 'POST', headers: { cookie: guestCookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Denied', body: 'No access' }),
+    })).status, 403);
+    assert.equal((await fetch(`${baseUrl}/help-articles/1`, {
+      method: 'PATCH', headers: { cookie: guestCookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Denied', body: 'No access', retired: true }),
+    })).status, 403);
+    const login = await fetch(`${baseUrl}/owner/login`, {
+      method: 'POST', headers: { cookie: guestCookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ password: 'test-password' }),
+    });
+    const ownerCookie = login.headers.get('set-cookie')!.split(';')[0];
+    const headers = { cookie: `${guestCookie}; ${ownerCookie}`, 'content-type': 'application/json' };
+    const otherCookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
+    assert.equal((await fetch(`${baseUrl}/help-articles`, { headers: { cookie: `${otherCookie}; ${ownerCookie}` } })).status, 403);
+    const listed = await fetch(`${baseUrl}/help-articles`, { headers });
+    assert.equal(listed.status, 200);
+    const originalArticle = (await listed.json()).find((item: { id: number }) => item.id === 1);
+    assert.equal((await fetch(`${baseUrl}/help-articles`, {
+      method: 'POST', headers, body: JSON.stringify({ title: '', body: 'Missing title' }),
+    })).status, 400);
+    const created = await fetch(`${baseUrl}/help-articles`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ title: 'Orbit access', body: 'Orbit access is enabled in Settings.' }),
+    });
+    assert.equal(created.status, 201);
+    const article = await created.json();
+    assert.equal(article.retired, false);
+    for (let index = 0; index < 7; index++) {
+      const unrelated = await fetch(`${baseUrl}/help-articles`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ title: `Unrelated topic ${index}`, body: 'z'.repeat(5000) }),
+      });
+      assert.equal(unrelated.status, 201);
+    }
+    const longArticleIds: number[] = [];
+    for (let index = 0; index < 2; index++) {
+      const longArticle = await fetch(`${baseUrl}/help-articles`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ title: `Orbit access extra ${index}`, body: '\u0001'.repeat(5000) }),
+      });
+      assert.equal(longArticle.status, 201);
+      longArticleIds.push((await longArticle.json()).id);
+    }
+    const submission = await fetch(`${baseUrl}/tickets`, {
+      method: 'POST', headers, body: JSON.stringify({ question: 'How do I use Orbit access?' }),
+    });
+    const { id } = await submission.json();
+    const generate = () => fetch(`${baseUrl}/tickets/${id}/generate`, { method: 'POST', headers });
+    let draft = await generate();
+    assert.equal(draft.status, 200);
+    assert.deepEqual((await draft.json()).draft.sources.map((source: { id: number }) => source.id), [article.id]);
+    await pool.query('UPDATE session_drafts SET source_articles = NULL WHERE ticket_id = $1', [id]);
+    await prepareDatabase(pool);
+    for (const longId of longArticleIds) {
+      const retiredLong = await fetch(`${baseUrl}/help-articles/${longId}`, {
+        method: 'PATCH', headers,
+        body: JSON.stringify({ title: 'Orbit access extra', body: '\u0001'.repeat(5000), retired: true }),
+      });
+      assert.equal(retiredLong.status, 200);
+    }
+    const edited = await fetch(`${baseUrl}/help-articles/${article.id}`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ title: 'Orbit access', body: 'Orbit access now requires owner approval.', retired: false }),
+    });
+    assert.equal(edited.status, 200);
+    const originalDraft = await (await fetch(`${baseUrl}/tickets/${id}`, { headers })).json();
+    assert.equal(originalDraft.draft.sources[0].body, 'Orbit access is enabled in Settings.');
+    draft = await generate();
+    assert.equal(draft.status, 200);
+    let ticket = await draft.json();
+    assert.equal(ticket.draft.reply, 'Orbit access now requires owner approval.');
+    assert.equal(ticket.draft.sources[0].body, 'Orbit access now requires owner approval.');
+    const retired = await fetch(`${baseUrl}/help-articles/${article.id}`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ title: 'Orbit access', body: 'Orbit access now requires owner approval.', retired: true }),
+    });
+    assert.equal(retired.status, 200);
+    draft = await generate();
+    assert.equal(draft.status, 200);
+    ticket = await draft.json();
+    assert.deepEqual(ticket.draft.sources, []);
+    assert.match(ticket.draft.reply, /clarify/i);
+    assert.equal(calls.length, 3);
+    assert.ok(calls[0].articles.some((item) => item.id === article.id));
+    assert.ok(calls[0].articles.length > 3);
+    assert.ok(Buffer.byteLength(JSON.stringify(calls[0])) > 32768);
+    assert.ok(calls[1].articles.some((item) => item.body.includes('owner approval')));
+    assert.ok(calls[2].articles.every((item) => item.id !== article.id));
+    const updatedSeed = await fetch(`${baseUrl}/help-articles/1`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ title: 'New invitations', body: 'New invitation text.', retired: true }),
+    });
+    assert.equal(updatedSeed.status, 200);
+    const guest = await (await fetch(`${baseUrl}/tickets/1`, { headers: { cookie: guestCookie } })).json();
+    assert.deepEqual(guest.draft, before.draft);
+    await fetch(`${baseUrl}/help-articles/1`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ title: originalArticle.title, body: originalArticle.body, retired: false }),
+    });
+  } finally {
+    if (previous.password === undefined) delete process.env.OWNER_PASSWORD;
+    else process.env.OWNER_PASSWORD = previous.password;
+    if (previous.secret === undefined) delete process.env.OWNER_SESSION_SECRET;
+    else process.env.OWNER_SESSION_SECRET = previous.secret;
+    if (previous.python === undefined) delete process.env.PYTHON_URL;
+    else process.env.PYTHON_URL = previous.python;
+    if (previous.serviceSecret === undefined) delete process.env.AI_SERVICE_SECRET;
+    else process.env.AI_SERVICE_SECRET = previous.serviceSecret;
+    await new Promise<void>((resolve) => generator.close(() => resolve()));
+  }
+});
+
 test('an owner generates a cited draft through Python without approving it', async () => {
   const previous = {
     password: process.env.OWNER_PASSWORD,
