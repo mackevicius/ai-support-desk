@@ -16,6 +16,7 @@ let server: Server;
 let baseUrl: string;
 
 before(async () => {
+  await prepareDatabase(pool);
   server = createApp(pool).listen(0);
   await new Promise<void>((resolve) => server.once('listening', resolve));
   const address = server.address();
@@ -61,6 +62,14 @@ test('a visitor can inspect a request and its history', async () => {
     status: 'open',
     priority: 'high',
     created_at: '2026-09-20T10:00:00.000Z',
+    approved_reply: null,
+    review_state: null,
+    draft: {
+      state: 'saved',
+      reply: 'Please check the email addresses and spam folders, then resend the invitations from Settings > Team. Invitations expire after seven days.',
+      suggested_priority: 'high',
+      sources: [{ id: 1, title: 'Inviting teammates', body: 'Workspace admins can resend invitations from Settings > Team. Check the invitation email address and ask teammates to check spam. Invitations expire after seven days.' }],
+    },
     history: [
       {
         id: 1,
@@ -75,6 +84,120 @@ test('a visitor can inspect a request and its history', async () => {
     ],
   });
   assert.equal((await fetch(`${baseUrl}/tickets/999`)).status, 404);
+});
+
+test('a saved draft requires approval and review stays in the visitor session', async () => {
+  const first = await fetch(`${baseUrl}/tickets`);
+  const firstCookie = first.headers.get('set-cookie')!.split(';')[0];
+  const second = await fetch(`${baseUrl}/tickets`);
+  const secondCookie = second.headers.get('set-cookie')!.split(';')[0];
+  const initial = await (await fetch(`${baseUrl}/tickets/1`, {
+    headers: { cookie: firstCookie },
+  })).json();
+  assert.equal(initial.status, 'open');
+  assert.equal(initial.priority, 'high');
+  assert.equal(initial.draft.state, 'saved');
+  assert.ok(initial.draft.reply.includes('invitation'));
+  assert.ok(initial.draft.sources[0].body.includes('invitation'));
+
+  const approved = await fetch(`${baseUrl}/tickets/1/review`, {
+    method: 'POST',
+    headers: { cookie: firstCookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'approve', reply: 'Please resend the invitations.', priority: 'normal' }),
+  });
+  assert.equal(approved.status, 200);
+  const reviewed = await approved.json();
+  assert.equal(reviewed.status, 'resolved');
+  assert.equal(reviewed.priority, 'normal');
+  assert.equal(reviewed.approved_reply, 'Please resend the invitations.');
+  assert.ok(reviewed.history.some((event: { description: string }) => event.description.includes('approved')));
+
+  const other = await (await fetch(`${baseUrl}/tickets/1`, {
+    headers: { cookie: secondCookie },
+  })).json();
+  assert.equal(other.status, 'open');
+  assert.equal(other.priority, 'high');
+  assert.equal(other.approved_reply, null);
+  assert.ok(!other.history.some((event: { description: string }) => event.description.includes('approved')));
+});
+
+test('rejection and reopening require explicit human actions', async () => {
+  const inbox = await fetch(`${baseUrl}/tickets`);
+  const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
+  const review = (id: number, body: object) => fetch(`${baseUrl}/tickets/${id}/review`, {
+    method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  assert.equal((await review(2, { action: 'approve', reply: '', priority: 'high' })).status, 400);
+  assert.equal((await review(2, { action: 'approve', reply: 'Unapproved' })).status, 400);
+  assert.equal((await review(2, { action: 'reopen' })).status, 409);
+  assert.equal((await review(4, { action: 'approve', reply: 'No draft', priority: 'high' })).status, 409);
+  const unchanged = await (await fetch(`${baseUrl}/tickets/2`, { headers: { cookie } })).json();
+  assert.equal(unchanged.status, 'open');
+  assert.equal(unchanged.priority, 'normal');
+  assert.equal(unchanged.history.length, 1);
+
+  const rejected = await (await review(2, { action: 'reject' })).json();
+  assert.equal(rejected.draft.state, 'rejected');
+  assert.equal(rejected.status, 'open');
+  assert.equal(rejected.approved_reply, null);
+  assert.ok(rejected.history.at(-1).description.includes('rejected'));
+  const replaced = await (await review(2, { action: 'approve', reply: 'I checked the invoice myself.', priority: 'high' })).json();
+  assert.equal(replaced.status, 'resolved');
+  assert.equal(replaced.approved_reply, 'I checked the invoice myself.');
+
+  const approved = await (await review(3, { action: 'approve', reply: 'Please share the reporting period.', priority: 'normal' })).json();
+  assert.equal(approved.status, 'resolved');
+  const reopened = await (await review(3, { action: 'reopen' })).json();
+  assert.equal(reopened.status, 'open');
+  assert.equal(reopened.priority, 'normal');
+  assert.equal(reopened.approved_reply, 'Please share the reporting period.');
+  assert.ok(reopened.history.at(-1).description.includes('reopened'));
+  assert.equal((await review(3, { action: 'reopen' })).status, 409);
+  const corrected = await (await review(3, { action: 'approve', reply: 'Please share the dates and timezone.', priority: 'high' })).json();
+  assert.equal(corrected.status, 'resolved');
+  assert.equal(corrected.approved_reply, 'Please share the dates and timezone.');
+  assert.equal(corrected.history.filter((event: { description: string }) => event.description.includes('approved')).length, 2);
+
+  const oldResolved = await (await review(4, { action: 'reopen' })).json();
+  assert.equal(oldResolved.status, 'open');
+  assert.equal(oldResolved.draft, null);
+  assert.ok(oldResolved.history.at(-1).description.includes('reopened'));
+  const manual = await (await review(4, { action: 'approve', reply: 'The workspace links still work after the rename.', priority: 'low' })).json();
+  assert.equal(manual.status, 'resolved');
+  assert.equal(manual.approved_reply, 'The workspace links still work after the rename.');
+});
+
+test('only one simultaneous review action changes a request', async () => {
+  const inbox = await fetch(`${baseUrl}/tickets`);
+  const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
+  const submit = () => fetch(`${baseUrl}/tickets/2/review`, {
+    method: 'POST',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'approve', reply: 'Download the invoice from Billing.', priority: 'normal' }),
+  });
+  const responses = await Promise.all([submit(), submit()]);
+  const ticket = await (await fetch(`${baseUrl}/tickets/2`, { headers: { cookie } })).json();
+  assert.deepEqual(responses.map((response) => response.status).sort(), [200, 409]);
+  assert.equal(ticket.history.filter((event: { description: string }) => event.description.includes('approved')).length, 1);
+});
+
+test('expired visitor reviews and their events are removed from the demo inbox', async () => {
+  const inbox = await fetch(`${baseUrl}/tickets`);
+  const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
+  const sessionId = cookie.split('=')[1];
+  const approval = await fetch(`${baseUrl}/tickets/1/review`, {
+    method: 'POST',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'approve', reply: 'Please resend the invitations.', priority: 'normal' }),
+  });
+  assert.equal(approval.status, 200);
+  await pool.query("UPDATE ticket_reviews SET created_at = '2020-01-01T00:00:00Z' WHERE session_id = $1", [sessionId]);
+  await pool.query("UPDATE ticket_events SET created_at = '2020-01-01T00:00:00Z' WHERE session_id = $1", [sessionId]);
+  const refreshed = await fetch(`${baseUrl}/tickets`, { headers: { cookie } });
+  assert.equal((await refreshed.json()).find((ticket: { id: number }) => ticket.id === 1).status, 'open');
+  const ticket = await (await fetch(`${baseUrl}/tickets/1`, { headers: { cookie } })).json();
+  assert.equal(ticket.review_state, null);
+  assert.equal(ticket.history.length, 2);
 });
 
 test('a submitted request belongs only to its visitor session', async () => {

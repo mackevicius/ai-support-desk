@@ -51,3 +51,39 @@ test('a visitor submits a request that another session cannot see', async ({
     await otherVisitor.close();
   }
 });
+
+test('a visitor reviews a saved draft, reopens, and moves to the next request', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('link', { name: /Team invitations are not arriving/ }).click();
+  await expect(page.getByText('Saved AI draft', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Inviting teammates' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Reply' }).fill('Please resend the invitations.');
+  await page.getByLabel('Priority').selectOption('normal');
+  await page.getByRole('button', { name: 'Approve in-app reply' }).click();
+  await expect(page.getByText('resolved', { exact: true })).toBeVisible();
+  await expect(page.getByText('Please resend the invitations.', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Human approved in-app reply/)).toBeVisible();
+  await page.getByRole('link', { name: 'Back to inbox' }).click();
+  await expect(page.getByRole('link', { name: /Team invitations are not arriving/ })).toContainText('resolved');
+  await page.getByRole('link', { name: /Team invitations are not arriving/ }).click();
+  await page.getByRole('link', { name: 'Next request' }).click();
+  await expect(page.getByRole('heading', { name: 'Where can I download invoices?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Reject suggestion' }).click();
+  await expect(page.getByText('Human rejected saved AI draft and priority suggestion')).toBeVisible();
+  await page.getByRole('textbox', { name: 'Reply' }).fill('I checked the invoice myself.');
+  await page.getByRole('button', { name: 'Approve in-app reply' }).click();
+  await expect(page.getByText('resolved', { exact: true })).toBeVisible();
+  await page.goto('/tickets/1');
+  await page.getByRole('button', { name: 'Reopen request' }).click();
+  await expect(page.getByText('open', { exact: true })).toBeVisible();
+  await expect(page.getByText('Human reopened request')).toBeVisible();
+  await page.getByRole('textbox', { name: 'Reply' }).fill('Please check the addresses again.');
+  await page.getByRole('button', { name: 'Approve in-app reply' }).click();
+  await expect(page.getByText('Please check the addresses again.', { exact: true })).toBeVisible();
+  await page.goto('/tickets/4');
+  await page.getByRole('button', { name: 'Reopen request' }).click();
+  await page.getByRole('textbox', { name: 'Reply' }).fill('Existing workspace links still work.');
+  await page.getByRole('button', { name: 'Approve in-app reply' }).click();
+  await expect(page.getByText('Existing workspace links still work.', { exact: true })).toBeVisible();
+  await expect(page.getByText('resolved', { exact: true })).toBeVisible();
+});

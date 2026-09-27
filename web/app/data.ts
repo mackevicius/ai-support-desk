@@ -9,6 +9,14 @@ export type TicketSummary = {
 
 export type Ticket = TicketSummary & {
   question: string;
+  approved_reply: string | null;
+  review_state: 'approved' | 'rejected' | 'reopened' | null;
+  draft: null | {
+    state: 'saved' | 'approved' | 'rejected' | 'reopened';
+    reply: string;
+    suggested_priority: 'low' | 'normal' | 'high';
+    sources: { id: number; title: string; body: string }[];
+  };
   history: { id: number; description: string; created_at: string }[];
 };
 
@@ -59,4 +67,23 @@ export async function submitQuestion(
   if (!response.ok) throw new Error('Could not submit the support request');
   const ticket: { id: number } = await response.json();
   return ticket.id;
+}
+
+export async function reviewTicket(
+  id: string,
+  sessionId: string,
+  action: string,
+  reply?: string,
+  priority?: string,
+) {
+  const response = await fetch(
+    `${process.env.API_URL ?? 'http://localhost:3001'}/tickets/${encodeURIComponent(id)}/review`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: `demo_session=${sessionId}` },
+      body: JSON.stringify({ action, reply, priority }),
+      cache: 'no-store',
+    },
+  );
+  if (!response.ok) throw new Error('Could not review the support request');
 }

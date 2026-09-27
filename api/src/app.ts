@@ -5,6 +5,48 @@ import type { Pool } from 'pg';
 export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
   const app = express();
   app.use(express.json());
+  function reviewedStatus(status: string, state?: string) {
+    if (state === 'approved') return 'resolved';
+    if (state === 'reopened') return 'open';
+    return status;
+  }
+  async function detail(id: string, session: string) {
+    const ticket = await pool.query(
+      `SELECT id, customer_name, subject, question, status, priority, created_at
+       FROM support_tickets WHERE id = $1 AND (session_id IS NULL OR (session_id = $2 AND created_at > NOW() - INTERVAL '1 day'))`,
+      [id, session],
+    );
+    if (!ticket.rows.length) return null;
+    const review = await pool.query(
+      'SELECT state, priority, approved_reply FROM ticket_reviews WHERE ticket_id = $1 AND session_id = $2',
+      [id, session],
+    );
+    const draft = await pool.query(
+      `SELECT d.reply, d.suggested_priority, a.id, a.title, a.body
+       FROM saved_drafts d JOIN help_articles a ON a.id = d.article_id WHERE d.ticket_id = $1`,
+      [id],
+    );
+    const events = await pool.query(
+      `SELECT id, description, created_at FROM ticket_events
+       WHERE ticket_id = $1 AND (session_id IS NULL OR session_id = $2) ORDER BY created_at, id`,
+      [id, session],
+    );
+    const current = review.rows[0];
+    return {
+      ...ticket.rows[0],
+      status: reviewedStatus(ticket.rows[0].status, current?.state),
+      priority: current?.priority ?? ticket.rows[0].priority,
+      approved_reply: current?.approved_reply ?? null,
+      review_state: current?.state ?? null,
+      draft: draft.rows.length ? {
+        state: current?.state ?? 'saved',
+        reply: draft.rows[0].reply,
+        suggested_priority: draft.rows[0].suggested_priority,
+        sources: [{ id: draft.rows[0].id, title: draft.rows[0].title, body: draft.rows[0].body }],
+      } : null,
+      history: events.rows,
+    };
+  }
   app.use((request, response, next) => {
     const session = request.headers.cookie?.match(
       /(?:^|;\s*)demo_session=([0-9a-f-]{36})(?:;|$)/,
@@ -23,6 +65,8 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
 
   app.get('/tickets', async (_request, response, next) => {
     try {
+      await pool.query("DELETE FROM ticket_events WHERE session_id IS NOT NULL AND created_at <= NOW() - INTERVAL '1 day'");
+      await pool.query("DELETE FROM ticket_reviews WHERE created_at <= NOW() - INTERVAL '1 day'");
       const result = await pool.query(
         `
         SELECT id, customer_name, subject, status, priority, created_at
@@ -32,7 +76,18 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       `,
         [response.locals.session],
       );
-      response.json(result.rows);
+      const reviews = await pool.query(
+        'SELECT ticket_id, state, priority FROM ticket_reviews WHERE session_id = $1',
+        [response.locals.session],
+      );
+      response.json(result.rows.map((ticket) => {
+        const review = reviews.rows.find((item) => item.ticket_id === ticket.id);
+        return review ? {
+          ...ticket,
+          status: reviewedStatus(ticket.status, review.state),
+          priority: review.priority,
+        } : ticket;
+      }));
     } catch (error) {
       next(error);
     }
@@ -93,20 +148,81 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         response.sendStatus(404);
         return;
       }
-      const ticket = await pool.query(
-        `SELECT id, customer_name, subject, question, status, priority, created_at
-         FROM support_tickets WHERE id = $1 AND (session_id IS NULL OR (session_id = $2 AND created_at > NOW() - INTERVAL '1 day'))`,
-        [request.params.id, response.locals.session],
-      );
-      if (!ticket.rows.length) {
+      const ticket = await detail(request.params.id, response.locals.session);
+      if (!ticket) {
         response.sendStatus(404);
         return;
       }
-      const events = await pool.query(
-        'SELECT id, description, created_at FROM ticket_events WHERE ticket_id = $1 ORDER BY created_at, id',
-        [request.params.id],
-      );
-      response.json({ ...ticket.rows[0], history: events.rows });
+      response.json(ticket);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/tickets/:id/review', async (request, response, next) => {
+    try {
+      if (!/^\d+$/.test(request.params.id)) {
+        response.sendStatus(404);
+        return;
+      }
+      const ticket = await detail(request.params.id, response.locals.session);
+      if (!ticket) {
+        response.sendStatus(404);
+        return;
+      }
+      if (!ticket.draft && !(request.body?.action === 'reopen' && ticket.status === 'resolved') &&
+        !(request.body?.action === 'approve' && ticket.review_state === 'reopened')) {
+        response.status(409).json({ error: 'No saved draft to review' });
+        return;
+      }
+      const { action, reply, priority } = request.body ?? {};
+      const state = ticket.review_state ?? ticket.draft?.state;
+      if (!(action === 'approve' && ['saved', 'rejected', 'reopened'].includes(state ?? '') ||
+        action === 'reject' && state === 'saved' ||
+        action === 'reopen' && ticket.status === 'resolved')) {
+        response.status(409).json({ error: 'Review action is not available' });
+        return;
+      }
+      if (action === 'approve' && (typeof reply !== 'string' || !reply.trim() || reply.length > 5000 || !['low', 'normal', 'high'].includes(priority))) {
+        response.status(400).json({ error: 'Enter a reply and choose a priority' });
+        return;
+      }
+      const newState = action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'reopened';
+      const newPriority = action === 'approve' ? priority : ticket.priority;
+      const approvedReply = action === 'approve' ? reply.trim() : ticket.approved_reply;
+      const description = action === 'approve'
+        ? `Human approved in-app reply and set ${priority} priority: ${approvedReply}`
+        : action === 'reject' ? 'Human rejected saved AI draft and priority suggestion' : 'Human reopened request';
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const changed = ticket.review_state === null
+          ? await client.query(`INSERT INTO ticket_reviews (session_id, ticket_id, state, priority, approved_reply)
+              VALUES ($1, $2, $3, $4, $5) RETURNING state`,
+              [response.locals.session, request.params.id, newState, newPriority, approvedReply])
+          : await client.query(`UPDATE ticket_reviews SET state = $3, priority = $4, approved_reply = $5
+              WHERE session_id = $1 AND ticket_id = $2 AND state = $6 RETURNING state`,
+              [response.locals.session, request.params.id, newState, newPriority, approvedReply, ticket.review_state]);
+        if (!changed.rows.length) {
+          await client.query('ROLLBACK');
+          response.status(409).json({ error: 'Review action is no longer available' });
+          return;
+        }
+        await client.query(`INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
+          VALUES (nextval('ticket_event_ids'), $1, $2, $3, $4)`,
+          [request.params.id, response.locals.session, description, new Date().toISOString()]);
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        if ((error as { code?: string }).code === '23505') {
+          response.status(409).json({ error: 'Review action is no longer available' });
+          return;
+        }
+        throw error;
+      } finally {
+        client.release();
+      }
+      response.json(await detail(request.params.id, response.locals.session));
     } catch (error) {
       next(error);
     }
