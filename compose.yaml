@@ -48,6 +48,8 @@ services:
       dockerfile: web/Dockerfile
     environment:
       API_URL: http://api:3001
+    volumes:
+      - ./web/app/quality:/app/web/app/quality:ro
     depends_on:
       - api
     ports:

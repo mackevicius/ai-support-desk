@@ -1,5 +1,26 @@
 import { expect, test } from '@playwright/test';
 
+test('owner inspects quality failures and guests cannot open the quality view', async ({ page }) => {
+  await page.goto('/quality');
+  await expect(page.getByRole('heading', { name: 'Owner sign in' })).toBeVisible();
+  await page.getByLabel('Password').fill('test-password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('link', { name: 'Answer quality' }).click();
+  await expect(page.getByRole('heading', { name: 'Answer quality' })).toBeVisible();
+  await expect(page.getByText('fictional-support-v1')).toBeVisible();
+  await expect(page.getByRole('link', { name: /known-failure/ })).toBeVisible();
+  await page.getByRole('link', { name: /known-failure/ }).click();
+  await expect(page.getByRole('heading', { name: 'Known failure' })).toBeVisible();
+  await expect(page.getByText('When are invoices available?')).toBeVisible();
+  await expect(page.getByText('Invoices are available before the billing period closes.')).toBeVisible();
+  await expect(page.getByText('Invoices are available after the billing period closes.', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Before the billing period closes, invoices are unavailable/).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByRole('link', { name: 'Owner sign in' })).toBeVisible();
+  await page.goto('/quality/known-failure');
+  await expect(page.getByRole('heading', { name: 'Owner sign in' })).toBeVisible();
+});
+
 test('owner manages help articles while visitors cannot open the editor', async ({ page }) => {
   await page.goto('/articles');
   await expect(page.getByRole('heading', { name: 'Owner sign in' })).toBeVisible();
@@ -18,12 +39,14 @@ test('owner manages help articles while visitors cannot open the editor', async 
     page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/articles'),
     editor.getByRole('button', { name: 'Save article' }).click(),
   ]);
+  await page.reload();
   await expect(editor.getByLabel('Content')).toHaveValue('Orbit access requires owner approval.');
   await editor.getByRole('checkbox', { name: /Retired/ }).check();
   await Promise.all([
     page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/articles'),
     editor.getByRole('button', { name: 'Save article' }).click(),
   ]);
+  await page.reload();
   await expect(editor.getByRole('checkbox', { name: /Retired/ })).toBeChecked();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('link', { name: 'Owner sign in' })).toBeVisible();

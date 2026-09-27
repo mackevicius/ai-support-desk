@@ -79,6 +79,54 @@ a:focus-visible {
 .articles-page {
   max-width: 800px;
 }
+.quality-page {
+  max-width: 880px;
+}
+.quality-tabs {
+  display: flex;
+  gap: 18px;
+  border-bottom: 1px solid #dde4de;
+  padding: 20px 0;
+}
+.quality-tabs a[aria-current='page'] {
+  color: #16675d;
+  font-weight: 700;
+  border-bottom: 2px solid #16675d;
+}
+.quality-meta, .quality-case small, .quality-checks {
+  color: #52695e;
+  font-size: 13px;
+}
+.quality-summary {
+  font-weight: 700;
+}
+.quality-list {
+  border-top: 1px solid #dde4de;
+}
+.quality-case {
+  display: grid;
+  gap: 8px;
+  padding: 18px 0;
+  border-bottom: 1px solid #dde4de;
+}
+.quality-case:hover {
+  background: #f0f6f2;
+}
+.quality-case-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.quality-pass { color: #16675d; }
+.quality-fail { color: #a12f32; }
+.quality-section {
+  padding: 16px 0;
+  border-bottom: 1px solid #dde4de;
+  overflow-wrap: anywhere;
+}
+.quality-section h2 { font-size: 17px; }
+.quality-section h3 { font-size: 14px; }
+.quality-source { padding: 8px 0; }
 .article-section {
   padding: 32px 0;
   border-bottom: 1px solid #dde4de;
@@ -496,13 +544,18 @@ button[aria-busy='true']::before {
     flex-direction: column;
   }
   .topbar {
-    height: 56px;
+    height: auto;
+    min-height: 56px;
+    flex-wrap: wrap;
+    gap: 12px 18px;
+    padding-top: 12px;
+    padding-bottom: 12px;
   }
   .topbar-label {
     display: none;
   }
   .workspace {
-    min-height: calc(100vh - 56px);
+    min-height: calc(100vh - 80px);
   }
   .inbox-view {
     padding: 28px 16px 60px;
