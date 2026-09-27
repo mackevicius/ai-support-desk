@@ -115,3 +115,35 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
   ).toBeVisible();
   await expect(page.getByText('resolved', { exact: true })).toBeVisible();
 });
+
+test('a visitor resets only their own demo workspace', async ({ browser, page }) => {
+  await page.goto('/');
+  await page.getByRole('link', { name: /Team invitations are not arriving/ }).click();
+  await page.getByRole('button', { name: 'Approve in-app reply' }).click();
+  await expect(page.getByText('resolved', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Back to inbox' }).click();
+  await page.getByRole('textbox', { name: 'New support request' }).fill('Reset my request');
+  await page.getByRole('button', { name: 'Submit request' }).click();
+  await expect(page).toHaveURL(/\/tickets\/\d+$/);
+  const submittedUrl = new URL(page.url()).pathname;
+
+  const otherVisitor = await browser.newContext();
+  try {
+    const otherPage = await otherVisitor.newPage();
+    await otherPage.goto('/');
+    await otherPage.getByRole('link', { name: /Team invitations are not arriving/ }).click();
+    await otherPage.getByRole('button', { name: 'Approve in-app reply' }).click();
+    await expect(otherPage.getByText('resolved', { exact: true })).toBeVisible();
+
+    await page.getByRole('link', { name: 'Back to inbox' }).click();
+    await page.getByRole('button', { name: 'Reset demo' }).click();
+    await expect(page.getByRole('link', { name: /Reset my request/ })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /Team invitations are not arriving/ })).toContainText('open');
+    const removed = await page.goto(submittedUrl);
+    expect(removed?.status()).toBe(404);
+    await otherPage.reload();
+    await expect(otherPage.getByText('resolved', { exact: true })).toBeVisible();
+  } finally {
+    await otherVisitor.close();
+  }
+});

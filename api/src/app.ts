@@ -71,6 +71,15 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     next();
   });
 
+  app.get('/health', async (_request, response, next) => {
+    try {
+      await pool.query('SELECT 1');
+      response.json({ status: 'ok' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get('/tickets', async (_request, response, next) => {
     try {
       await pool.query(
@@ -152,6 +161,32 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       );
       await client.query('COMMIT');
       response.status(201).json({ ...ticket.rows[0], history: event.rows });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      next(error);
+    } finally {
+      client.release();
+    }
+  });
+
+  app.post('/reset', async (_request, response, next) => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `DELETE FROM ticket_events WHERE session_id = $1 OR ticket_id IN (
+          SELECT id FROM support_tickets WHERE session_id = $1
+        )`,
+        [response.locals.session],
+      );
+      await client.query('DELETE FROM ticket_reviews WHERE session_id = $1', [
+        response.locals.session,
+      ]);
+      await client.query('DELETE FROM support_tickets WHERE session_id = $1', [
+        response.locals.session,
+      ]);
+      await client.query('COMMIT');
+      response.sendStatus(204);
     } catch (error) {
       await client.query('ROLLBACK');
       next(error);
@@ -301,6 +336,22 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     } catch (error) {
       next(error);
     }
+  });
+
+  app.use((
+    _error: unknown,
+    request: express.Request,
+    response: express.Response,
+    _next: express.NextFunction,
+  ) => {
+    const status = request.path === '/health' ? 503 : 500;
+    console.error(JSON.stringify({
+      event: 'api_error',
+      method: request.method,
+      route: request.route?.path ?? 'unknown',
+      status,
+    }));
+    response.status(status).json({ error: 'Service unavailable' });
   });
 
   return app;

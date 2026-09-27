@@ -1,6 +1,6 @@
 import React from 'react';
 import { cookies } from 'next/headers';
-import { submitRequest } from './actions';
+import { resetWorkspace, submitRequest } from './actions';
 import { getTickets } from './data';
 import { Queue } from './queue';
 
@@ -11,8 +11,13 @@ export default async function Home() {
   return (
     <main className="workspace inbox-view">
       <div className="inbox-intro">
-        <span className="eyebrow">Workspace / 01</span>
-        <h1>Support inbox</h1>
+        <div>
+          <span className="eyebrow">Workspace / 01</span>
+          <h1>Support inbox</h1>
+        </div>
+        <form action={resetWorkspace}>
+          <button className="reset-button" type="submit">Reset demo</button>
+        </form>
       </div>
       <form className="request-form" action={submitRequest}>
         <label htmlFor="question">New support request</label>
