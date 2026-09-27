@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import Request, urlopen
 
 
-STOP_WORDS = {'a', 'an', 'and', 'are', 'can', 'do', 'for', 'from', 'how', 'i', 'in', 'is', 'my', 'of', 'please', 'the', 'to', 'what', 'where', 'you', 'your'}
+STOP_WORDS = {'a', 'an', 'and', 'are', 'can', 'do', 'find', 'for', 'from', 'how', 'i', 'in', 'is', 'my', 'of', 'please', 'the', 'to', 'under', 'what', 'where', 'you', 'your'}
 
 
 def terms(text):
@@ -65,7 +65,21 @@ def generate(question, articles):
             len(sources) != len(set(sources))):
         raise ValueError('Invalid provider answer')
     cited_text = ' '.join(f"{article['title']} {article['body']}" for article in relevant if article['id'] in sources)
-    if not sources or not terms(answer['reply']).issubset(terms(cited_text)):
+    if not sources:
+        return {
+            'reply': 'Could you clarify your request? The available help articles do not support an answer yet.',
+            'suggested_priority': 'normal',
+            'source_ids': [],
+        }
+    if not terms(answer['reply']).issubset(terms(cited_text)):
+        sentences = (
+            (len(keywords & terms(sentence)), article['id'], sentence)
+            for article in relevant if article['id'] in sources
+            for sentence in re.split(r'(?<=[.!?])\s+', article['body'])
+        )
+        score, source_id, sentence = max(sentences, key=lambda item: item[0], default=(0, None, None))
+        if score >= min(2, len(keywords)) and score > 0:
+            return {'reply': sentence, 'suggested_priority': 'normal', 'source_ids': [source_id]}
         return {
             'reply': 'Could you clarify your request? The available help articles do not support an answer yet.',
             'suggested_priority': 'normal',

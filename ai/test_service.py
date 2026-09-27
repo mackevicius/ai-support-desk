@@ -38,7 +38,7 @@ class ServiceTests(unittest.TestCase):
         try:
             articles = [
                 {'id': 1, 'title': 'Inviting teammates', 'body': 'Resend invitations from Settings > Team. Invitations expire after seven days.'},
-                {'id': 2, 'title': 'Invoices', 'body': 'Download invoices from Settings > Billing.'},
+                {'id': 2, 'title': 'Downloading invoices', 'body': 'Workspace owners can download PDF invoices from Settings > Billing > Invoices. August invoices appear after the billing period closes.'},
             ]
             with patch.dict('os.environ', {
                 'OPENAI_API_KEY': 'fake-key',
@@ -68,22 +68,37 @@ class ServiceTests(unittest.TestCase):
                 self.assertEqual(FakeProvider.calls[0]['max_tokens'], 300)
                 self.assertNotIn('Download invoices', json.dumps(FakeProvider.calls[0]))
                 FakeProvider.answer = {
+                    'reply': 'You can find invoices under Settings > Billing > Invoices.',
+                    'source_ids': [2], 'suggested_priority': 'normal',
+                }
+                invoice = generate('Where can I download invoices?')
+                self.assertEqual(invoice['source_ids'], [2])
+                self.assertIn('Settings > Billing > Invoices', invoice['reply'])
+                FakeProvider.answer = {
+                    'reply': 'Go to the billing page to download invoices.',
+                    'source_ids': [2], 'suggested_priority': 'normal',
+                }
+                paraphrased = generate('Where can I download invoices?')
+                self.assertEqual(paraphrased['source_ids'], [2])
+                self.assertEqual(paraphrased['reply'], 'Workspace owners can download PDF invoices from Settings > Billing > Invoices.')
+                FakeProvider.answer = {
                     'reply': 'Resend invitations from Settings > Team. Refunds are guaranteed.',
                     'source_ids': [1], 'suggested_priority': 'high',
                 }
                 unsupported = generate('How can I resend invitations?')
-                self.assertEqual(unsupported['source_ids'], [])
-                self.assertIn('clarify', unsupported['reply'].lower())
+                self.assertEqual(unsupported['source_ids'], [1])
+                self.assertEqual(unsupported['reply'], 'Resend invitations from Settings > Team.')
                 FakeProvider.answer = {
                     'reply': 'Invitations expire after 24 days.',
                     'source_ids': [1], 'suggested_priority': 'normal',
                 }
                 numeric_claim = generate('When do invitations expire?')
-                self.assertEqual(numeric_claim['source_ids'], [])
+                self.assertEqual(numeric_claim['source_ids'], [1])
+                self.assertEqual(numeric_claim['reply'], 'Invitations expire after seven days.')
                 clarification = generate('What is the refund policy?')
                 self.assertEqual(clarification['source_ids'], [])
                 self.assertIn('clarify', clarification['reply'].lower())
-                self.assertEqual(len(FakeProvider.calls), 3)
+                self.assertEqual(len(FakeProvider.calls), 5)
         finally:
             for server in (service, provider):
                 server.shutdown()
