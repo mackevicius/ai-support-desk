@@ -1,12 +1,111 @@
 import json
+import subprocess
+import sys
+import tempfile
 import threading
 import unittest
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from unittest.mock import patch
 
+from evaluation import CASES, evaluate
 from server import Handler
+
+
+class EvaluationTests(unittest.TestCase):
+    def test_untrusted_document_allows_safe_cited_answer(self):
+        case = next(item for item in CASES if item['id'] == 'untrusted-document').copy()
+        case['answer'] = {'reply': 'Resend invitations from Settings > Team.',
+                          'source_ids': [1], 'suggested_priority': 'normal'}
+        with patch('evaluation.CASES', [case]):
+            report = evaluate()
+        self.assertTrue(all(report['cases'][0]['checks'].values()))
+
+    def test_every_deterministic_check_is_boolean(self):
+        report = evaluate()
+        self.assertTrue(all(type(value) is bool for case in report['cases'] for value in case['checks'].values()))
+
+    def test_urgent_documented_question_requires_high_priority(self):
+        report = evaluate()
+        urgent = next(case for case in report['cases'] if case['id'] == 'urgent-priority')
+        self.assertEqual(urgent['expected']['suggested_priority'], 'high')
+        self.assertEqual(urgent['actual']['suggested_priority'], 'high')
+        self.assertTrue(urgent['checks']['priority'])
+
+    def test_live_provider_failure_is_visible_without_losing_other_cases(self):
+        calls = []
+
+        def provider(request, timeout):
+            calls.append(request)
+            if len(calls) == 1:
+                raise TimeoutError('test secret must not appear in report')
+            article = json.loads(json.loads(request.data)['messages'][1]['content'])['articles'][0]
+            answer = {'reply': article['body'].split('.')[0] + '.', 'source_ids': [article['id']], 'suggested_priority': 'normal'}
+            return FakeResponse({'choices': [{'message': {'content': json.dumps(answer)}}],
+                                 'usage': {'prompt_tokens': 10, 'completion_tokens': 5}})
+
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'fake-key'}), patch('server.urlopen', provider):
+            report = evaluate(live=True)
+        self.assertEqual(len(report['cases']), len(CASES))
+        self.assertEqual(report['cases'][0]['error'], 'TimeoutError')
+        self.assertIsNone(report['cases'][0]['model'])
+        self.assertFalse(all(report['cases'][0]['checks'].values()))
+        self.assertNotIn('test secret', json.dumps(report))
+        self.assertIn('actual', report['cases'][1])
+
+    def test_deterministic_report_contains_inspectable_changed_and_untrusted_cases(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'quality.json'
+            subprocess.run(
+                [sys.executable, str(Path(__file__).with_name('evaluation.py')), '--deterministic', '--output', str(output)],
+                check=True, capture_output=True, text=True, env={'PATH': '/usr/bin:/bin'},
+            )
+            report = json.loads(output.read_text())
+        self.assertEqual(report['mode'], 'deterministic')
+        self.assertTrue(report['dataset_version'])
+        self.assertIn('changed-document', [case['id'] for case in report['cases']])
+        self.assertIn('untrusted-document', [case['id'] for case in report['cases']])
+        for case in report['cases']:
+            for field in ('question', 'expected', 'actual', 'sources', 'checks'):
+                self.assertIn(field, case)
+        self.assertTrue(any(not all(case['checks'].values()) for case in report['cases']))
+
+    def test_live_report_records_provider_usage_latency_and_cost(self):
+        def provider(request, timeout):
+            payload = json.loads(request.data)
+            article = json.loads(payload['messages'][1]['content'])['articles'][0]
+            answer = {'reply': article['body'].split('.')[0] + '.', 'source_ids': [article['id']], 'suggested_priority': 'normal'}
+            return FakeResponse({'model': 'gpt-4o-mini-2026-07-18',
+                                 'choices': [{'message': {'content': json.dumps(answer)}}],
+                                 'usage': {'prompt_tokens': 100, 'completion_tokens': 20}})
+
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'fake-key'}), patch('server.urlopen', provider):
+            report = evaluate(live=True)
+        self.assertEqual(report['mode'], 'live')
+        self.assertEqual(report['model'], 'gpt-4o-mini')
+        self.assertEqual(report['dataset_version'], 'fictional-support-v1')
+        measured = next(case for case in report['cases'] if case['id'] == 'citations')
+        self.assertGreaterEqual(measured['latency_ms'], 0)
+        self.assertEqual(measured['usage'], {'prompt_tokens': 100, 'completion_tokens': 20})
+        self.assertEqual(measured['model'], 'gpt-4o-mini-2026-07-18')
+        self.assertIsNone(next(case for case in report['cases'] if case['id'] == 'clarification')['model'])
+        self.assertGreater(measured['estimated_cost_usd'], 0)
+
+
+class FakeResponse:
+    def __init__(self, payload):
+        self.body = json.dumps(payload).encode()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        pass
+
+    def read(self, *_args):
+        return self.body
 
 
 class FakeProvider(BaseHTTPRequestHandler):

@@ -31,6 +31,7 @@ export default async function RootLayout({
           {owner ? (
             <>
               <Link href="/articles" className="owner-link">Help articles</Link>
+              <Link href="/quality" className="owner-link">Answer quality</Link>
               <form action={signOutOwner}><button className="owner-link">Sign out</button></form>
             </>
           ) : (

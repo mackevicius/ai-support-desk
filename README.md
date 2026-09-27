@@ -50,6 +50,24 @@ The [Render Blueprint](render.yaml) runs the Next.js site and Express API on fre
 
 GitHub Actions runs typechecking, API, Python, and browser tests, and a production build without AI credentials. Render's `checksPass` setting deploys later commits on `master` only after checks succeed. The first Blueprint creation triggers an initial deployment, so create it only after the initial CI check passes. Public visitors cannot initiate paid AI calls: the Node API denies guest generation and Python requires a server-only service secret.
 
+## Answer quality
+
+Sign in as the owner and open **Answer quality** to inspect fictional evaluation cases. Each case shows the question, expected behavior, actual answer, cited and available documents, and individual checks. The checked-in deterministic report uses fixed provider replies, calls the real draft generator, and requires no provider key. It intentionally records a wrong priority suggestion and a semantic contradiction that the lexical grounding guard does not catch. These are known limitations, not passing results or evidence of real-user adoption. Changed and untrusted documents are included.
+
+Regenerate the checked-in report after changing the dataset or generator:
+
+```sh
+python3 ai/evaluation.py --deterministic --output web/app/quality/results.json
+```
+
+CI regenerates this report and fails if it differs from the checked-in version. To run a **separate paid live evaluation**, set `OPENAI_API_KEY` in your local shell and explicitly run:
+
+```sh
+python3 ai/evaluation.py --live --output web/app/quality/live-results.json
+```
+
+The local owner **Live** tab displays that untracked report, including the dataset version, returned model version (when reported), per-case latency, provider token usage, and estimated cost. Compose mounts the local quality directory into the web container so a live run on the host appears there. Failed provider calls are retained as failed cases without logging their error details or estimating an unreported cost. It is not run in CI or published with the demo. Cost uses reference rates of $0.15 per million input tokens and $0.60 per million output tokens for `gpt-4o-mini`; check current provider prices before budgeting. Exact example matching and lexical support are limited checks, not proof of semantic grounding; inspect the sources when a reply differs from the reference. No live results are shown until you run it. Do not commit the live results or your provider key.
+
 The API's `/health` checks database availability. Render's health checks and service logs show outages and failed API routes; error logs contain the HTTP method, route pattern, and status, not ticket text, cookies, or connection strings. Render Free web services sleep after 15 minutes idle and may take around a minute to wake; Neon Free compute scales to zero after five minutes. These free tiers provide a near-zero idle-cost path, subject to their usage limits. Monitor Render's usage and Neon storage/compute; heavy public traffic can exhaust the free allowances. The deployed demo uses fictional data only.
 
 ## Checks

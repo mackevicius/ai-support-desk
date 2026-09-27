@@ -4,4 +4,5 @@ node_modules/
 .env*
 web/test-results/
 web/playwright-report/
+web/app/quality/live-results.json
 __pycache__/

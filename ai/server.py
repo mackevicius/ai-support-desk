@@ -24,7 +24,7 @@ def is_instruction(sentence):
     ))
 
 
-def generate(question, articles):
+def generate(question, articles, metadata_callback=None):
     keywords = terms(question)
     matches = sorted(
         ((len(keywords & terms(f"{article['title']} {article['body']}")), article) for article in articles),
@@ -66,6 +66,8 @@ def generate(question, articles):
     )
     with urlopen(request, timeout=8) as response:
         result = json.loads(response.read(65536))
+    if metadata_callback is not None:
+        metadata_callback(result)
     answer = json.loads(result['choices'][0]['message']['content'])
     sources = answer.get('source_ids')
     if (not isinstance(answer.get('reply'), str) or not answer['reply'].strip() or
