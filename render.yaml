@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: ai-support-desk-api
+    runtime: node
+    plan: free
+    branch: master
+    buildCommand: npm ci
+    startCommand: npm run start --workspace api
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_VERSION
+        value: '24'
+      - key: DATABASE_URL
+        sync: false
+  - type: web
+    name: ai-support-desk-web
+    runtime: node
+    plan: free
+    branch: master
+    buildCommand: npm ci && npm run build --workspace web
+    startCommand: npm run start --workspace web -- --port $PORT
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_VERSION
+        value: '24'
+      - key: API_URL
+        fromService:
+          name: ai-support-desk-api
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL

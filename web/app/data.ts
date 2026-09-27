@@ -69,6 +69,18 @@ export async function submitQuestion(
   return ticket.id;
 }
 
+export async function resetDemo(sessionId: string) {
+  const response = await fetch(
+    `${process.env.API_URL ?? 'http://localhost:3001'}/reset`,
+    {
+      method: 'POST',
+      headers: { cookie: `demo_session=${sessionId}` },
+      cache: 'no-store',
+    },
+  );
+  if (!response.ok) throw new Error('Could not reset the demo workspace');
+}
+
 export async function reviewTicket(
   id: string,
   sessionId: string,

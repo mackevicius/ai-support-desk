@@ -2,7 +2,14 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { reviewTicket, submitQuestion } from './data';
+import { resetDemo, reviewTicket, submitQuestion } from './data';
+
+export async function resetWorkspace() {
+  const sessionId = (await cookies()).get('demo_session')?.value;
+  if (!sessionId) throw new Error('No visitor session');
+  await resetDemo(sessionId);
+  redirect('/');
+}
 
 export async function submitRequest(formData: FormData) {
   const question = formData.get('question');

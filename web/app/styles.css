@@ -73,7 +73,28 @@ a:focus-visible {
   background: #f6f8f6;
 }
 .inbox-intro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 28px;
+}
+.reset-button {
+  border: 1px solid #a9bcb1;
+  border-radius: 4px;
+  background: #fff;
+  color: #16675d;
+  padding: 10px 14px;
+  font: 700 13px 'DM Sans', sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.reset-button:hover {
+  background: #eaf2ed;
+}
+.reset-button:focus-visible {
+  outline: 3px solid #207b70;
+  outline-offset: 2px;
 }
 .request-form {
   display: grid;

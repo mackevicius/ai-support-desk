@@ -50,6 +50,28 @@ test('a visitor can browse tickets through the API', async () => {
   });
 });
 
+test('health reports database availability without exposing private details', async () => {
+  const healthy = await fetch(`${baseUrl}/health`);
+  assert.equal(healthy.status, 200);
+  const failingApp = createApp({
+    query: async () => { throw new Error('private database detail'); },
+    connect: pool.connect.bind(pool),
+  } as Parameters<typeof createApp>[0]);
+  const failingServer = failingApp.listen(0);
+  try {
+    await new Promise<void>((resolve) => failingServer.once('listening', resolve));
+    const address = failingServer.address();
+    if (!address || typeof address === 'string') throw new Error('No server address');
+    const unavailable = await fetch(`http://127.0.0.1:${address.port}/health`);
+    assert.equal(unavailable.status, 503);
+    assert.ok(!(await unavailable.text()).includes('private database detail'));
+  } finally {
+    await new Promise<void>((resolve, reject) =>
+      failingServer.close((error) => (error ? reject(error) : resolve())),
+    );
+  }
+});
+
 test('a visitor can inspect a request and its history', async () => {
   const response = await fetch(`${baseUrl}/tickets/1`);
   assert.equal(response.status, 200);
@@ -364,6 +386,60 @@ test('a submitted request belongs only to its visitor session', async () => {
   );
 });
 
+test('reset restores fictional tickets without changing another visitor session', async () => {
+  const firstCookie = (await fetch(`${baseUrl}/tickets`)).headers
+    .get('set-cookie')!
+    .split(';')[0];
+  const secondCookie = (await fetch(`${baseUrl}/tickets`)).headers
+    .get('set-cookie')!
+    .split(';')[0];
+  const review = (cookie: string) =>
+    fetch(`${baseUrl}/tickets/1/review`, {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'approve',
+        reply: 'Please resend the invitations.',
+        priority: 'normal',
+      }),
+    });
+  assert.equal((await review(firstCookie)).status, 200);
+  assert.equal((await review(secondCookie)).status, 200);
+  const submitted = await fetch(`${baseUrl}/tickets`, {
+    method: 'POST',
+    headers: { cookie: firstCookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ question: 'Reset this question' }),
+  });
+  const { id } = await submitted.json();
+
+  const reset = await fetch(`${baseUrl}/reset`, {
+    method: 'POST',
+    headers: { cookie: firstCookie },
+  });
+  assert.equal(reset.status, 204);
+  const restored = await (
+    await fetch(`${baseUrl}/tickets/1`, { headers: { cookie: firstCookie } })
+  ).json();
+  assert.equal(restored.status, 'open');
+  assert.equal(restored.review_state, null);
+  assert.equal(restored.history.length, 2);
+  assert.equal(
+    (await fetch(`${baseUrl}/tickets/${id}`, { headers: { cookie: firstCookie } }))
+      .status,
+    404,
+  );
+  const other = await (
+    await fetch(`${baseUrl}/tickets/1`, { headers: { cookie: secondCookie } })
+  ).json();
+  assert.equal(other.status, 'resolved');
+  assert.equal(other.history.length, 3);
+  assert.equal(
+    (await fetch(`${baseUrl}/reset`, { method: 'POST', headers: { cookie: firstCookie } }))
+      .status,
+    204,
+  );
+});
+
 test('an existing inbox keeps its data when the session schema is installed', async () => {
   const oldDatabase = newDb();
   oldDatabase.public.none(`
@@ -412,6 +488,44 @@ test('an existing inbox keeps its data when the session schema is installed', as
       oldServer.close((error) => (error ? reject(error) : resolve())),
     );
     await oldPool.end();
+  }
+});
+
+test('an empty database starts with the fictional inbox and keeps visitor changes on restart', async () => {
+  const freshDatabase = newDb();
+  const { Pool: FreshPool } = freshDatabase.adapters.createPg();
+  const freshPool = new FreshPool();
+  try {
+    await prepareDatabase(freshPool);
+    const freshServer = createApp(freshPool).listen(0);
+    try {
+      await new Promise<void>((resolve) => freshServer.once('listening', resolve));
+      const address = freshServer.address();
+      if (!address || typeof address === 'string') throw new Error('No server address');
+      const url = `http://127.0.0.1:${address.port}`;
+      const inbox = await fetch(`${url}/tickets`);
+      assert.deepEqual(
+        (await inbox.json()).map((ticket: { id: number }) => ticket.id),
+        [1, 2, 3, 4],
+      );
+      const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
+      const submitted = await fetch(`${url}/tickets`, {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ question: 'Keep this after restart' }),
+      });
+      assert.equal(submitted.status, 201);
+      const { id } = await submitted.json();
+      await prepareDatabase(freshPool);
+      const kept = await fetch(`${url}/tickets/${id}`, { headers: { cookie } });
+      assert.equal(kept.status, 200);
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        freshServer.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  } finally {
+    await freshPool.end();
   }
 });
 

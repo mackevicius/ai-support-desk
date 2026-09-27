@@ -1,6 +1,15 @@
 import type { Pool } from 'pg';
+import { readFileSync } from 'node:fs';
 
 export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
+  const existing = await pool.query(
+    "SELECT table_name FROM information_schema.tables WHERE table_name = 'support_tickets'",
+  );
+  if (!existing.rows.length) {
+    await pool.query(
+      readFileSync(new URL('../../db/seed.sql', import.meta.url), 'utf8'),
+    );
+  }
   await pool.query(
     'ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS session_id text',
   );
