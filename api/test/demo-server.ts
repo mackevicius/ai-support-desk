@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { newDb } from 'pg-mem';
 import { createApp } from '../src/app.js';
+import { prepareDatabase } from '../src/schema.js';
 
 const database = newDb();
 database.public.none(
@@ -8,4 +9,5 @@ database.public.none(
 );
 const { Pool } = database.adapters.createPg();
 const pool = new Pool();
+await prepareDatabase(pool);
 createApp(pool).listen(3101, '127.0.0.1');
