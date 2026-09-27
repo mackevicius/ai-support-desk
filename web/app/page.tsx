@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { resetWorkspace, submitRequest } from './actions';
 import { getTickets } from './data';
 import { Queue } from './queue';
+import { SubmitButton } from './_components/submit-button';
 
 export default async function Home() {
   const tickets = await getTickets(
@@ -16,7 +17,7 @@ export default async function Home() {
           <h1>Support inbox</h1>
         </div>
         <form action={resetWorkspace}>
-          <button className="reset-button" type="submit">Reset demo</button>
+          <SubmitButton className="reset-button" label="Reset demo" pendingLabel="Resetting demo..." />
         </form>
       </div>
       <form className="request-form" action={submitRequest}>
@@ -31,7 +32,7 @@ export default async function Home() {
         />
         <div className="form-footer">
           <span>New requests do not receive an AI-generated answer draft.</span>
-          <button type="submit">Submit request</button>
+          <SubmitButton label="Submit request" pendingLabel="Submitting request..." />
         </div>
       </form>
       <Queue tickets={tickets} />
