@@ -2,18 +2,23 @@ import React from 'react';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
-import { reviewRequest } from '../../actions';
+import { generateRequest, reviewRequest } from '../../actions';
 import { getTicket, getTickets } from '../../data';
 import { ReviewButtons, SubmitButton } from '../../_components/submit-button';
 
 export default async function TicketPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ generation?: string }>;
 }) {
   const { id } = await params;
-  const sessionId = (await cookies()).get('demo_session')?.value;
-  const ticket = await getTicket(id, sessionId);
+  const { generation } = await searchParams;
+  const jar = await cookies();
+  const sessionId = jar.get('demo_session')?.value;
+  const owner = Boolean(jar.get('owner_session')?.value);
+  const ticket = await getTicket(id, sessionId, jar.get('owner_session')?.value);
   if (!ticket) notFound();
   const queue = await getTickets(sessionId);
   const position = queue.findIndex((item) => item.id === ticket.id);
@@ -45,17 +50,29 @@ export default async function TicketPage({
           <h2 id="question-title">Customer question</h2>
           <p>{ticket.question}</p>
         </section>
-        {ticket.customer_name === 'Visitor' && (
+        {generation && (
+          <p role="alert" className="draft-notice">
+            {generation === 'limit' ? 'Daily live generation limit reached.' : 'Live generation is unavailable. Please try again later.'}
+          </p>
+        )}
+        {owner && ticket.status === 'open' && !ticket.review_state && !ticket.draft?.live && (
+          <form action={generateRequest} className="draft-notice">
+            <input type="hidden" name="id" value={ticket.id} />
+            <SubmitButton label="Generate live draft" pendingLabel="Generating draft..." />
+          </form>
+        )}
+        {ticket.customer_name === 'Visitor' && !ticket.draft && (
           <section className="draft-notice" aria-label="Answer draft">
             No answer draft has been generated for this request.
           </section>
         )}
         {ticket.draft && (
           <section className="draft" aria-label="Answer draft">
-            <h2>Saved AI draft</h2>
+            <h2>{ticket.draft.live ? 'Live AI draft' : 'Saved AI draft'}</h2>
             <p className="draft-label">
-              Saved result for this sample request. Nothing is sent without
-              approval.
+              {ticket.draft.live
+                ? 'Live suggestion. Nothing is sent without approval.'
+                : 'Saved result for this sample request. Nothing is sent without approval.'}
             </p>
             <p>
               Suggested priority:{' '}
@@ -80,6 +97,14 @@ export default async function TicketPage({
             </div>
             {['saved', 'rejected', 'reopened'].includes(ticket.draft.state) && (
               <div className="review-controls">
+                {ticket.draft.state === 'saved' && ticket.priority !== ticket.draft.suggested_priority && (
+                  <form action={reviewRequest} className="priority-approval">
+                    <input type="hidden" name="id" value={ticket.id} />
+                    <input type="hidden" name="action" value="priority" />
+                    <input type="hidden" name="priority" value={ticket.draft.suggested_priority} />
+                    <SubmitButton label={`Apply ${ticket.draft.suggested_priority} priority`} pendingLabel="Applying priority..." />
+                  </form>
+                )}
                 <form action={reviewRequest} className="review-form">
                   <input type="hidden" name="id" value={ticket.id} />
                   <label htmlFor="reply">Reply</label>

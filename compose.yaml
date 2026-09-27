@@ -21,11 +21,26 @@ services:
     environment:
       DATABASE_URL: postgres://support:local_only@db:5432/support_desk
       PORT: 3001
+      PYTHON_URL: http://ai:8000
+      AI_SERVICE_SECRET: ${AI_SERVICE_SECRET:-local-service-secret}
+      OWNER_PASSWORD: ${OWNER_PASSWORD:-}
+      OWNER_SESSION_SECRET: ${OWNER_SESSION_SECRET:-}
     depends_on:
       db:
         condition: service_healthy
+      ai:
+        condition: service_started
     ports:
       - '3001:3001'
+
+  ai:
+    build:
+      context: .
+      dockerfile: ai/Dockerfile
+    environment:
+      PORT: 8000
+      AI_SERVICE_SECRET: ${AI_SERVICE_SECRET:-local-service-secret}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
 
   web:
     build:

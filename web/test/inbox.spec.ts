@@ -1,5 +1,25 @@
 import { expect, test } from '@playwright/test';
 
+test('only a signed-in owner sees live generation', async ({ page }) => {
+  await page.goto('/tickets/1');
+  await expect(page.getByRole('button', { name: 'Generate live draft' })).toHaveCount(0);
+  await page.getByRole('link', { name: 'Owner sign in' }).click();
+  await page.getByLabel('Password').fill('wrong-password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('main [role="alert"]')).toHaveText('Incorrect password.');
+  await page.getByLabel('Password').fill('test-password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+  await page.goto('/tickets/1');
+  await page.getByRole('button', { name: 'Generate live draft' }).click();
+  await expect(page.locator('main [role="alert"]')).toHaveText('Live generation is unavailable. Please try again later.');
+  await expect(page.getByRole('heading', { name: 'Saved AI draft' })).toBeVisible();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByRole('link', { name: 'Owner sign in' })).toBeVisible();
+  await page.goto('/tickets/1');
+  await expect(page.getByRole('button', { name: 'Generate live draft' })).toHaveCount(0);
+});
+
 test('a visitor submits a request that another session cannot see', async ({
   browser,
   page,

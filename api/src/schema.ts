@@ -26,6 +26,14 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
       'ticket_reviews',
       'session_id text NOT NULL, ticket_id integer NOT NULL REFERENCES support_tickets(id), state text NOT NULL, priority text NOT NULL, approved_reply text, created_at timestamptz NOT NULL DEFAULT NOW(), PRIMARY KEY (session_id, ticket_id)',
     ],
+    [
+      'session_drafts',
+      'session_id text NOT NULL, ticket_id integer NOT NULL REFERENCES support_tickets(id), reply text NOT NULL, suggested_priority text NOT NULL, source_ids text NOT NULL, created_at timestamptz NOT NULL DEFAULT NOW(), PRIMARY KEY (session_id, ticket_id)',
+    ],
+    [
+      'generation_usage',
+      'day text PRIMARY KEY, requests integer NOT NULL, reserved_tokens integer NOT NULL DEFAULT 0',
+    ],
   ]) {
     try {
       await pool.query(`CREATE TABLE ${table} (${columns})`);
@@ -45,6 +53,9 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
   );
   await pool.query(
     'ALTER TABLE ticket_reviews ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT NOW()',
+  );
+  await pool.query(
+    'ALTER TABLE generation_usage ADD COLUMN IF NOT EXISTS reserved_tokens integer NOT NULL DEFAULT 0',
   );
   for (const [id, title, body] of [
     [

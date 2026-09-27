@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { newDb } from 'pg-mem';
-import type { Server } from 'node:http';
+import { createServer, type Server } from 'node:http';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { fileURLToPath } from 'node:url';
 import { createApp } from '../src/app.js';
 import { prepareDatabase } from '../src/schema.js';
 
@@ -113,6 +116,160 @@ test('a visitor can inspect a request and its history', async () => {
     ],
   });
   assert.equal((await fetch(`${baseUrl}/tickets/999`)).status, 404);
+});
+
+test('a visitor cannot request live generation', async () => {
+  const inbox = await fetch(`${baseUrl}/tickets`);
+  const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
+  const response = await fetch(`${baseUrl}/tickets/1/generate`, {
+    method: 'POST',
+    headers: { cookie },
+  });
+  assert.equal(response.status, 403);
+  const ticket = await (await fetch(`${baseUrl}/tickets/1`, { headers: { cookie } })).json();
+  assert.equal(ticket.draft.state, 'saved');
+});
+
+test('an owner generates a cited draft through Python without approving it', async () => {
+  const previous = {
+    password: process.env.OWNER_PASSWORD,
+    secret: process.env.OWNER_SESSION_SECRET,
+    python: process.env.PYTHON_URL,
+    serviceSecret: process.env.AI_SERVICE_SECRET,
+  };
+  const calls: unknown[] = [];
+  const provider = createServer(async (request, response) => {
+    assert.equal(request.url, '/v1/chat/completions');
+    assert.equal(request.method, 'POST');
+    assert.equal(request.headers.authorization, 'Bearer fake-provider-key');
+    let body = '';
+    for await (const chunk of request) body += chunk;
+    calls.push(JSON.parse(body));
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({
+        reply: 'Workspace admins can resend invitations from Settings > Team.',
+        suggested_priority: 'high',
+        source_ids: [1],
+      }) } }],
+    }));
+  });
+  provider.listen(0);
+  await once(provider, 'listening');
+  const providerAddress = provider.address();
+  if (!providerAddress || typeof providerAddress === 'string') throw new Error('No provider address');
+  const reservation = createServer();
+  reservation.listen(0);
+  await once(reservation, 'listening');
+  const pythonAddress = reservation.address();
+  if (!pythonAddress || typeof pythonAddress === 'string') throw new Error('No Python address');
+  await new Promise<void>((resolve) => reservation.close(() => resolve()));
+  const pythonUrl = `http://127.0.0.1:${pythonAddress.port}`;
+  const python = spawn('python3', ['-u', fileURLToPath(new URL('../../ai/server.py', import.meta.url))], {
+    env: {
+      ...process.env,
+      PORT: String(pythonAddress.port),
+      AI_SERVICE_SECRET: 'test-service-secret',
+      OPENAI_API_KEY: 'fake-provider-key',
+      OPENAI_BASE_URL: `http://127.0.0.1:${providerAddress.port}`,
+    },
+  });
+  process.env.OWNER_PASSWORD = 'test-password';
+  process.env.OWNER_SESSION_SECRET = 'test-session-secret';
+  process.env.PYTHON_URL = pythonUrl;
+  process.env.AI_SERVICE_SECRET = 'test-service-secret';
+  try {
+    let ready = false;
+    for (let attempt = 0; attempt < 40; attempt++) {
+      try {
+        ready = (await fetch(`${pythonUrl}/health`)).ok;
+        if (ready) break;
+      } catch {}
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.ok(ready, 'Python service did not start');
+    assert.equal((await fetch(`${pythonUrl}/generate`, { method: 'POST' })).status, 403);
+    const cookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
+    const login = await fetch(`${baseUrl}/owner/login`, {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ password: 'test-password' }),
+    });
+    assert.equal(login.status, 204);
+    const ownerCookie = login.headers.get('set-cookie')!.split(';')[0];
+    const headers = { cookie: `${cookie}; ${ownerCookie}`, 'content-type': 'application/json' };
+    const otherCookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
+    assert.equal((await fetch(`${baseUrl}/tickets/1/generate`, {
+      method: 'POST', headers: { cookie: `${otherCookie}; ${ownerCookie}` },
+    })).status, 403);
+    const submission = await fetch(`${baseUrl}/tickets`, {
+      method: 'POST', headers, body: JSON.stringify({ question: 'How do I resend an invitation?' }),
+    });
+    const { id } = await submission.json();
+    const generated = await fetch(`${baseUrl}/tickets/${id}/generate`, { method: 'POST', headers });
+    assert.equal(generated.status, 200);
+    const ticket = await generated.json();
+    assert.equal(ticket.status, 'open');
+    assert.equal(ticket.priority, 'normal');
+    assert.equal(ticket.approved_reply, null);
+    assert.equal(ticket.draft.reply, 'Workspace admins can resend invitations from Settings > Team.');
+    assert.equal(ticket.draft.suggested_priority, 'high');
+    assert.equal(ticket.draft.sources[0].title, 'Inviting teammates');
+    assert.equal(calls.length, 1);
+    const providerCall = calls[0] as { max_tokens: number; messages: { content: string }[] };
+    assert.equal(providerCall.max_tokens, 300);
+    const promptData = JSON.parse(providerCall.messages[1].content);
+    assert.equal(promptData.question, 'How do I resend an invitation?');
+    assert.equal(promptData.articles[0].id, 1);
+    const signedOut = await (await fetch(`${baseUrl}/tickets/${id}`, {
+      headers: { cookie },
+    })).json();
+    assert.equal(signedOut.draft, null);
+    assert.equal((await fetch(`${baseUrl}/tickets/${id}/review`, {
+      method: 'POST', headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'approve', reply: ticket.draft.reply, priority: 'high' }),
+    })).status, 403);
+    const prioritized = await fetch(`${baseUrl}/tickets/${id}/review`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ action: 'priority', priority: 'high' }),
+    });
+    assert.equal(prioritized.status, 200);
+    const priorityOnly = await prioritized.json();
+    assert.equal(priorityOnly.status, 'open');
+    assert.equal(priorityOnly.priority, 'high');
+    assert.equal(priorityOnly.approved_reply, null);
+    assert.equal(priorityOnly.draft.state, 'saved');
+    const approved = await fetch(`${baseUrl}/tickets/${id}/review`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ action: 'approve', reply: ticket.draft.reply, priority: 'high' }),
+    });
+    assert.equal(approved.status, 200);
+    assert.equal((await approved.json()).status, 'resolved');
+    assert.equal((await fetch(`${baseUrl}/tickets/${id}/generate`, { method: 'POST', headers })).status, 409);
+    assert.equal(calls.length, 1);
+    await pool.query("UPDATE generation_usage SET requests = 20 WHERE day = $1", [new Date().toISOString().slice(0, 10)]);
+    const another = await fetch(`${baseUrl}/tickets`, {
+      method: 'POST', headers, body: JSON.stringify({ question: 'How do I invite a teammate?' }),
+    });
+    const nextTicket = await another.json();
+    assert.equal((await fetch(`${baseUrl}/tickets/${nextTicket.id}/generate`, { method: 'POST', headers })).status, 429);
+    assert.equal(calls.length, 1);
+    await pool.query('UPDATE generation_usage SET requests = 0, reserved_tokens = 400000 WHERE day = $1', [new Date().toISOString().slice(0, 10)]);
+    assert.equal((await fetch(`${baseUrl}/tickets/${nextTicket.id}/generate`, { method: 'POST', headers })).status, 429);
+    assert.equal(calls.length, 1);
+  } finally {
+    if (previous.password === undefined) delete process.env.OWNER_PASSWORD;
+    else process.env.OWNER_PASSWORD = previous.password;
+    if (previous.secret === undefined) delete process.env.OWNER_SESSION_SECRET;
+    else process.env.OWNER_SESSION_SECRET = previous.secret;
+    if (previous.python === undefined) delete process.env.PYTHON_URL;
+    else process.env.PYTHON_URL = previous.python;
+    if (previous.serviceSecret === undefined) delete process.env.AI_SERVICE_SECRET;
+    else process.env.AI_SERVICE_SECRET = previous.serviceSecret;
+    python.kill();
+    await once(python, 'exit');
+    await new Promise<void>((resolve) => provider.close(() => resolve()));
+  }
 });
 
 test('a saved draft requires approval and review stays in the visitor session', async () => {

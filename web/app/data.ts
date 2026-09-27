@@ -12,6 +12,7 @@ export type Ticket = TicketSummary & {
   approved_reply: string | null;
   review_state: 'approved' | 'rejected' | 'reopened' | null;
   draft: null | {
+    live?: boolean;
     state: 'saved' | 'approved' | 'rejected' | 'reopened';
     reply: string;
     suggested_priority: 'low' | 'normal' | 'high';
@@ -35,12 +36,13 @@ export async function getTickets(sessionId?: string): Promise<TicketSummary[]> {
 export async function getTicket(
   id: string,
   sessionId?: string,
+  ownerSession?: string,
 ): Promise<Ticket | null> {
   const response = await fetch(
     `${process.env.API_URL ?? 'http://localhost:3001'}/tickets/${encodeURIComponent(id)}`,
     {
       cache: 'no-store',
-      headers: sessionId ? { cookie: `demo_session=${sessionId}` } : undefined,
+      headers: sessionId ? { cookie: `demo_session=${sessionId}${ownerSession ? `; owner_session=${ownerSession}` : ''}` } : undefined,
     },
   );
   if (response.status === 404) return null;
@@ -87,6 +89,7 @@ export async function reviewTicket(
   action: string,
   reply?: string,
   priority?: string,
+  ownerSession?: string,
 ) {
   const response = await fetch(
     `${process.env.API_URL ?? 'http://localhost:3001'}/tickets/${encodeURIComponent(id)}/review`,
@@ -94,11 +97,36 @@ export async function reviewTicket(
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        cookie: `demo_session=${sessionId}`,
+        cookie: `demo_session=${sessionId}${ownerSession ? `; owner_session=${ownerSession}` : ''}`,
       },
       body: JSON.stringify({ action, reply, priority }),
       cache: 'no-store',
     },
   );
   if (!response.ok) throw new Error('Could not review the support request');
+}
+
+export async function loginOwner(password: string, sessionId: string) {
+  const response = await fetch(`${process.env.API_URL ?? 'http://localhost:3001'}/owner/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie: `demo_session=${sessionId}` },
+    body: JSON.stringify({ password }),
+    cache: 'no-store',
+  });
+  if (response.status === 503) return 'unavailable';
+  if (!response.ok) return 'invalid';
+  const cookie = response.headers.getSetCookie().find((value) => value.startsWith('owner_session='));
+  return cookie?.split(';')[0].slice('owner_session='.length) ?? 'unavailable';
+}
+
+export async function generateTicket(id: string, sessionId: string, ownerSession: string) {
+  const response = await fetch(
+    `${process.env.API_URL ?? 'http://localhost:3001'}/tickets/${encodeURIComponent(id)}/generate`,
+    {
+      method: 'POST',
+      headers: { cookie: `demo_session=${sessionId}; owner_session=${ownerSession}` },
+      cache: 'no-store',
+    },
+  );
+  return response.status;
 }
