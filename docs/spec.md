@@ -90,7 +90,12 @@ As a customer, the visitor submits a problem and the AI drafts an answer from Tu
 - Use a small model with capped output. Set a spending limit on the provider account as a second guard.
 - When a limit is reached, or the provider refuses for lack of credit, the app says "Live AI is paused for today" and keeps showing saved examples.
 - Keep provider credentials server-side.
-- Docker runs the Next.js app, Node.js API, Python service, and database locally. Use an affordable deployment path for the public demo; managed Kubernetes is not required.
+
+### Running and hosting
+
+- The web app, Node.js API, and Python service stay three separate codebases. Docker Compose runs them with the database locally as long-running services.
+- Kubernetes setup files describe the same four parts. On every pull request, CI creates a throwaway Kubernetes cluster, deploys the app with an in-cluster Postgres, and runs the end-to-end tests against it. There is no hosted cluster.
+- The public demo runs on Vercel's free plan: the web app as Next.js, and the API and Python service as on-demand functions from their own code. The database stays on Neon's free plan. No hosting account holds a payment card, so the worst case of overuse is a paused site, not a bill. See [ADR 0002](adr/0002-vercel-functions-and-kubernetes-in-ci.md).
 - Publish a real deployment, a reproducible setup, and measured evaluation results. Do not claim user adoption or production scale without evidence.
 
 ## Testing Decisions
@@ -104,8 +109,8 @@ As a customer, the visitor submits a problem and the AI drafts an answer from Tu
 
 ## Out Of Scope
 
-Real customer data, real company brands, email delivery, unlimited public AI generation, automatic replies to risky tickets or drafts relying on internal notes, visitor edits to internal notes, mobile apps, managed Kubernetes in the first version, and claims of organizational adoption or production-scale operation.
+Real customer data, real company brands, email delivery, unlimited public AI generation, automatic replies to risky tickets or drafts relying on internal notes, visitor edits to internal notes, mobile apps, a hosted Kubernetes cluster, paid hosting, and claims of organizational adoption or production-scale operation.
 
 ## Further Notes
 
-The project is intended to teach both full-stack development and AI engineering while demonstrating judgment to interviewers. Hosting choices should keep idle cost close to zero, but free-tier availability and API usage limits must be verified before deployment. The provider account holds a small prepaid credit without auto-refill, so running out must degrade gracefully rather than break the app. A local Kubernetes exercise can follow the working Docker deployment if it adds value for a specific application.
+The project is intended to teach both full-stack development and AI engineering while demonstrating judgment to interviewers. Hosting choices should keep idle cost at zero, but free-tier availability and usage limits must be verified before deployment. The provider account holds a small prepaid credit without auto-refill, so running out must degrade gracefully rather than break the app.
