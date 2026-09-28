@@ -59,3 +59,8 @@ services:
           name: ai-support-desk-api
           type: web
           envVarKey: RENDER_EXTERNAL_URL
+      - key: AI_URL
+        fromService:
+          name: ai-support-desk-ai
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
