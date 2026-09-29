@@ -23,3 +23,53 @@ jobs:
       - run: python3 ai/evaluation.py --deterministic --output web/app/quality/results.json && git diff --exit-code -- web/app/quality/results.json
       - run: npm test
       - run: npm run build --workspace web
+
+  kubernetes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: azure/setup-kubectl@v4
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: support-ci
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Build and load images
+        run: |
+          for service in web api ai; do
+            docker build -f "$service/Dockerfile" -t "support-${service}:ci" .
+            kind load docker-image "support-${service}:ci" --name support-ci
+          done
+      - name: Deploy and seed
+        run: |
+          postgres_password="$(openssl rand -hex 24)"
+          kubectl create secret generic support-secrets \
+            --from-literal=postgres-password="$postgres_password" \
+            --from-literal=database-url="postgres://support:$postgres_password@db:5432/support_desk" \
+            --from-literal=owner-password=test-password \
+            --from-literal=owner-session-secret="$(openssl rand -hex 32)" \
+            --from-literal=ai-service-secret="$(openssl rand -hex 32)"
+          kubectl create configmap support-seed --from-file=seed.sql=api/seed.sql
+          kubectl apply -f k8s/
+          for service in db ai api web; do
+            kubectl rollout status "deployment/$service" --timeout=180s
+          done
+      - name: Browser tests against Kubernetes
+        run: |
+          kubectl port-forward service/web 3100:3000 > /tmp/support-port-forward.log 2>&1 &
+          forward_pid=$!
+          trap 'kill "$forward_pid" 2>/dev/null || true' EXIT
+          curl --fail --silent --show-error --retry 20 --retry-delay 2 --retry-connrefused http://127.0.0.1:3100/ > /dev/null
+          PLAYWRIGHT_BASE_URL=http://127.0.0.1:3100 npm test --workspace web
+      - name: Print pod logs on failure
+        if: failure()
+        run: |
+          kubectl get pods -o wide
+          for service in db ai api web; do
+            kubectl logs "deployment/$service" --all-containers=true --tail=200 || true
+          done

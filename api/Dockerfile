@@ -5,6 +5,5 @@ COPY api/package.json api/package.json
 COPY web/package.json web/package.json
 RUN npm ci --no-audit --no-fund
 COPY api api
-COPY db db
 EXPOSE 3001
 CMD ["npm", "run", "start", "--workspace", "api"]

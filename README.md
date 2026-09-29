@@ -12,6 +12,31 @@ docker compose up --build
 
 Open http://localhost:3000 to browse or submit requests. The API is available at http://localhost:3001/tickets. The browser gets a 24-hour demo session cookie; submitted requests stop appearing after 24 hours and expired rows are cleaned up on later submissions. On first start, Postgres loads fictional requests from `api/seed.sql`. The API also applies the additive session schema on first request, so existing Docker volumes keep their data.
 
+### Test the Kubernetes deployment locally
+
+With Docker, [kind](https://kind.sigs.k8s.io/), kubectl, Node.js 24+, and Playwright's Chromium installed, run from the repository root:
+
+```sh
+kind create cluster --name support-ci
+for service in web api ai; do
+	docker build -f "$service/Dockerfile" -t "support-${service}:ci" .
+	kind load docker-image "support-${service}:ci" --name support-ci
+done
+postgres_password="$(openssl rand -hex 24)"
+kubectl create secret generic support-secrets \
+	--from-literal=postgres-password="$postgres_password" \
+	--from-literal=database-url="postgres://support:$postgres_password@db:5432/support_desk" \
+	--from-literal=owner-password=test-password \
+	--from-literal=owner-session-secret="$(openssl rand -hex 32)" \
+	--from-literal=ai-service-secret="$(openssl rand -hex 32)"
+kubectl create configmap support-seed --from-file=seed.sql=api/seed.sql
+kubectl apply -f k8s/
+for service in db ai api web; do kubectl rollout status "deployment/$service" --timeout=180s; done
+kubectl port-forward service/web 3100:3000
+```
+
+Leave the port-forward running. In another terminal, run `npm ci`, `npx playwright install chromium`, and `PLAYWRIGHT_BASE_URL=http://127.0.0.1:3100 npm test --workspace web`. The Postgres container loads the seed on its first start. The owner password is a test fixture; the other secrets are generated locally. No AI-provider key is needed. When finished, run `kind delete cluster --name support-ci`. This ephemeral deployment is for testing, not a replacement for the Vercel demo.
+
 ### Enable live generation locally
 
 Run these steps from the repository root. You do not need any credentials to browse the saved-result demo.

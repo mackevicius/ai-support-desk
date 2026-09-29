@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: api
+          image: support-api:ci
+          imagePullPolicy: Never
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: support-secrets
+                  key: database-url
+            - name: PYTHON_URL
+              value: http://ai:8000
+            - name: AI_SERVICE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: support-secrets
+                  key: ai-service-secret
+            - name: OWNER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: support-secrets
+                  key: owner-password
+            - name: OWNER_SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: support-secrets
+                  key: owner-session-secret
+          ports:
+            - containerPort: 3001
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            periodSeconds: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+spec:
+  selector:
+    app: api
+  ports:
+    - port: 3001
