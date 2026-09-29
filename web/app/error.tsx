@@ -2,6 +2,7 @@
 
 import React, { startTransition, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button } from '../components/ui/button';
 
 const RETRY_DELAY_MS = 5_000;
 const MAX_ATTEMPTS = 24;
@@ -38,29 +39,30 @@ export default function ErrorPage({
 
   return (
     <main className="workspace">
-      <span className="eyebrow">Service unavailable</span>
-      <h1>
-        {gaveUp
-          ? 'The support service is not responding'
-          : 'Waking up the support service'}
-      </h1>
-      <p role="status">
-        {gaveUp
-          ? 'Please try again in a moment.'
-          : 'It sleeps when idle and can take up to a minute to start. Retrying automatically…'}
-      </p>
-      {gaveUp && (
-        <button
-          className="reset-button"
-          onClick={() => {
-            attempts = 0;
-            setAttempt(0);
-            retry();
-          }}
-        >
-          Try again
-        </button>
-      )}
+      <div className="detail">
+        <span className="eyebrow">Service unavailable</span>
+        <h1>
+          {gaveUp
+            ? 'The support service is not responding'
+            : 'Waking up the support service'}
+        </h1>
+        <p role="status" className="my-6">
+          {gaveUp
+            ? 'Please try again in a moment.'
+            : 'It sleeps when idle and can take up to a minute to start. Retrying automatically…'}
+        </p>
+        {gaveUp && (
+          <Button
+            onClick={() => {
+              attempts = 0;
+              setAttempt(0);
+              retry();
+            }}
+          >
+            Try again
+          </Button>
+        )}
+      </div>
     </main>
   );
 }

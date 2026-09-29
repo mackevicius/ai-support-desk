@@ -4,6 +4,7 @@ import { resetWorkspace, submitRequest } from './actions';
 import { getTickets } from './data';
 import { Queue } from './queue';
 import { SubmitButton } from './_components/submit-button';
+import { Textarea } from '../components/ui/textarea';
 
 export default async function Home() {
   const tickets = await getTickets(
@@ -17,12 +18,12 @@ export default async function Home() {
           <h1>Support inbox</h1>
         </div>
         <form action={resetWorkspace}>
-          <SubmitButton className="reset-button" label="Reset demo" pendingLabel="Resetting demo..." />
+          <SubmitButton className="reset-button" variant="secondary" label="Reset demo" pendingLabel="Resetting demo..." />
         </form>
       </div>
       <form className="request-form" action={submitRequest}>
         <label htmlFor="question">New support request</label>
-        <textarea
+        <Textarea
           id="question"
           name="question"
           required
