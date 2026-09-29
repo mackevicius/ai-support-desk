@@ -1,0 +1,27 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "web": {
+      "root": "web/",
+      "framework": "nextjs",
+      "bindings": [
+        { "type": "service", "service": "api", "format": "url", "env": "API_URL" }
+      ]
+    },
+    "api": {
+      "root": "api/",
+      "framework": "express",
+      "entrypoint": "server.ts",
+      "bindings": [
+        { "type": "service", "service": "ai", "format": "url", "env": "PYTHON_URL" }
+      ]
+    },
+    "ai": {
+      "root": "ai/",
+      "entrypoint": "app:app"
+    }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": { "service": "web" } }
+  ]
+}

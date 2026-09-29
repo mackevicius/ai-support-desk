@@ -108,6 +108,29 @@ def generate(question, articles, metadata_callback=None):
     return answer
 
 
+def generate_request(authorization, content_length, body_stream):
+    secret = os.environ.get('AI_SERVICE_SECRET')
+    if not secret or not hmac.compare_digest(authorization, f'Bearer {secret}'):
+        return 403, None
+    try:
+        length = int(content_length)
+        if length < 1 or length > 3200000:
+            return 400, None
+        body = json.loads(body_stream.read(length))
+        question, articles = body['question'], body['articles']
+        if (not isinstance(question, str) or not question.strip() or len(question) > 5000 or
+                not isinstance(articles, list) or len(articles) > 100 or
+                any(not isinstance(article, dict) or type(article.get('id')) is not int or
+                    not isinstance(article.get('title'), str) or not isinstance(article.get('body'), str)
+                    for article in articles)):
+            return 400, None
+        return 200, generate(question, articles)
+    except (KeyError, ValueError, TypeError):
+        return 400, None
+    except Exception:
+        return 503, None
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path != '/health':
@@ -120,30 +143,11 @@ class Handler(BaseHTTPRequestHandler):
         if self.path != '/generate':
             self.send_error(404)
             return
-        secret = os.environ.get('AI_SERVICE_SECRET')
-        if not secret or not hmac.compare_digest(self.headers.get('Authorization', ''), f'Bearer {secret}'):
-            self.send_error(403)
-            return
-        try:
-            length = int(self.headers.get('Content-Length', '0'))
-            if length < 1 or length > 3200000:
-                self.send_error(400)
-                return
-            body = json.loads(self.rfile.read(length))
-            question, articles = body['question'], body['articles']
-            if (not isinstance(question, str) or not question.strip() or len(question) > 5000 or
-                    not isinstance(articles, list) or len(articles) > 100 or
-                    any(not isinstance(article, dict) or type(article.get('id')) is not int or
-                        not isinstance(article.get('title'), str) or not isinstance(article.get('body'), str)
-                        for article in articles)):
-                self.send_error(400)
-                return
-            answer = generate(question, articles)
-        except (KeyError, ValueError, TypeError):
-            self.send_error(400)
-            return
-        except Exception:
-            self.send_error(503)
+        status, answer = generate_request(
+            self.headers.get('Authorization', ''), self.headers.get('Content-Length', '0'), self.rfile,
+        )
+        if status != 200:
+            self.send_error(status)
             return
         data = json.dumps(answer).encode()
         self.send_response(200)

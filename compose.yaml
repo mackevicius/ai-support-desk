@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: local_only
     volumes:
       - support_data:/var/lib/postgresql/data
-      - ./db/seed.sql:/docker-entrypoint-initdb.d/seed.sql:ro
+      - ./api/seed.sql:/docker-entrypoint-initdb.d/seed.sql:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U support -d support_desk']
       interval: 2s

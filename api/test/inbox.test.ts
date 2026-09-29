@@ -11,7 +11,7 @@ import { prepareDatabase } from '../src/schema.js';
 
 const database = newDb();
 database.public.none(
-  readFileSync(new URL('../../db/seed.sql', import.meta.url), 'utf8'),
+  readFileSync(new URL('../seed.sql', import.meta.url), 'utf8'),
 );
 const { Pool } = database.adapters.createPg();
 const pool = new Pool();

@@ -7,7 +7,7 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
   );
   if (!existing.rows.length) {
     await pool.query(
-      readFileSync(new URL('../../db/seed.sql', import.meta.url), 'utf8'),
+      readFileSync(new URL('../seed.sql', import.meta.url), 'utf8'),
     );
   }
   await pool.query(
