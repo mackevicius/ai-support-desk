@@ -18,7 +18,7 @@ export default async function Home() {
           <h1>Support inbox</h1>
         </div>
         <form action={resetWorkspace}>
-          <SubmitButton className="reset-button" label="Reset demo" pendingLabel="Resetting demo..." />
+          <SubmitButton className="reset-button" variant="secondary" label="Reset demo" pendingLabel="Resetting demo..." />
         </form>
       </div>
       <form className="request-form" action={submitRequest}>

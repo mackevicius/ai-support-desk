@@ -157,7 +157,7 @@ export default async function TicketPage({
               <form action={reviewRequest}>
                 <input type="hidden" name="id" value={ticket.id} />
                 <input type="hidden" name="action" value="reopen" />
-                <SubmitButton label="Reopen request" pendingLabel="Reopening request..." className="secondary" />
+                <SubmitButton label="Reopen request" pendingLabel="Reopening request..." variant="secondary" />
               </form>
             )}
           </section>
@@ -166,7 +166,7 @@ export default async function TicketPage({
           <form action={reviewRequest} className="draft">
             <input type="hidden" name="id" value={ticket.id} />
             <input type="hidden" name="action" value="reopen" />
-            <SubmitButton label="Reopen request" pendingLabel="Reopening request..." className="secondary" />
+            <SubmitButton label="Reopen request" pendingLabel="Reopening request..." variant="secondary" />
           </form>
         )}
         {!ticket.draft && ticket.review_state === 'reopened' && (

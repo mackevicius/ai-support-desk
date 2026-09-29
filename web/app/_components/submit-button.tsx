@@ -8,10 +8,12 @@ export function SubmitButton({
   label,
   pendingLabel,
   className,
+  variant,
 }: {
   label: string;
   pendingLabel: string;
   className?: string;
+  variant?: 'default' | 'secondary';
 }) {
   const { pending } = useFormStatus();
 
@@ -19,7 +21,7 @@ export function SubmitButton({
     <Button
       type="submit"
       className={className}
-      variant={className === 'secondary' || className === 'reset-button' ? 'secondary' : 'default'}
+      variant={variant}
       disabled={pending}
       aria-busy={pending}
     >

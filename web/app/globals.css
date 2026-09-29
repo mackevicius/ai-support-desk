@@ -12,6 +12,10 @@
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-ring: var(--ring);
+  --color-strip: var(--strip);
+  --color-strip-foreground: var(--strip-foreground);
+  --color-pass: var(--pass);
+  --color-fail: var(--fail);
   --font-sans: 'Nunito', sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
 }
@@ -28,6 +32,10 @@
   --secondary: #40352c;
   --secondary-foreground: #fff4e9;
   --ring: #ffad70;
+  --strip: #fff3b0;
+  --strip-foreground: #3a3100;
+  --pass: #65c591;
+  --fail: #ff8585;
   font-family: 'Nunito', sans-serif;
   color-scheme: dark;
 }
@@ -44,6 +52,8 @@
   --secondary: #eee4d9;
   --secondary-foreground: #492910;
   --ring: #a43b00;
+  --pass: #17643a;
+  --fail: #a32222;
   color-scheme: light;
 }
 
@@ -60,7 +70,7 @@
   select { @apply min-h-10 rounded-lg border border-input bg-card px-3 text-foreground; }
 }
 
-.demo-strip { @apply bg-[#fff3b0] px-4 py-2 text-center text-xs font-bold text-[#3a3100]; }
+.demo-strip { @apply bg-strip px-4 py-2 text-center text-xs font-bold text-strip-foreground; }
 .demo-strip a { @apply underline underline-offset-2; }
 .topbar { @apply flex min-h-18 flex-wrap items-center gap-x-5 gap-y-2 border-b border-border bg-card px-5 py-3 sm:px-8; }
 .brand { @apply flex items-center gap-2 text-lg font-extrabold whitespace-nowrap; }
@@ -139,10 +149,8 @@
 .quality-list { @apply border-t border-border; }
 .quality-case { @apply grid gap-2 border-b border-border py-5 hover:bg-secondary; }
 .quality-case-top { @apply flex justify-between gap-4; }
-.quality-pass { @apply font-bold text-[#65c591]; }
-.quality-fail { @apply font-bold text-[#ff8585]; }
-.agent .quality-pass { color: #17643a; }
-.agent .quality-fail { color: #a32222; }
+.quality-pass { @apply font-bold text-pass; }
+.quality-fail { @apply font-bold text-fail; }
 .quality-section { @apply wrap-break-word; }
 .quality-section h2 { @apply text-base; }
 .quality-source { @apply py-2; }
