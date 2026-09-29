@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useFormStatus } from 'react-dom';
+import { Button } from '../../components/ui/button';
 
 export function SubmitButton({
   label,
@@ -15,14 +16,15 @@ export function SubmitButton({
   const { pending } = useFormStatus();
 
   return (
-    <button
+    <Button
       type="submit"
       className={className}
+      variant={className === 'secondary' || className === 'reset-button' ? 'secondary' : 'default'}
       disabled={pending}
       aria-busy={pending}
     >
       {pending ? pendingLabel : label}
-    </button>
+    </Button>
   );
 }
 
@@ -33,25 +35,25 @@ export function ReviewButtons({ showReject }: { showReject: boolean }) {
   return (
     <>
       <input type="hidden" name="action" value={active} />
-      <button
+      <Button
         type="submit"
         onClick={() => setActive('approve')}
         disabled={pending}
         aria-busy={pending && active === 'approve'}
       >
         {pending && active === 'approve' ? 'Approving reply...' : 'Approve in-app reply'}
-      </button>
+      </Button>
       {showReject && (
-        <button
+        <Button
           type="submit"
           formNoValidate
-          className="secondary"
+          variant="secondary"
           onClick={() => setActive('reject')}
           disabled={pending}
           aria-busy={pending && active === 'reject'}
         >
           {pending && active === 'reject' ? 'Rejecting suggestion...' : 'Reject suggestion'}
-        </button>
+        </Button>
       )}
     </>
   );

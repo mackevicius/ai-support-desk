@@ -4,6 +4,7 @@ import { resetWorkspace, submitRequest } from './actions';
 import { getTickets } from './data';
 import { Queue } from './queue';
 import { SubmitButton } from './_components/submit-button';
+import { Textarea } from '../components/ui/textarea';
 
 export default async function Home() {
   const tickets = await getTickets(
@@ -22,7 +23,7 @@ export default async function Home() {
       </div>
       <form className="request-form" action={submitRequest}>
         <label htmlFor="question">New support request</label>
-        <textarea
+        <Textarea
           id="question"
           name="question"
           required

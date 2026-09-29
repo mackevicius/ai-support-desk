@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { signInOwner } from '../actions';
 import { SubmitButton } from '../_components/submit-button';
+import { Input } from '../../components/ui/input';
 
 export default async function OwnerPage({
   searchParams,
@@ -16,7 +17,7 @@ export default async function OwnerPage({
         {error && <p role="alert">{error === 'invalid' ? 'Incorrect password.' : 'Owner sign-in is unavailable.'}</p>}
         <form action={signInOwner} className="review-form">
           <label htmlFor="owner-password">Password</label>
-          <input id="owner-password" name="password" type="password" required autoComplete="current-password" />
+          <Input id="owner-password" name="password" type="password" required autoComplete="current-password" />
           <SubmitButton label="Sign in" pendingLabel="Signing in..." />
         </form>
       </section>

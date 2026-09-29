@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { generateRequest, reviewRequest } from '../../actions';
 import { getTicket, getTickets } from '../../data';
 import { ReviewButtons, SubmitButton } from '../../_components/submit-button';
+import { Textarea } from '../../../components/ui/textarea';
 
 export default async function TicketPage({
   params,
@@ -108,7 +109,7 @@ export default async function TicketPage({
                 <form action={reviewRequest} className="review-form">
                   <input type="hidden" name="id" value={ticket.id} />
                   <label htmlFor="reply">Reply</label>
-                  <textarea
+                  <Textarea
                     id="reply"
                     name="reply"
                     defaultValue={
@@ -174,7 +175,7 @@ export default async function TicketPage({
             <input type="hidden" name="id" value={ticket.id} />
             <input type="hidden" name="action" value="approve" />
             <label htmlFor="reply">Reply</label>
-            <textarea
+            <Textarea
               id="reply"
               name="reply"
               required
