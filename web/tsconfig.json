@@ -4,6 +4,9 @@
     "lib": ["dom", "dom.iterable", "esnext"],
     "module": "esnext",
     "moduleResolution": "bundler",
+    "paths": {
+      "@/*": ["./*"]
+    },
     "jsx": "preserve",
     "strict": true,
     "noEmit": true,
