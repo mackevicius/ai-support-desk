@@ -18,8 +18,11 @@ export function SeatSwitch({ seat }: { seat: 'customer' | 'agent' }) {
           type="button"
           variant="secondary"
           aria-pressed={seat === option}
-          disabled={pending || seat === option}
-          onClick={() => startTransition(() => selectSeat(option, pathname))}
+          disabled={pending}
+          onClick={() => {
+            if (seat !== option)
+              startTransition(() => selectSeat(option, pathname));
+          }}
         >
           {option === 'customer' ? 'Customer' : 'Agent'}
         </Button>
