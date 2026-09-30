@@ -4,6 +4,8 @@ Ask Tunely a question in the customer chat or choose an example problem. A clear
 
 The Agent seat handles sample requests and new handed-off conversations in three columns: an open-first inbox with a status filter, the customer thread and editable answer draft, and a numbered "How the AI decided" trail. Fixed code rules hand off refunds, double charges, account security and weakly supported answers even when the provider suggests replying. Agents can ask for details without closing the request, redraft, reject, approve a priority or reply, and reopen. Approval delivers the edited reply as "Replied by our team" and opens the next unresolved request. Redrafts count toward the visitor's live-draft allowance. The decision trail uses the saved decision and reason recorded in history. A signed-in owner can manage help articles and generate live drafts for sample requests. Retired articles are excluded from new drafts; saved drafts keep their original citations. No email is sent.
 
+Agent home opens the first open request in that workspace, or the first remaining request when none are open. Switching seats on a submitted conversation keeps that conversation selected. Reset remains available in the inbox column.
+
 ## Run locally
 
 With Docker Compose installed, run from the repository root:
@@ -107,4 +109,4 @@ The API's `/health` checks database availability. Vercel function logs show fail
 
 ## Checks
 
-With Node.js 24+ and Python 3.13+, run `npm ci`, `npx playwright install chromium`, `npm run typecheck`, `npm test`, and `npm run build --workspace web`. Browser tests start Next.js, an in-memory API, a fake provider, and Python on ports 3100 through 3103; they need neither Docker nor paid credentials. If those ports are in use, run `PLAYWRIGHT_PORT=3200 npm test` to use ports 3200 through 3203 and a separate Next.js test build. API and Python tests also use fake provider responses.
+With Node.js 24+ and Python 3.13+, run `npm ci`, `npx playwright install chromium`, `npm run typecheck`, `npm test`, and `npm run build --workspace web`. Browser tests start Next.js, an in-memory API, a fake provider, and Python on ports 3100 through 3103; they need neither Docker nor paid credentials. Test runs build into `web/.next-test`, separate from the dev server's `web/.next`. If those ports are in use, for example by a running dev server, run `PLAYWRIGHT_PORT=3200 npm test` to use ports 3200 through 3203. API and Python tests also use fake provider responses.

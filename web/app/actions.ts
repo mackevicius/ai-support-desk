@@ -3,6 +3,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import {
+  agentHomeTicket,
   generateTicket,
   getTickets,
   loginOwner,
@@ -11,6 +12,23 @@ import {
   saveHelpArticle,
   submitQuestion,
 } from './data';
+
+export async function selectSeat(seat: 'customer' | 'agent', pathname: string) {
+  if (seat !== 'customer' && seat !== 'agent') throw new Error('Invalid seat');
+  const jar = await cookies();
+  jar.set('demo_seat', seat, {
+    path: '/',
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  });
+  if (/^\/tickets\/\d+$/.test(pathname)) redirect(pathname);
+  if (seat === 'agent') {
+    const tickets = await getTickets(jar.get('demo_session')?.value);
+    const selected = agentHomeTicket(tickets);
+    if (selected) redirect(`/tickets/${selected.id}`);
+  }
+  redirect('/');
+}
 
 export async function signInOwner(formData: FormData) {
   const password = formData.get('password');

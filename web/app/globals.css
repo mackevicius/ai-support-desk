@@ -356,6 +356,9 @@
 .queue-empty {
   @apply p-5 text-sm text-muted;
 }
+.queue-reset {
+  @apply p-5;
+}
 .request[aria-current='page'] {
   @apply bg-secondary;
 }

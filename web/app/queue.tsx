@@ -4,6 +4,8 @@ import React from 'react';
 import { useState } from 'react';
 import Link from 'next/link';
 import type { TicketSummary } from './data';
+import { resetWorkspace } from './actions';
+import { SubmitButton } from './_components/submit-button';
 
 export function Queue({
   tickets,
@@ -19,7 +21,7 @@ export function Queue({
   return (
     <aside className="queue" aria-label="Support inbox">
       <div className="queue-header">
-        <span>Inbox</span>
+        <h2>Support inbox</h2>
         <strong>{tickets.length}</strong>
       </div>
       <label className="queue-filter">
@@ -64,6 +66,13 @@ export function Queue({
         ))}
         {!visible.length && <p className="queue-empty">No requests</p>}
       </nav>
+      <form action={resetWorkspace} className="queue-reset">
+        <SubmitButton
+          label="Reset demo"
+          pendingLabel="Resetting demo..."
+          variant="secondary"
+        />
+      </form>
     </aside>
   );
 }

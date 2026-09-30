@@ -1,13 +1,20 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useTransition } from 'react';
+import { usePathname } from 'next/navigation';
+import { selectSeat } from '../actions';
 import { Button } from '../../components/ui/button';
 
 export function AgentSeatButton() {
-  const router = useRouter();
-  return <Button variant="secondary" onClick={() => {
-    document.cookie = 'demo_seat=agent; Path=/; SameSite=Lax';
-    router.push('/');
-    router.refresh();
-  }}>Switch to Agent seat</Button>;
+  const pathname = usePathname();
+  const [pending, startTransition] = useTransition();
+  return (
+    <Button
+      variant="secondary"
+      disabled={pending}
+      onClick={() => startTransition(() => selectSeat('agent', pathname))}
+    >
+      Switch to Agent seat
+    </Button>
+  );
 }

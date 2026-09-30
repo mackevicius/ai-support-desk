@@ -8,6 +8,10 @@ export type TicketSummary = {
   review_state?: 'saved' | 'approved' | 'rejected' | 'reopened' | null;
 };
 
+export function agentHomeTicket(tickets: TicketSummary[]) {
+  return tickets.find((ticket) => ticket.status === 'open') ?? tickets[0];
+}
+
 export type HelpArticle = {
   id: number;
   title: string;

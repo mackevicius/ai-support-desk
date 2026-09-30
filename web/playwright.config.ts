@@ -30,7 +30,7 @@ export default defineConfig({
           url: `http://localhost:${port}`,
           env: {
             API_URL: `http://127.0.0.1:${port + 1}`,
-            NEXT_DIST_DIR: `.next-test-${port}`,
+            NEXT_DIST_DIR: '.next-test',
           },
           reuseExistingServer: false,
         },

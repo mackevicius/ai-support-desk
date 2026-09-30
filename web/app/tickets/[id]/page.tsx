@@ -1,7 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { generateRequest, reviewRequest } from '../../actions';
 import { getTicket, getTickets } from '../../data';
 import { ReviewButtons, SubmitButton } from '../../_components/submit-button';
@@ -28,7 +28,8 @@ export default async function TicketPage({
   );
   if (!ticket) notFound();
   const queue = await getTickets(sessionId);
-  if (ticket.decision && jar.get('demo_seat')?.value !== 'agent') {
+  if (jar.get('demo_seat')?.value !== 'agent') {
+    if (!ticket.decision) redirect('/');
     return (
       <main className="workspace customer-ticket">
         <SupportChat
@@ -48,9 +49,6 @@ export default async function TicketPage({
     <main className="workspace focus-view agent-workspace">
       <Queue tickets={queue} selectedId={ticket.id} />
       <article className="detail" aria-label="Request detail">
-        <Link href="/" className="back">
-          Back to inbox
-        </Link>
         <div className="detail-heading">
           <div>
             <span className="eyebrow">

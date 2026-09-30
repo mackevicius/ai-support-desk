@@ -7,6 +7,13 @@
 			"command": "command -v docker; docker --version; ls -d /Applications/Docker.app /Applications/OrbStack.app 2>/dev/null; command -v brew; uname -m; git status --short --branch",
 			"isBackground": false,
 			"problemMatcher": []
+		},
+		{
+			"label": "Verify unified agent workspace",
+			"type": "shell",
+			"command": "PLAYWRIGHT_PORT=3500 npm test && npm run typecheck && git diff --check && git diff -- web/next-env.d.ts web/tsconfig.json",
+			"isBackground": false,
+			"problemMatcher": []
 		}
 	]
 }

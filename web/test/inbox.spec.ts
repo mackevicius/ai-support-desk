@@ -1,5 +1,60 @@
 import { expect, test } from '@playwright/test';
 
+test('agent home opens the shared inbox workspace and seat switches keep the selected conversation', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Agent', exact: true }).click();
+  await expect(page).toHaveURL(/\/tickets\/1$/, { timeout: 15000 });
+  await expect(
+    page.getByRole('complementary', { name: 'Support inbox' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('article', { name: 'Request detail' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'How the AI decided' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('textbox', { name: 'New support request' }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Reset demo', exact: true }),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: 'Customer', exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await page
+    .getByRole('textbox', { name: 'New support request' })
+    .fill('How do I download music for offline listening?');
+  await page
+    .getByRole('button', { name: 'Submit request', exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/tickets\/\d+$/);
+  const ticketPath = new URL(page.url()).pathname;
+  await page.getByRole('button', { name: 'Agent', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
+  await expect(
+    page.getByRole('article', { name: 'Request detail' }).getByRole('heading', {
+      name: 'How do I download music for offline listening?',
+    }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Customer', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
+  await expect(
+    page
+      .getByRole('region', { name: 'Support chat' })
+      .getByText('Answered', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Agent', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
+  await expect(
+    page.getByRole('article', { name: 'Request detail' }),
+  ).toBeVisible();
+  await page.getByRole('link', { name: /^T Tunely/ }).click();
+  await expect(page).toHaveURL(/\/tickets\/1$/);
+});
+
 test('an agent edits a risky draft, asks for details and delivers a team reply', async ({
   page,
 }) => {
@@ -13,9 +68,7 @@ test('an agent edits a risky draft, asks for details and delivers a team reply',
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
   const ticketPath = new URL(page.url()).pathname;
   await page.getByRole('button', { name: 'Switch to Agent seat' }).click();
-  await page
-    .getByRole('link', { name: /I was charged twice for offline downloads/ })
-    .click();
+  await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
   const trail = page.getByRole('complementary', { name: 'How the AI decided' });
   await expect(
     trail.getByText('Money or account security', { exact: true }),
@@ -97,7 +150,7 @@ test('an agent edits a risky draft, asks for details and delivers a team reply',
   await expect(handOffs).toHaveCount(2);
   await expect(handOffs.first()).toBeVisible();
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
   await expect(
     page.getByRole('heading', { name: 'Support inbox', exact: true }),
   ).toBeVisible();
@@ -125,7 +178,7 @@ test('a reopened conversation shows its new redraft and suggested priority', asy
   ).toBeVisible();
   const ticketPath = new URL(page.url()).pathname;
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
-  await page.goto(ticketPath);
+  await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
   await page.getByRole('button', { name: 'Reopen request' }).click();
   await page.getByRole('button', { name: 'Redraft', exact: true }).click();
   await expect(
@@ -342,7 +395,9 @@ test('owner manages help articles while visitors cannot open the editor', async 
 });
 
 test('only a signed-in owner sees live generation', async ({ page }) => {
-  await page.goto('/tickets/1');
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Agent', exact: true }).click();
+  await expect(page).toHaveURL(/\/tickets\/1$/, { timeout: 15000 });
   await expect(
     page.getByRole('button', { name: 'Generate live draft' }),
   ).toHaveCount(0);
@@ -385,13 +440,15 @@ test('a visitor submits a request that another session cannot see', async ({
     .click();
   await expect(page.getByText('Assigned to the support inbox')).toBeVisible();
 
-  await page.getByRole('link', { name: 'Back to inbox' }).click();
+  await page.getByRole('button', { name: 'Customer', exact: true }).click();
   await page
     .getByRole('textbox', { name: 'New support request' })
     .fill('How do I invite my team?');
   await page.getByRole('button', { name: 'Submit request' }).click();
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
   const ticketUrl = new URL(page.url()).pathname;
+  await page.getByRole('button', { name: 'Agent', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${ticketUrl}$`));
   await expect(
     page.getByRole('heading', { name: 'How do I invite my team?' }),
   ).toBeVisible();
@@ -405,7 +462,6 @@ test('a visitor submits a request that another session cannot see', async ({
     page.getByRole('textbox', { name: 'Reply', exact: true }),
   ).toHaveValue(/Could you clarify your request/);
 
-  await page.getByRole('link', { name: 'Back to inbox' }).click();
   await expect(
     page.getByRole('link', { name: /How do I invite my team\?/ }),
   ).toBeVisible();
@@ -452,7 +508,6 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
     page.getByText('Please resend the invitations.', { exact: true }),
   ).toBeVisible();
   await expect(page.getByText(/Human approved in-app reply/)).toBeVisible();
-  await page.getByRole('link', { name: 'Back to inbox' }).click();
   await expect(
     page.getByRole('link', { name: /Team invitations are not arriving/ }),
   ).toContainText('resolved');
@@ -472,7 +527,7 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
     .getByRole('textbox', { name: 'Reply' })
     .fill('I checked the invoice myself.');
   await page.getByRole('button', { name: 'Approve in-app reply' }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/tickets\/3$/);
   await page.goto('/tickets/2');
   await expect(
     page
@@ -491,7 +546,7 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
     .getByRole('textbox', { name: 'Reply' })
     .fill('Please check the addresses again.');
   await page.getByRole('button', { name: 'Approve in-app reply' }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/tickets\/3$/);
   await page.goto('/tickets/1');
   await expect(
     page.getByText('Please check the addresses again.', { exact: true }),
@@ -502,7 +557,7 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
     .getByRole('textbox', { name: 'Reply' })
     .fill('Existing workspace links still work.');
   await page.getByRole('button', { name: 'Approve in-app reply' }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/tickets\/3$/);
   await page.goto('/tickets/4');
   await expect(
     page.getByText('Existing workspace links still work.', { exact: true }),
@@ -517,7 +572,8 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
 test('review actions stay disabled while approval is in flight', async ({
   page,
 }) => {
-  await page.goto('/tickets/1');
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Agent', exact: true }).click();
   let releaseRequest: () => void = () => {};
   const heldRequest = new Promise<void>((resolve) => {
     releaseRequest = resolve;
@@ -556,7 +612,9 @@ test('review actions stay disabled while approval is in flight', async ({
   } finally {
     releaseRequest();
   }
-  await expect(page.getByText('resolved', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: /Team invitations are not arriving/ }),
+  ).toContainText('resolved');
   expect(requests).toBe(1);
 });
 
@@ -630,13 +688,15 @@ test('a visitor resets only their own demo workspace', async ({
   await expect(
     page.getByRole('link', { name: /Team invitations are not arriving/ }),
   ).toContainText('resolved');
-  await page.getByRole('link', { name: 'Back to inbox' }).click();
+  await page.getByRole('button', { name: 'Customer', exact: true }).click();
   await page
     .getByRole('textbox', { name: 'New support request' })
     .fill('Reset my request');
   await page.getByRole('button', { name: 'Submit request' }).click();
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
   const submittedUrl = new URL(page.url()).pathname;
+  await page.getByRole('button', { name: 'Agent', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${submittedUrl}$`));
 
   const otherVisitor = await browser.newContext();
   try {
@@ -655,7 +715,6 @@ test('a visitor resets only their own demo workspace', async ({
       }),
     ).toContainText('resolved');
 
-    await page.getByRole('link', { name: 'Back to inbox' }).click();
     await page.getByRole('button', { name: 'Reset demo' }).click();
     await expect(
       page.getByRole('link', { name: /Reset my request/ }),

@@ -1,16 +1,13 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useTransition } from 'react';
+import { usePathname } from 'next/navigation';
+import { selectSeat } from '../actions';
 import { Button } from '../../components/ui/button';
 
 export function SeatSwitch({ seat }: { seat: 'customer' | 'agent' }) {
-  const router = useRouter();
-
-  function selectSeat(nextSeat: 'customer' | 'agent') {
-    document.cookie = `demo_seat=${nextSeat}; Path=/; SameSite=Lax`;
-    router.push('/');
-    router.refresh();
-  }
+  const pathname = usePathname();
+  const [pending, startTransition] = useTransition();
 
   return (
     <div className="seat-switch" role="group" aria-label="Viewing as">
@@ -21,7 +18,8 @@ export function SeatSwitch({ seat }: { seat: 'customer' | 'agent' }) {
           type="button"
           variant="secondary"
           aria-pressed={seat === option}
-          onClick={() => selectSeat(option)}
+          disabled={pending || seat === option}
+          onClick={() => startTransition(() => selectSeat(option, pathname))}
         >
           {option === 'customer' ? 'Customer' : 'Agent'}
         </Button>
