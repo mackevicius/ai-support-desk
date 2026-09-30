@@ -5,6 +5,7 @@ const visitorDraftLimit = 5;
 const dailyDraftLimit = 200;
 export type Generation = {
   reply: string; suggested_priority: string; source_ids: number[];
+  topic?: string;
   clearly_covered?: boolean; requires_team?: boolean; sources: Article[];
 };
 
@@ -63,6 +64,7 @@ export async function generateDraft(pool: Pick<Pool, 'query' | 'connect'>, sessi
         !['low', 'normal', 'high'].includes(suggestion.suggested_priority) || !Array.isArray(suggestion.source_ids) ||
         suggestion.source_ids.some((id: unknown) => !Number.isInteger(id) || !articles.some((article) => article.id === id)) ||
         new Set(suggestion.source_ids).size !== suggestion.source_ids.length ||
+        (suggestion.topic !== undefined && (typeof suggestion.topic !== 'string' || !suggestion.topic.trim() || suggestion.topic.length > 100)) ||
         (suggestion.clearly_covered !== undefined && typeof suggestion.clearly_covered !== 'boolean') ||
         (suggestion.requires_team !== undefined && typeof suggestion.requires_team !== 'boolean')) return { error: 'unavailable' as const };
     const draft: Generation = { ...suggestion, reply: suggestion.reply.trim(), sources: suggestion.source_ids.map((id: number) => articles.find((article) => article.id === id)!) };

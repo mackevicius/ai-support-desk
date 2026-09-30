@@ -5,6 +5,7 @@ export type TicketSummary = {
   status: string;
   priority: string;
   created_at: string;
+  review_state?: 'saved' | 'approved' | 'rejected' | 'reopened' | null;
 };
 
 export type HelpArticle = { id: number; title: string; body: string; retired: boolean };
@@ -35,11 +36,11 @@ export async function saveHelpArticle(
 }
 
 export type Ticket = TicketSummary & {
-  decision?: { kind: 'automatic_reply' | 'hand_off'; reason: string; sources: { id: number; title: string; body: string }[]; paused: boolean };
+  decision?: { kind: 'automatic_reply' | 'hand_off'; reason: string; rule?: string; topic?: string; suggested_priority?: string; documents?: { id: number; title: string; kind?: string }[]; sources: { id: number; title: string; body: string }[]; paused: boolean };
   live_ai?: { remaining: number; paused: boolean };
   question: string;
   approved_reply: string | null;
-  review_state: 'approved' | 'rejected' | 'reopened' | null;
+  review_state: 'saved' | 'approved' | 'rejected' | 'reopened' | null;
   draft: null | {
     live?: boolean;
     state: 'saved' | 'approved' | 'rejected' | 'reopened';
@@ -156,12 +157,12 @@ export async function loginOwner(password: string, sessionId: string) {
   return cookie?.split(';')[0].slice('owner_session='.length) ?? 'unavailable';
 }
 
-export async function generateTicket(id: string, sessionId: string, ownerSession: string) {
+export async function generateTicket(id: string, sessionId: string, ownerSession?: string) {
   const response = await fetch(
     `${process.env.API_URL ?? 'http://localhost:3001'}/tickets/${encodeURIComponent(id)}/generate`,
     {
       method: 'POST',
-      headers: { cookie: `demo_session=${sessionId}; owner_session=${ownerSession}` },
+      headers: { cookie: `demo_session=${sessionId}${ownerSession ? `; owner_session=${ownerSession}` : ''}` },
       cache: 'no-store',
     },
   );

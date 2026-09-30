@@ -179,6 +179,172 @@ test('a covered visitor question receives an automatic reply and a recorded expl
   }
 });
 
+test('a risky live draft can be reviewed by the visitor acting as a support agent', async () => {
+  const previous = { url: process.env.PYTHON_URL, secret: process.env.AI_SERVICE_SECRET };
+  const generator = createServer(async (request, response) => {
+    let body = '';
+    for await (const chunk of request) body += chunk;
+    const input = JSON.parse(body);
+    const article = input.articles.find((item: { title: string }) => item.title === 'Offline downloads');
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ reply: 'Your refund is approved.', suggested_priority: 'high', topic: 'refund', source_ids: [article.id], clearly_covered: true, requires_team: false }));
+  });
+  generator.listen(0);
+  await once(generator, 'listening');
+  const address = generator.address();
+  if (!address || typeof address === 'string') throw new Error('No generator address');
+  process.env.PYTHON_URL = `http://127.0.0.1:${address.port}`;
+  process.env.AI_SERVICE_SECRET = 'test-service-secret';
+  try {
+    const response = await fetch(`${baseUrl}/tickets`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ question: 'Please refund my double charge.' }) });
+    const cookie = response.headers.get('set-cookie')!.split(';')[0];
+    const ticket = await response.json();
+    assert.equal(ticket.status, 'open');
+    assert.equal(ticket.decision.kind, 'hand_off');
+    assert.ok(ticket.history.some((event: { description: string }) => event.description === `Hand-off: ${ticket.decision.reason}`));
+    assert.equal(ticket.draft.reply, 'Your refund is approved.');
+    const asked = await fetch(`${baseUrl}/tickets/${ticket.id}/review`, { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify({ action: 'ask', reply: 'Which dates were the two charges taken?' }) });
+    assert.equal(asked.status, 200);
+    const waiting = await asked.json();
+    assert.equal(waiting.status, 'open');
+    assert.ok(waiting.history.some((event: { description: string }) => event.description === 'Team asked for details: Which dates were the two charges taken?'));
+    for (let remaining = 3; remaining >= 0; remaining--) {
+      const redraft = await fetch(`${baseUrl}/tickets/${ticket.id}/generate`, { method: 'POST', headers: { cookie } });
+      assert.equal(redraft.status, 200);
+      assert.equal((await redraft.json()).live_ai.remaining, remaining);
+    }
+    assert.equal((await fetch(`${baseUrl}/tickets/${ticket.id}/generate`, { method: 'POST', headers: { cookie } })).status, 429);
+    const approved = await fetch(`${baseUrl}/tickets/${ticket.id}/review`, { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify({ action: 'approve', reply: 'Our team will check the two charges.', priority: 'high' }) });
+    assert.equal(approved.status, 200);
+    const delivered = await approved.json();
+    assert.equal(delivered.status, 'resolved');
+    assert.equal(delivered.approved_reply, 'Our team will check the two charges.');
+  } finally {
+    if (previous.url === undefined) delete process.env.PYTHON_URL;
+    else process.env.PYTHON_URL = previous.url;
+    if (previous.secret === undefined) delete process.env.AI_SERVICE_SECRET;
+    else process.env.AI_SERVICE_SECRET = previous.secret;
+    await new Promise<void>((resolve) => generator.close(() => resolve()));
+  }
+});
+
+test('redrafting a reopened automatic reply stays open and cannot overwrite approval', async () => {
+  const previous = { url: process.env.PYTHON_URL, secret: process.env.AI_SERVICE_SECRET };
+  let calls = 0;
+  let holdRequests = false;
+  let announceGeneration: () => void = () => {};
+  let releaseGeneration: () => void = () => {};
+  const started = new Promise<void>((resolve) => { announceGeneration = resolve; });
+  const held = new Promise<void>((resolve) => { releaseGeneration = resolve; });
+  const generator = createServer(async (request, response) => {
+    let body = '';
+    for await (const chunk of request) body += chunk;
+    const input = JSON.parse(body);
+    const initial = calls++ === 0;
+    if (holdRequests) { announceGeneration(); await held; }
+    const article = input.articles.find((item: { title: string }) => item.title === (initial ? 'Offline downloads' : 'Changing audio quality'));
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ reply: initial ? 'Open a playlist and tap Download.' : 'A replacement draft requiring review.', topic: initial ? 'Offline downloads' : 'Audio quality', suggested_priority: initial ? 'normal' : 'high', source_ids: [article.id], clearly_covered: initial, requires_team: false }));
+  });
+  generator.listen(0);
+  await once(generator, 'listening');
+  const address = generator.address();
+  if (!address || typeof address === 'string') throw new Error('No generator address');
+  process.env.PYTHON_URL = `http://127.0.0.1:${address.port}`;
+  process.env.AI_SERVICE_SECRET = 'test-service-secret';
+  try {
+    const submitted = await fetch(`${baseUrl}/tickets`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ question: 'How do I download music?' }) });
+    const cookie = submitted.headers.get('set-cookie')!.split(';')[0];
+    const ticket = await submitted.json();
+    assert.equal(ticket.status, 'resolved');
+    const headers = { cookie, 'content-type': 'application/json' };
+    assert.equal((await fetch(`${baseUrl}/tickets/${ticket.id}/review`, { method: 'POST', headers, body: JSON.stringify({ action: 'reopen' }) })).status, 200);
+    const redraft = await fetch(`${baseUrl}/tickets/${ticket.id}/generate`, { method: 'POST', headers });
+    assert.equal(redraft.status, 200);
+    const updated = await redraft.json();
+    assert.equal(updated.status, 'open');
+    assert.equal(updated.approved_reply, ticket.approved_reply);
+    assert.equal(updated.decision.kind, 'hand_off');
+    assert.equal(updated.decision.topic, 'Audio quality');
+    assert.equal(updated.decision.suggested_priority, 'high');
+    assert.equal(updated.decision.documents[0].title, 'Changing audio quality');
+    assert.ok(updated.history.some((event: { description: string }) => event.description === `Hand-off: ${updated.decision.reason}`));
+    holdRequests = true;
+    const pending = fetch(`${baseUrl}/tickets/${ticket.id}/generate`, { method: 'POST', headers });
+    await started;
+    const approved = await fetch(`${baseUrl}/tickets/${ticket.id}/review`, { method: 'POST', headers, body: JSON.stringify({ action: 'approve', reply: 'An agent checked this reply.', priority: 'normal' }) });
+    assert.equal(approved.status, 200);
+    releaseGeneration();
+    assert.equal((await pending).status, 409);
+    const saved = await (await fetch(`${baseUrl}/tickets/${ticket.id}`, { headers })).json();
+    assert.equal(saved.status, 'resolved');
+    assert.equal(saved.approved_reply, 'An agent checked this reply.');
+    assert.equal(saved.draft.reply, updated.draft.reply);
+  } finally {
+    releaseGeneration();
+    if (previous.url === undefined) delete process.env.PYTHON_URL;
+    else process.env.PYTHON_URL = previous.url;
+    if (previous.secret === undefined) delete process.env.AI_SERVICE_SECRET;
+    else process.env.AI_SERVICE_SECRET = previous.secret;
+    await new Promise<void>((resolve) => generator.close(() => resolve()));
+  }
+});
+
+test('the inbox sorts reviewed tickets after open tickets and filters by status', async () => {
+  const cookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
+  const approval = await fetch(`${baseUrl}/tickets/1/review`, { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify({ action: 'approve', reply: 'Please resend the invitation.', priority: 'normal' }) });
+  assert.equal(approval.status, 200);
+  const tickets = await (await fetch(`${baseUrl}/tickets`, { headers: { cookie } })).json();
+  assert.deepEqual(tickets.map((ticket: { id: number }) => ticket.id), [2, 3, 1, 4]);
+  const open = await (await fetch(`${baseUrl}/tickets?status=open`, { headers: { cookie } })).json();
+  assert.deepEqual(open.map((ticket: { id: number }) => ticket.id), [2]);
+  const resolved = await (await fetch(`${baseUrl}/tickets?status=resolved`, { headers: { cookie } })).json();
+  assert.deepEqual(resolved.map((ticket: { id: number }) => ticket.id), [1, 4]);
+  const reopened = await fetch(`${baseUrl}/tickets/4/review`, { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify({ action: 'reopen' }) });
+  assert.equal(reopened.status, 200);
+  const reordered = await (await fetch(`${baseUrl}/tickets`, { headers: { cookie } })).json();
+  assert.deepEqual(reordered.map((ticket: { id: number }) => ticket.id), [2, 4, 3, 1]);
+});
+
+test('fixed hand-off rules override confident provider output and weak coverage', async () => {
+  const previous = { url: process.env.PYTHON_URL, secret: process.env.AI_SERVICE_SECRET };
+  let covered = true;
+  let sources = true;
+  const generator = createServer(async (request, response) => {
+    let body = '';
+    for await (const chunk of request) body += chunk;
+    const input = JSON.parse(body);
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ reply: 'A confident but unsafe reply.', topic: 'audio quality', suggested_priority: 'low', source_ids: sources ? [input.articles[0].id] : [], clearly_covered: covered, requires_team: false }));
+  });
+  generator.listen(0);
+  await once(generator, 'listening');
+  const address = generator.address();
+  if (!address || typeof address === 'string') throw new Error('No generator address');
+  process.env.PYTHON_URL = `http://127.0.0.1:${address.port}`;
+  process.env.AI_SERVICE_SECRET = 'test-service-secret';
+  try {
+    for (const question of ['I need a refund', 'Are refunds available?', 'I was charged twice', 'My account was hacked', 'My account has been compromised', 'Someone took over my account', 'Unknown music issue', 'An unsupported draft']) {
+      if (question === 'Unknown music issue') covered = false;
+      if (question === 'An unsupported draft') { covered = true; sources = false; }
+      const response = await fetch(`${baseUrl}/tickets`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ question }) });
+      const ticket = await response.json();
+      assert.equal(ticket.decision.kind, 'hand_off', question);
+      assert.equal(ticket.approved_reply, null);
+      assert.equal(ticket.decision.topic, 'audio quality');
+      assert.equal(ticket.decision.suggested_priority, 'low');
+      assert.equal(ticket.decision.rule, /refund|charged|hacked|compromised|account/.test(question) ? 'Money or account security' : 'Weak help article coverage');
+      assert.ok(ticket.history.some((event: { description: string }) => event.description === `Hand-off: ${ticket.decision.reason}`));
+    }
+  } finally {
+    if (previous.url === undefined) delete process.env.PYTHON_URL;
+    else process.env.PYTHON_URL = previous.url;
+    if (previous.secret === undefined) delete process.env.AI_SERVICE_SECRET;
+    else process.env.AI_SERVICE_SECRET = previous.secret;
+    await new Promise<void>((resolve) => generator.close(() => resolve()));
+  }
+});
+
 test('visitor and owner generation share daily limits and provider credit pauses', async () => {
   const previous = { url: process.env.PYTHON_URL, secret: process.env.AI_SERVICE_SECRET, password: process.env.OWNER_PASSWORD, session: process.env.OWNER_SESSION_SECRET };
   let calls = 0;
@@ -250,7 +416,7 @@ test('visitor and owner generation share daily limits and provider credit pauses
   }
 });
 
-test('uncertain, risky, internal-note and invalid answers hand off without exposing drafts', async () => {
+test('uncertain, risky, internal-note and invalid answers hand off without delivering drafts', async () => {
   const previousUrl = process.env.PYTHON_URL;
   const previousSecret = process.env.AI_SERVICE_SECRET;
   await pool.query("INSERT INTO help_articles (id, title, body, kind) VALUES (9000, 'Staff investigation', 'Private investigation details', 'internal_note')");
@@ -280,9 +446,9 @@ test('uncertain, risky, internal-note and invalid answers hand off without expos
       assert.equal(ticket.status, 'open');
       assert.equal(ticket.decision.kind, 'hand_off');
       assert.equal(ticket.approved_reply, null);
-      assert.equal(ticket.draft, null);
+      assert.equal(ticket.draft?.live ?? false, !question.includes('invalid'));
       assert.ok(ticket.history.some((event: { description: string }) => event.description === `Hand-off: ${ticket.decision.reason}`));
-      assert.ok(!JSON.stringify(ticket).includes('Private investigation details'));
+      assert.ok(!JSON.stringify({ decision: ticket.decision, reply: ticket.approved_reply }).includes('Private investigation details'));
     }
   } finally {
     await pool.query('DELETE FROM help_articles WHERE id = 9000');
@@ -555,17 +721,18 @@ test('an owner generates a cited draft through Python without approving it', asy
     const providerCall = calls[0] as { max_tokens: number; messages: { content: string }[] };
     assert.equal(providerCall.max_tokens, 300);
     assert.match(providerCall.messages[0].content, /clearly_covered/);
+    assert.match(providerCall.messages[0].content, /topic/);
     const promptData = JSON.parse(providerCall.messages[1].content);
     assert.equal(promptData.question, 'How do I resend an invitation?');
     assert.equal(promptData.articles[0].id, 1);
     const signedOut = await (await fetch(`${baseUrl}/tickets/${id}`, {
       headers: { cookie },
     })).json();
-    assert.equal(signedOut.draft, null);
+    assert.equal(signedOut.draft.reply, ticket.draft.reply);
     assert.equal((await fetch(`${baseUrl}/tickets/${id}/review`, {
       method: 'POST', headers: { cookie, 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'approve', reply: ticket.draft.reply, priority: 'high' }),
-    })).status, 403);
+      body: JSON.stringify({ action: 'approve', reply: ticket.draft.reply, priority: 'invalid' }),
+    })).status, 400);
     const prioritized = await fetch(`${baseUrl}/tickets/${id}/review`, {
       method: 'POST', headers,
       body: JSON.stringify({ action: 'priority', priority: 'high' }),

@@ -2,7 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { generateTicket, loginOwner, resetDemo, reviewTicket, saveHelpArticle, submitQuestion } from './data';
+import { generateTicket, getTickets, loginOwner, resetDemo, reviewTicket, saveHelpArticle, submitQuestion } from './data';
 
 export async function signInOwner(formData: FormData) {
   const password = formData.get('password');
@@ -26,8 +26,8 @@ export async function generateRequest(formData: FormData) {
   const jar = await cookies();
   const sessionId = jar.get('demo_session')?.value;
   const ownerSession = jar.get('owner_session')?.value;
-  if (typeof id !== 'string' || !/^\d+$/.test(id) || !sessionId || !ownerSession)
-    throw new Error('Owner sign-in required');
+  if (typeof id !== 'string' || !/^\d+$/.test(id) || !sessionId)
+    throw new Error('Invalid generation request');
   const status = await generateTicket(id, sessionId, ownerSession);
   if (status !== 200) redirect(`/tickets/${id}?generation=${status === 429 ? 'limit' : 'unavailable'}`);
   redirect(`/tickets/${id}`);
@@ -82,7 +82,7 @@ export async function reviewRequest(formData: FormData) {
     typeof id !== 'string' ||
     !/^\d+$/.test(id) ||
     typeof action !== 'string' ||
-    !['approve', 'reject', 'reopen', 'priority'].includes(action) ||
+    !['approve', 'reject', 'reopen', 'priority', 'ask'].includes(action) ||
     !sessionId
   ) {
     throw new Error('Invalid review request');
@@ -95,5 +95,9 @@ export async function reviewRequest(formData: FormData) {
     formData.get('priority')?.toString(),
     (await cookies()).get('owner_session')?.value,
   );
+  if (action === 'approve' && (await cookies()).get('demo_seat')?.value === 'agent') {
+    const next = (await getTickets(sessionId)).find((ticket) => ticket.status === 'open');
+    redirect(next ? `/tickets/${next.id}` : '/');
+  }
   redirect(`/tickets/${id}`);
 }

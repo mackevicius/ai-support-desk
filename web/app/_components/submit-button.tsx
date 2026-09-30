@@ -30,9 +30,9 @@ export function SubmitButton({
   );
 }
 
-export function ReviewButtons({ showReject }: { showReject: boolean }) {
+export function ReviewButtons({ showReject, showAsk = false }: { showReject: boolean; showAsk?: boolean }) {
   const { pending } = useFormStatus();
-  const [active, setActive] = useState<'approve' | 'reject'>('approve');
+  const [active, setActive] = useState<'approve' | 'reject' | 'ask'>('approve');
 
   return (
     <>
@@ -45,6 +45,9 @@ export function ReviewButtons({ showReject }: { showReject: boolean }) {
       >
         {pending && active === 'approve' ? 'Approving reply...' : 'Approve in-app reply'}
       </Button>
+      {showAsk && <Button type="submit" variant="secondary" onClick={() => setActive('ask')} disabled={pending} aria-busy={pending && active === 'ask'}>
+        {pending && active === 'ask' ? 'Sending question...' : 'Ask for details'}
+      </Button>}
       {showReject && (
         <Button
           type="submit"

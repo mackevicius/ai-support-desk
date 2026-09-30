@@ -327,6 +327,57 @@
 .detail {
   @apply mx-auto max-w-5xl px-5 py-8 sm:px-10 sm:py-14;
 }
+.agent-workspace {
+  @apply grid min-w-0 items-start gap-0 lg:grid-cols-[260px_minmax(0,1fr)_300px];
+}
+.agent-workspace > .queue {
+  @apply rounded-none border-0 border-b lg:sticky lg:top-0 lg:max-h-screen lg:overflow-y-auto lg:border-r lg:border-b-0;
+}
+.agent-workspace > .detail {
+  @apply m-0 min-w-0 max-w-none px-5 py-6 sm:px-7;
+}
+.agent-workspace h1 {
+  @apply text-2xl wrap-break-word;
+}
+.agent-workspace .detail-heading {
+  @apply gap-3 pb-5;
+}
+.agent-workspace .question,
+.agent-workspace .draft,
+.agent-workspace .history {
+  @apply py-5;
+}
+.queue-filter {
+  @apply flex items-center justify-between gap-3 border-b border-border px-5 py-3 text-xs font-bold;
+}
+.queue-filter select {
+  @apply min-w-0 rounded-md border border-border bg-background px-2 py-1;
+}
+.queue-empty {
+  @apply p-5 text-sm text-muted;
+}
+.request[aria-current='page'] {
+  @apply bg-secondary;
+}
+.decision-trail {
+  @apply min-w-0 border-t border-border px-5 py-6 lg:sticky lg:top-0 lg:border-t-0 lg:border-l;
+}
+.decision-trail ol {
+  @apply mt-5 list-decimal space-y-6 pl-5 text-sm;
+}
+.decision-trail h3,
+.decision-trail h4 {
+  @apply mb-2 font-bold;
+}
+.decision-trail p {
+  @apply my-2 whitespace-pre-wrap wrap-break-word;
+}
+.decision-trail article {
+  @apply mt-4;
+}
+.agent-workspace .queue nav {
+  @apply max-h-56 overflow-y-auto lg:max-h-none;
+}
 .detail-heading {
   @apply flex flex-wrap justify-between gap-5 border-b border-border pb-8;
 }

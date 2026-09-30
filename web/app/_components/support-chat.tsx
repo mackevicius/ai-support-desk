@@ -21,17 +21,20 @@ export function SupportChat({ tickets, ticket, allowance }: {
         <div className="conversation-heading"><h2>Your conversations</h2><Link href="/" className="new-conversation">New conversation</Link></div>
         <nav aria-label="Conversations">
           {conversations.map((item) => <Link key={item.id} href={`/tickets/${item.id}`} aria-current={ticket?.id === item.id ? 'page' : undefined}>
-            <strong>{item.subject}</strong><span>{item.status === 'resolved' ? 'Answered' : 'With our team'}</span>
+            <strong>{item.subject}</strong><span>{item.status === 'resolved' ? item.review_state === 'approved' ? 'Replied by our team' : 'Answered' : 'With our team'}</span>
           </Link>)}
           {!conversations.length && <p>No conversations yet</p>}
         </nav>
         <form action={resetWorkspace}><SubmitButton label="Reset demo" pendingLabel="Resetting demo..." variant="secondary" /></form>
       </aside>
       <section className="support-chat" aria-label="Support chat">
-        <header className="chat-heading"><div><h2>Tunely support</h2><span>{ticket ? ticket.status === 'resolved' ? 'Answered' : 'With our team' : 'New conversation'}</span></div><p>{allowance.remaining} live drafts left</p></header>
+        <header className="chat-heading"><div><h2>Tunely support</h2><span>{ticket ? ticket.status === 'resolved' ? ticket.review_state === 'approved' ? 'Replied by our team' : 'Answered' : 'With our team' : 'New conversation'}</span></div><p>{allowance.remaining} live drafts left</p></header>
         {ticket ? <>
           <h1 className="chat-subject">{ticket.subject}</h1>
           <div className="chat-message customer-message"><span>You</span><p>{ticket.question}</p></div>
+          {ticket.history.filter((event) => event.description.startsWith('Team asked for details: ')).map((event) => (
+            <article key={event.id} className="chat-message tunely-message" aria-label="Team question"><span>Tunely team</span><p>{event.description.slice('Team asked for details: '.length)}</p></article>
+          ))}
           <article className="chat-message tunely-message" aria-label="Tunely reply"><span>Tunely</span><p>{ticket.approved_reply ?? 'A Tunely team member will reply soon'}</p>
             {(ticket.decision?.paused || allowance.paused) && <p role="status">Live AI is paused for today</p>}
             {ticket.status !== 'resolved' && <AgentSeatButton />}
