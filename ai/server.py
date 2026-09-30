@@ -2,12 +2,26 @@ import json
 import os
 import re
 import hmac
+import unicodedata
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 
 
 STOP_WORDS = {'a', 'an', 'and', 'are', 'can', 'do', 'find', 'for', 'from', 'how', 'i', 'in', 'is', 'my', 'of', 'please', 'the', 'to', 'under', 'what', 'where', 'you', 'your'}
+STAFF_REVIEW_REPLY = 'A Tunely team member needs to review this request.'
+
+
+def copies_internal_phrase(reply, articles):
+    words = re.findall(r'[^\W_]+', unicodedata.normalize('NFC', reply).lower())
+    phrases = {
+        tuple(note_words[index:index + 8])
+        for article in articles if article.get('kind') == 'internal_note'
+        for text in [article['title'], article['body']]
+        for note_words in [re.findall(r'[^\W_]+', unicodedata.normalize('NFC', text).lower())]
+        for index in range(len(note_words) - 7)
+    }
+    return any(tuple(words[index:index + 8]) in phrases for index in range(len(words) - 7))
 
 
 def terms(text):
@@ -26,6 +40,15 @@ def is_instruction(sentence):
 
 
 def generate(question, articles, metadata_callback=None):
+    answer = _generate(question, articles, metadata_callback)
+    if copies_internal_phrase(answer['reply'], articles):
+        answer['reply'] = STAFF_REVIEW_REPLY
+        answer['clearly_covered'] = False
+        answer['requires_team'] = True
+    return answer
+
+
+def _generate(question, articles, metadata_callback=None):
     keywords = terms(question)
     matches = sorted(
         ((len(keywords & terms(f"{article['title']} {article['body']}")), article) for article in articles),
@@ -51,7 +74,8 @@ def generate(question, articles, metadata_callback=None):
         'set it to true for money, account security, other risky questions, internal notes, or any uncertainty about risk. '
         'Set clearly_covered to true only when public help articles fully answer every part '
         'of the question without guessing. Set it to false for money, account security, risky questions, internal notes, '
-        'or any uncertainty. An article with kind internal_note is for staff only. '
+        'or any uncertainty. An article with kind internal_note is for staff only: use it to inform a draft, '
+        'but never quote its title or text; paraphrase only customer-safe facts and require team review. '
         'If the articles do not support an answer, request clarification in reply and use an empty source_ids array. '
         'Never claim a reply was sent or a priority was changed.'
     )
@@ -88,6 +112,7 @@ def generate(question, articles, metadata_callback=None):
         raise ValueError('Invalid provider answer')
     cited_text = ' '.join(f"{article['title']} {article['body']}" for article in relevant if article['id'] in sources)
     topic = {'topic': answer['topic']} if 'topic' in answer else {}
+    staff_sources = any(article.get('kind') == 'internal_note' and article['id'] in sources for article in relevant)
     if not sources:
         return {
             **topic,
@@ -103,6 +128,9 @@ def generate(question, articles, metadata_callback=None):
             'source_ids': [],
         }
     if not terms(answer['reply']).issubset(terms(cited_text)):
+        if staff_sources:
+            return {**topic, 'reply': STAFF_REVIEW_REPLY, 'suggested_priority': answer['suggested_priority'],
+                'source_ids': sources, 'clearly_covered': False, 'requires_team': True}
         cited_articles = [article for article in relevant if article['id'] in sources]
         grounded_reply = '\n\n'.join(article['body'] for article in cited_articles)
         if (answer.get('clearly_covered') is True and answer.get('requires_team') is False and
@@ -129,6 +157,9 @@ def generate(question, articles, metadata_callback=None):
             'suggested_priority': 'normal',
             'source_ids': [],
         }
+    if staff_sources:
+        answer['clearly_covered'] = False
+        answer['requires_team'] = True
     return answer
 
 

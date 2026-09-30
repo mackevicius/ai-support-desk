@@ -6,6 +6,12 @@ The Agent seat handles sample requests and new handed-off conversations in three
 
 Agent home opens the first open request in that workspace, or the first remaining request when none are open. Switching seats on a submitted conversation keeps that conversation selected. Reset remains available in the inbox column.
 
+Every knowledge-base document has a type: **Help article** or **Internal note**. The signed-in owner chooses the type in the Help articles editor and alone can create, edit, or retire internal notes. Drafts citing internal notes always hand off, regardless of the provider's recommendation. The agent's trail labels sources Help or Internal; customer ticket responses omit drafts and internal source titles and text. "How was this answered?" shows only a count of internal sources.
+
+The deterministic copy guard detects **eight or more consecutive words** copied from internal notes, ignoring case and punctuation. It checks all current internal notes, including retired notes, and the draft's saved internal sources. Matching ranges are highlighted while the agent edits, and the server checks the submitted reply before approval or asking for details. The agent can edit the reply or explicitly acknowledge the warning and approve it. Copied phrases never qualify for automatic delivery. Python also prevents long internal quotations before returning a draft; the API checks independently before delivery. Neither copy check calls AI. This is a phrase-copy guard, not proof that paraphrased or shorter confidential text is safe.
+
+Generation checks both the original knowledge-base text and refreshed document types before deciding on delivery. Detected copied phrases are saved with the draft, including uncited phrases, so editing a note while generation runs cannot erase the warning. Customer responses use a decision-field allowlist and exclude unchecked AI topic metadata.
+
 ## Run locally
 
 With Docker Compose installed, run from the repository root:
@@ -90,6 +96,8 @@ GitHub Actions runs typechecking, API, Python, and browser tests, and a producti
 ## Answer quality
 
 Sign in as the owner and open **Answer quality** to inspect fictional evaluation cases. Each case shows the question, expected behavior, actual answer, cited and available documents, and individual checks. The checked-in deterministic report uses fixed provider replies, calls the real draft generator, and requires no provider key. It intentionally records a wrong priority suggestion and a semantic contradiction that the lexical grounding guard does not catch. These are known limitations, not passing results or evidence of real-user adoption. Changed and untrusted documents are included.
+
+Three internal leak-attempt cases cover a direct quotation, an omitted internal citation, and a prompt requesting a verbatim staff-only workaround. They run through the real generator without paid calls, appear in the owner quality report, and must pass in the Python tests in CI. The API and browser suites separately exercise copy warnings and the automatic-delivery guard.
 
 Regenerate the checked-in report after changing the dataset or generator:
 

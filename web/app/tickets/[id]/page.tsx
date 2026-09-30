@@ -5,7 +5,7 @@ import { notFound, redirect } from 'next/navigation';
 import { generateRequest, reviewRequest } from '../../actions';
 import { getTicket, getTickets } from '../../data';
 import { ReviewButtons, SubmitButton } from '../../_components/submit-button';
-import { Textarea } from '../../../components/ui/textarea';
+import { ReplyForm } from '../../_components/reply-editor';
 import { SupportChat } from '../../_components/support-chat';
 import { Queue } from '../../queue';
 
@@ -25,6 +25,7 @@ export default async function TicketPage({
     id,
     sessionId,
     jar.get('owner_session')?.value,
+    jar.get('demo_seat')?.value === 'agent' ? 'agent' : 'customer',
   );
   if (!ticket) notFound();
   const queue = await getTickets(sessionId);
@@ -160,16 +161,10 @@ export default async function TicketPage({
                         />
                       </form>
                     )}
-                  <form
+                  <ReplyForm
                     key={`${ticket.draft.reply}-${ticket.history.length}`}
-                    action={reviewRequest}
-                    className="review-form"
-                  >
-                    <input type="hidden" name="id" value={ticket.id} />
-                    <label htmlFor="reply">Reply</label>
-                    <Textarea
-                      id="reply"
-                      name="reply"
+                      ticketId={String(ticket.id)}
+                      initialCopies={ticket.draft.internal_copies ?? []}
                       defaultValue={
                         ticket.draft.state === 'saved' ||
                         (ticket.draft.live && ticket.draft.state === 'reopened')
@@ -178,10 +173,7 @@ export default async function TicketPage({
                             ? (ticket.approved_reply ?? '')
                             : ''
                       }
-                      required
-                      maxLength={5000}
-                      rows={5}
-                    />
+                  >
                     <label htmlFor="priority">Priority</label>
                     <select
                       id="priority"
@@ -201,7 +193,7 @@ export default async function TicketPage({
                       showReject={ticket.draft.state === 'saved'}
                       showAsk={ticket.status === 'open'}
                     />
-                  </form>
+                  </ReplyForm>
                 </div>
               )}
             {ticket.draft.state === 'rejected' && (
@@ -241,17 +233,9 @@ export default async function TicketPage({
           </form>
         )}
         {!ticket.draft && ticket.status !== 'resolved' && (
-          <form action={reviewRequest} className="draft review-form">
+          <section className="draft">
             <h2>Write a replacement reply</h2>
-            <input type="hidden" name="id" value={ticket.id} />
-            <label htmlFor="reply">Reply</label>
-            <Textarea
-              id="reply"
-              name="reply"
-              required
-              maxLength={5000}
-              rows={5}
-            />
+            <ReplyForm ticketId={String(ticket.id)} defaultValue="" initialCopies={[]}>
             <label htmlFor="priority">Priority</label>
             <select
               id="priority"
@@ -266,7 +250,8 @@ export default async function TicketPage({
               showReject={false}
               showAsk={ticket.status === 'open'}
             />
-          </form>
+            </ReplyForm>
+          </section>
         )}
         {!ticket.draft && ticket.approved_reply && (
           <section className="approved-reply">
@@ -317,11 +302,12 @@ export default async function TicketPage({
               (source) => (
                 <article key={source.id} id={`source-${source.id}`}>
                   <h4>{source.title}</h4>
+                  <span className="source-kind">{source.kind === 'internal_note' ? 'Internal' : 'Help'}</span>
                   <p>
                     {
                       (
-                        ticket.decision?.sources ??
                         ticket.draft?.sources ??
+                        ticket.decision?.sources ??
                         []
                       ).find((article) => article.id === source.id)?.body
                     }

@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { readFileSync } from 'node:fs';
+import { sourceKind } from './internal-copy.js';
 
 export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
   const existing = await pool.query(
@@ -67,6 +68,7 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
   await pool.query('ALTER TABLE saved_drafts ADD COLUMN IF NOT EXISTS article_title text');
   await pool.query('ALTER TABLE saved_drafts ADD COLUMN IF NOT EXISTS article_body text');
   await pool.query('ALTER TABLE session_drafts ADD COLUMN IF NOT EXISTS source_articles text');
+  await pool.query('ALTER TABLE session_drafts ADD COLUMN IF NOT EXISTS internal_copies text');
   await pool.query("ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'help_article'");
   await pool.query('ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS starter_key text UNIQUE');
   await pool.query('ALTER TABLE generation_usage ADD COLUMN IF NOT EXISTS paused boolean NOT NULL DEFAULT false');
@@ -82,13 +84,15 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
     );
   }
   const unsnapshottedLive = await pool.query(
-    'SELECT session_id, ticket_id, source_ids FROM session_drafts WHERE source_articles IS NULL',
+    'SELECT session_id, ticket_id, source_ids, source_articles FROM session_drafts',
   );
   if (unsnapshottedLive.rows.length) {
-    const articles = (await pool.query('SELECT id, title, body FROM help_articles')).rows;
+    const articles = (await pool.query('SELECT id, title, body, kind FROM help_articles')).rows;
     for (const draft of unsnapshottedLive.rows) {
-      const sources = (JSON.parse(draft.source_ids) as number[])
-        .map((id) => articles.find((article) => article.id === id)).filter(Boolean);
+      const existingSources = draft.source_articles ? JSON.parse(draft.source_articles) :
+        (JSON.parse(draft.source_ids) as number[]).map((id) => articles.find((article) => article.id === id)).filter(Boolean);
+      const sources = existingSources.map((source: { id: number; kind?: string }) => ({ ...source, kind: sourceKind(source, articles) }));
+      if (JSON.stringify(sources) === draft.source_articles) continue;
       await pool.query(
         'UPDATE session_drafts SET source_articles = $1 WHERE session_id = $2 AND ticket_id = $3',
         [JSON.stringify(sources), draft.session_id, draft.ticket_id],

@@ -2,6 +2,7 @@ import express from 'express';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { Pool } from 'pg';
 import { generateDraft, liveAllowance } from './generation.js';
+import { internalCopies, internalDocuments, sourceKind, type InternalCopy } from './internal-copy.js';
 
 const ownerSessionAge = 8 * 60 * 60 * 1000;
 const statusOrder: Record<string, number> = {
@@ -12,16 +13,17 @@ const statusOrder: Record<string, number> = {
 
 function validArticle(
   input: unknown,
-): input is { title: string; body: string; retired?: boolean } {
+): input is { title: string; body: string; retired?: boolean; kind?: 'help_article' | 'internal_note' } {
   if (!input || typeof input !== 'object') return false;
-  const { title, body } = input as { title?: unknown; body?: unknown };
+  const { title, body, kind } = input as { title?: unknown; body?: unknown; kind?: unknown };
   return (
     typeof title === 'string' &&
     !!title.trim() &&
     title.length <= 200 &&
     typeof body === 'string' &&
     !!body.trim() &&
-    body.length <= 5000
+    body.length <= 5000 &&
+    (kind === undefined || kind === 'help_article' || kind === 'internal_note')
   );
 }
 
@@ -71,11 +73,13 @@ function decide(
   const internal = draft?.sources.some(
     (source) => source.kind !== 'help_article',
   );
+  const copied = !!draft?.internal_copies.length;
   const covered = draft?.clearly_covered === true && draft.sources.length > 0;
   const automatic =
     covered &&
     draft?.requires_team === false &&
     !internal &&
+    !copied &&
     !risky &&
     !agentReview;
   const outcome =
@@ -90,7 +94,7 @@ function decide(
             reason:
               'A team member needs to check questions about money or account security.',
           }
-        : internal
+        : internal || copied
           ? {
               rule: 'Staff-only information',
               reason:
@@ -135,6 +139,13 @@ function decide(
 export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
   const app = express();
   app.use(express.json());
+  async function checkedCopies(reply: string, sources: { id: number; body: string; title?: string; kind?: string }[], database: Pick<Pool, 'query'> = pool, savedCopies: InternalCopy[] = []) {
+    const documents = (await database.query('SELECT id, title, body, kind FROM help_articles')).rows;
+    return internalCopies(reply, [
+      ...internalDocuments(documents, sources),
+      ...savedCopies.map((copy) => ({ body: copy.text })),
+    ]);
+  }
   function reviewedStatus(status: string, state?: string) {
     if (state === 'approved') return 'resolved';
     if (state === 'reopened') return 'open';
@@ -152,7 +163,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       [id, session],
     );
     const draft = await pool.query(
-      `SELECT d.reply, d.suggested_priority, a.id, d.article_title AS title, d.article_body AS body
+      `SELECT d.reply, d.suggested_priority, a.id, a.kind, d.article_title AS title, d.article_body AS body
        FROM saved_drafts d JOIN help_articles a ON a.id = d.article_id WHERE d.ticket_id = $1`,
       [id],
     );
@@ -162,20 +173,24 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     const live =
       owner || decision
         ? await pool.query(
-            'SELECT reply, suggested_priority, source_ids, source_articles FROM session_drafts WHERE ticket_id = $1 AND session_id = $2',
+            'SELECT reply, suggested_priority, source_ids, source_articles, internal_copies FROM session_drafts WHERE ticket_id = $1 AND session_id = $2',
             [id, session],
           )
         : { rows: [] };
-    const articles = live.rows.length
-      ? await pool.query('SELECT id, title, body FROM help_articles')
-      : null;
+    const articles = await pool.query('SELECT id, title, body, kind FROM help_articles');
     const liveSources = live.rows.length
       ? live.rows[0].source_articles
         ? JSON.parse(live.rows[0].source_articles)
         : (JSON.parse(live.rows[0].source_ids) as number[]).map((sourceId) =>
-            articles!.rows.find((article) => article.id === sourceId),
+            articles.rows.find((article) => article.id === sourceId),
           )
       : [];
+    for (const source of liveSources) source.kind = sourceKind(source, articles.rows);
+    const savedCopies = live.rows[0]?.internal_copies ? JSON.parse(live.rows[0].internal_copies) : [];
+    if (decision) {
+      decision.documents = (decision.documents ?? []).map((source: { id: number; kind?: string }) => ({ ...source, kind: sourceKind(source, articles.rows) }));
+      decision.sources = (decision.sources ?? []).filter((source: { id: number; kind?: string }) => sourceKind(source, articles.rows) === 'help_article');
+    }
     const events = await pool.query(
       `SELECT id, description, created_at FROM ticket_events
        WHERE ticket_id = $1 AND (session_id IS NULL OR session_id = $2) ORDER BY created_at, id`,
@@ -202,6 +217,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
             reply: live.rows[0].reply,
             suggested_priority: live.rows[0].suggested_priority,
             sources: liveSources,
+            internal_copies: await checkedCopies(live.rows[0].reply, liveSources, pool, savedCopies),
           }
         : draft.rows.length
           ? {
@@ -213,8 +229,10 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
                   id: draft.rows[0].id,
                   title: draft.rows[0].title,
                   body: draft.rows[0].body,
+                  kind: draft.rows[0].kind,
                 },
               ],
+              internal_copies: await checkedCopies(draft.rows[0].reply, draft.rows),
             }
           : null,
       history: events.rows,
@@ -283,7 +301,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     }
     try {
       const articles = await pool.query(
-        'SELECT id, title, body, retired FROM help_articles ORDER BY id',
+        'SELECT id, title, body, retired, kind FROM help_articles ORDER BY id',
       );
       response.json(articles.rows);
     } catch (error) {
@@ -302,11 +320,11 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         .json({ error: 'Enter a title and body within the allowed lengths.' });
       return;
     }
-    const { title, body } = request.body;
+    const { title, body, kind = 'help_article' } = request.body;
     try {
       const article = await pool.query(
-        "INSERT INTO help_articles (id, title, body) VALUES (nextval('help_article_ids'), $1, $2) RETURNING id, title, body, retired",
-        [title.trim(), body.trim()],
+        "INSERT INTO help_articles (id, title, body, kind) VALUES (nextval('help_article_ids'), $1, $2, $3) RETURNING id, title, body, retired, kind",
+        [title.trim(), body.trim(), kind],
       );
       response.status(201).json(article.rows[0]);
     } catch (error) {
@@ -329,11 +347,11 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         .json({ error: 'Enter a valid article, title, body and status.' });
       return;
     }
-    const { title, body, retired } = request.body;
+    const { title, body, retired, kind } = request.body;
     try {
       const article = await pool.query(
-        'UPDATE help_articles SET title = $1, body = $2, retired = $3 WHERE id = $4 RETURNING id, title, body, retired',
-        [title.trim(), body.trim(), retired, request.params.id],
+        'UPDATE help_articles SET title = $1, body = $2, retired = $3, kind = COALESCE($5, kind) WHERE id = $4 RETURNING id, title, body, retired, kind',
+        [title.trim(), body.trim(), retired, request.params.id, kind ?? null],
       );
       if (!article.rows.length) {
         response.sendStatus(404);
@@ -427,11 +445,11 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
           return;
         }
         await client.query(
-          `INSERT INTO session_drafts (session_id, ticket_id, reply, suggested_priority, source_ids, source_articles)
-           VALUES ($1, $2, $3, $4, $5, $6)
+          `INSERT INTO session_drafts (session_id, ticket_id, reply, suggested_priority, source_ids, source_articles, internal_copies)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
            ON CONFLICT (session_id, ticket_id) DO UPDATE SET reply = EXCLUDED.reply,
            suggested_priority = EXCLUDED.suggested_priority, source_ids = EXCLUDED.source_ids,
-           source_articles = EXCLUDED.source_articles`,
+           source_articles = EXCLUDED.source_articles, internal_copies = EXCLUDED.internal_copies`,
           [
             response.locals.session,
             request.params.id,
@@ -439,6 +457,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
             suggestion.suggested_priority,
             JSON.stringify(suggestion.source_ids),
             JSON.stringify(suggestion.sources),
+            JSON.stringify(suggestion.internal_copies),
           ],
         );
         if (ticket.decision) {
@@ -608,8 +627,8 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       const automatic = decision.kind === 'automatic_reply';
       if (draft) {
         await pool.query(
-          `INSERT INTO session_drafts (session_id, ticket_id, reply, suggested_priority, source_ids, source_articles)
-          VALUES ($1, $2, $3, $4, $5, $6)`,
+          `INSERT INTO session_drafts (session_id, ticket_id, reply, suggested_priority, source_ids, source_articles, internal_copies)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [
             response.locals.session,
             ticketId,
@@ -617,6 +636,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
             draft.suggested_priority,
             JSON.stringify(draft.source_ids),
             JSON.stringify(draft.sources),
+            JSON.stringify(draft.internal_copies),
           ],
         );
       }
@@ -684,7 +704,41 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         response.sendStatus(404);
         return;
       }
+      if (request.query.view === 'customer') {
+        const documents = ticket.decision?.documents ?? [];
+        response.json({
+          ...ticket,
+          draft: null,
+          approved_reply: ticket.decision?.kind === 'automatic_reply' && documents.some((source: { kind: string }) => source.kind === 'internal_note') ? null : ticket.approved_reply,
+          decision: ticket.decision ? {
+            kind: ticket.decision.kind,
+            reason: ticket.decision.reason,
+            sources: ticket.decision.sources,
+            paused: ticket.decision.paused,
+            internal_count: documents.filter((source: { kind: string }) => source.kind !== 'help_article').length,
+          } : undefined,
+        });
+        return;
+      }
       response.json(ticket);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/tickets/:id/check', async (request, response, next) => {
+    try {
+      const ticket = /^\d+$/.test(request.params.id) ? await detail(request.params.id, response.locals.session, true) : null;
+      if (!ticket) {
+        response.sendStatus(404);
+        return;
+      }
+      const reply = request.body?.reply;
+      if (typeof reply !== 'string' || reply.length > 5000) {
+        response.sendStatus(400);
+        return;
+      }
+      response.json(await checkedCopies(reply, ticket.draft?.sources ?? [], pool, ticket.draft?.internal_copies ?? []));
     } catch (error) {
       next(error);
     }
@@ -785,6 +839,14 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
+        if (action === 'approve' || action === 'ask') {
+          const copies = await checkedCopies(reply.trim(), ticket.draft?.sources ?? [], client, ticket.draft?.internal_copies ?? []);
+          if (copies.length && request.body.internal_confirmed !== reply.trim()) {
+            await client.query('ROLLBACK');
+            response.status(409).json({ error: 'Internal text copied. Review the highlighted text before delivery.', internal_copies: copies });
+            return;
+          }
+        }
         const changed =
           ticket.review_state === null
             ? await client.query(

@@ -23,6 +23,11 @@ export default async function ArticlesPage() {
         <section className="article-section" aria-labelledby="add-article">
           <h2 id="add-article">Add article</h2>
           <form action={saveArticle} className="review-form">
+            <label htmlFor="new-kind">Document type</label>
+            <select id="new-kind" name="kind" defaultValue="help_article">
+              <option value="help_article">Help article</option>
+              <option value="internal_note">Internal note</option>
+            </select>
             <label htmlFor="new-title">Title</label>
             <Input id="new-title" name="title" required maxLength={200} />
             <label htmlFor="new-body">Content</label>
@@ -35,6 +40,11 @@ export default async function ArticlesPage() {
           {articles.map((article) => (
             <form key={`${article.id}-${article.title}-${article.body}-${article.retired}`} action={saveArticle} className="review-form article-editor">
               <input type="hidden" name="id" value={article.id} />
+              <label htmlFor={`kind-${article.id}`}>Document type</label>
+              <select id={`kind-${article.id}`} name="kind" defaultValue={article.kind}>
+                <option value="help_article">Help article</option>
+                <option value="internal_note">Internal note</option>
+              </select>
               <label htmlFor={`title-${article.id}`}>Title</label>
               <Input id={`title-${article.id}`} name="title" defaultValue={article.title} required maxLength={200} />
               <label htmlFor={`body-${article.id}`}>Content</label>

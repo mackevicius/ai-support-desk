@@ -4,6 +4,8 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import {
   agentHomeTicket,
+  checkReply,
+  type InternalCopy,
   generateTicket,
   getTickets,
   loginOwner,
@@ -74,6 +76,7 @@ export async function saveArticle(formData: FormData) {
   const id = formData.get('id');
   const title = formData.get('title');
   const body = formData.get('body');
+  const kind = formData.get('kind') ?? 'help_article';
   if (
     !sessionId ||
     !ownerSession ||
@@ -83,6 +86,7 @@ export async function saveArticle(formData: FormData) {
     typeof body !== 'string' ||
     !body.trim() ||
     body.length > 5000 ||
+    (kind !== 'help_article' && kind !== 'internal_note') ||
     (id !== null && (typeof id !== 'string' || !/^\d+$/.test(id)))
   ) {
     throw new Error('Invalid help article');
@@ -93,8 +97,22 @@ export async function saveArticle(formData: FormData) {
       : { id: Number(id), retired: formData.get('retired') === 'on' }),
     title,
     body,
+    kind,
   });
   redirect('/articles');
+}
+
+export async function checkDraft(id: string, reply: string) {
+  const sessionId = (await cookies()).get('demo_session')?.value;
+  if (!sessionId || !/^\d+$/.test(id) || typeof reply !== 'string' || reply.length > 5000)
+    throw new Error('Invalid draft check');
+  return checkReply(id, sessionId, reply);
+}
+
+export type DraftReviewState = { reply: string; copies: InternalCopy[]; error?: string } | null;
+
+export async function reviewCheckedRequest(_previous: DraftReviewState, formData: FormData): Promise<DraftReviewState> {
+  return performReview(formData);
 }
 
 export async function resetWorkspace() {
@@ -120,6 +138,10 @@ export async function submitRequest(formData: FormData) {
 }
 
 export async function reviewRequest(formData: FormData) {
+  await performReview(formData);
+}
+
+async function performReview(formData: FormData): Promise<DraftReviewState> {
   const id = formData.get('id');
   const action = formData.get('action');
   const sessionId = (await cookies()).get('demo_session')?.value;
@@ -132,14 +154,16 @@ export async function reviewRequest(formData: FormData) {
   ) {
     throw new Error('Invalid review request');
   }
-  await reviewTicket(
+  const copies = await reviewTicket(
     id,
     sessionId,
     action,
     formData.get('reply')?.toString(),
     formData.get('priority')?.toString(),
     (await cookies()).get('owner_session')?.value,
+    formData.get('internal_confirmed')?.toString(),
   );
+  if (copies) return { reply: formData.get('reply')?.toString() ?? '', copies };
   if (
     action === 'approve' &&
     (await cookies()).get('demo_seat')?.value === 'agent'

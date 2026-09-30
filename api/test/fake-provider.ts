@@ -14,7 +14,7 @@ createServer(async (request, response) => {
     response.writeHead(503).end();
     return;
   }
-  const covered = /offline|family plan|audio quality/i.test(input.question);
+  const covered = /offline|family plan|audio quality|staff playback/i.test(input.question);
   const calls = (questionCalls.get(input.question) ?? 0) + 1;
   questionCalls.set(input.question, calls);
   const redrafted = input.question.includes('redraft review') && calls > 1;

@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { internalCopies, internalDocuments, sourceKind, type InternalCopy } from './internal-copy.js';
 
 type Article = { id: number; title: string; body: string; kind?: string };
 const visitorDraftLimit = 5;
@@ -11,6 +12,7 @@ export type Generation = {
   clearly_covered?: boolean;
   requires_team?: boolean;
   sources: Article[];
+  internal_copies: InternalCopy[];
 };
 
 export async function liveAllowance(
@@ -130,12 +132,16 @@ export async function generateDraft(
         typeof suggestion.requires_team !== 'boolean')
     )
       return { error: 'unavailable' as const };
+    const current: Article[] = (await pool.query('SELECT id, title, body, kind FROM help_articles')).rows;
+    const sources = suggestion.source_ids.map((id: number) => {
+      const source = articles.find((article) => article.id === id)!;
+      return { ...source, kind: sourceKind(source, current) };
+    });
     const draft: Generation = {
       ...suggestion,
       reply: suggestion.reply.trim(),
-      sources: suggestion.source_ids.map(
-        (id: number) => articles.find((article) => article.id === id)!,
-      ),
+      internal_copies: internalCopies(suggestion.reply.trim(), internalDocuments(current, articles)),
+      sources,
     };
     return { draft };
   } catch {

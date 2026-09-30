@@ -506,6 +506,25 @@
   @apply size-4 accent-primary;
 }
 
+.source-kind {
+  @apply font-mono text-xs font-bold text-muted;
+}
+.internal-copy-warning {
+  @apply border-l-4 border-destructive py-3 pl-4 text-sm wrap-break-word;
+}
+.internal-copy-warning p {
+  @apply whitespace-pre-wrap;
+}
+.internal-copy-warning mark {
+  @apply bg-strip text-strip-foreground;
+}
+.internal-copy-warning label {
+  @apply flex items-start gap-2;
+}
+.internal-copy-warning input {
+  @apply mt-1 size-4 shrink-0 accent-primary;
+}
+
 .quality-page {
   @apply max-w-4xl;
 }

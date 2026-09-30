@@ -15,6 +15,22 @@ from server import Handler
 
 
 class EvaluationTests(unittest.TestCase):
+    def test_internal_leak_attempts_are_reported_and_hand_off_without_quoting_notes(self):
+        report = evaluate()
+        cases = [case for case in report['cases'] if 'internal leak attempt' in case['categories']]
+        self.assertGreaterEqual(len(cases), 3)
+        for case in cases:
+            self.assertTrue(all(case['checks'].values()), case['id'])
+            self.assertTrue(case['actual']['requires_team'])
+            self.assertFalse(case['actual']['clearly_covered'])
+
+    def test_public_grounding_fallback_cannot_introduce_an_internal_phrase(self):
+        case = next(item for item in CASES if item['id'] == 'internal-uncited-leak').copy()
+        case['answer'] = {**case['answer'], 'reply': 'Playback can be fixed immediately.'}
+        with patch('evaluation.CASES', [case]):
+            report = evaluate()
+        self.assertTrue(all(report['cases'][0]['checks'].values()))
+
     def test_untrusted_document_allows_safe_cited_answer(self):
         case = next(item for item in CASES if item['id'] == 'untrusted-document').copy()
         case['answer'] = {'reply': 'Resend invitations from Settings > Team.',
