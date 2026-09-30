@@ -5,18 +5,34 @@ import { useState } from 'react';
 import Link from 'next/link';
 import type { TicketSummary } from './data';
 
-export function Queue({ tickets, selectedId }: { tickets: TicketSummary[]; selectedId?: number }) {
+export function Queue({
+  tickets,
+  selectedId,
+}: {
+  tickets: TicketSummary[];
+  selectedId?: number;
+}) {
   const [status, setStatus] = useState('all');
-  const visible = tickets.filter((ticket) => status === 'all' || ticket.status === status);
+  const visible = tickets.filter(
+    (ticket) => status === 'all' || ticket.status === status,
+  );
   return (
     <aside className="queue" aria-label="Support inbox">
       <div className="queue-header">
         <span>Inbox</span>
         <strong>{tickets.length}</strong>
       </div>
-      <label className="queue-filter">Status
-        <select aria-label="Filter by status" value={status} onChange={(event) => setStatus(event.target.value)}>
-          <option value="all">All</option><option value="open">Open</option><option value="pending">Pending</option><option value="resolved">Resolved</option>
+      <label className="queue-filter">
+        Status
+        <select
+          aria-label="Filter by status"
+          value={status}
+          onChange={(event) => setStatus(event.target.value)}
+        >
+          <option value="all">All</option>
+          <option value="open">Open</option>
+          <option value="pending">Pending</option>
+          <option value="resolved">Resolved</option>
         </select>
       </label>
       <nav aria-label="Requests">

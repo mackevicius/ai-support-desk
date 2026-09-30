@@ -51,22 +51,23 @@ Run these steps from the repository root. You do not need any credentials to bro
 2. Sign in at the [OpenAI API keys page](https://platform.openai.com/api-keys), create a **new secret key**, and copy it when shown. This is an API key, not your ChatGPT password or subscription. Check your OpenAI API billing/credits before making paid requests.
 3. Create or edit a file named `.env` in the **repository root**, next to `compose.yaml`. Put the four values in it, replacing each placeholder with its actual value (without angle brackets or quotes):
 
-	```dotenv
-	OWNER_PASSWORD=PASTE_FIRST_OPENSSL_OUTPUT
-	OWNER_SESSION_SECRET=PASTE_SECOND_OPENSSL_OUTPUT
-	AI_SERVICE_SECRET=PASTE_THIRD_OPENSSL_OUTPUT
-	OPENAI_API_KEY=PASTE_OPENAI_SECRET_KEY
-	```
+   ```dotenv
+   OWNER_PASSWORD=PASTE_FIRST_OPENSSL_OUTPUT
+   OWNER_SESSION_SECRET=PASTE_SECOND_OPENSSL_OUTPUT
+   AI_SERVICE_SECRET=PASTE_THIRD_OPENSSL_OUTPUT
+   OPENAI_API_KEY=PASTE_OPENAI_SECRET_KEY
+   ```
 
 4. Run `chmod 600 .env` to restrict local file access, then `docker compose up --build -d` to start or recreate the services with the new values. Compose reads the root `.env` automatically; do not use a file under `web/` or `api/`. If you change a value later, run `docker compose up -d --force-recreate api ai` to apply it. Changing `OWNER_SESSION_SECRET` also signs out existing owner sessions.
 5. Check that the containers received the values without printing them:
 
-	```sh
-	docker compose exec -T api node -e 'for (const name of ["OWNER_PASSWORD", "OWNER_SESSION_SECRET", "AI_SERVICE_SECRET"]) console.log(name, !process.env[name] ? "missing" : name === "AI_SERVICE_SECRET" && process.env[name] === "local-service-secret" ? "using local default" : "set")'
-	docker compose exec -T ai python -c 'import os; print("OPENAI_API_KEY", "set" if os.getenv("OPENAI_API_KEY") else "missing")'
-	```
+   ```sh
+   docker compose exec -T api node -e 'for (const name of ["OWNER_PASSWORD", "OWNER_SESSION_SECRET", "AI_SERVICE_SECRET"]) console.log(name, !process.env[name] ? "missing" : name === "AI_SERVICE_SECRET" && process.env[name] === "local-service-secret" ? "using local default" : "set")'
+   docker compose exec -T ai python -c 'import os; print("OPENAI_API_KEY", "set" if os.getenv("OPENAI_API_KEY") else "missing")'
+   ```
 
-	All four should say `set`. If `AI_SERVICE_SECRET` says `using local default`, replace it with your own value in `.env`. For missing values, check that the file is named exactly `.env`, has no blank values, and is in the repository root. Values already exported in your shell take precedence over the file when Compose starts; unset conflicting exports and recreate the containers.
+   All four should say `set`. If `AI_SERVICE_SECRET` says `using local default`, replace it with your own value in `.env`. For missing values, check that the file is named exactly `.env`, has no blank values, and is in the repository root. Values already exported in your shell take precedence over the file when Compose starts; unset conflicting exports and recreate the containers.
+
 6. Open http://localhost:3000, select **Owner sign in**, and enter the value of `OWNER_PASSWORD`. Use **Help articles** to add, edit, or retire fictional documentation. Open an unresolved request and select **Generate live draft**; after a document change, use **Regenerate live draft** to replace an unreviewed live suggestion. The owner password is for the app; the OpenAI key goes only to the Python service. Never paste either key or secret into the browser, a ticket, a commit, or chat.
 
 The root `.env` is ignored by Git. Owner login lasts eight hours in the current demo session. The Node API holds database-backed limits of **5 drafts per visitor session** and **200 drafts per UTC day** across visitors and owners. Failed provider attempts count. Owner generation is exempt from the visitor cap, not the daily cap. Visitors see their remaining allowance. Reset does not replenish it. A reached cap or provider credit refusal shows "Live AI is paused for today"; a question still creates a conversation and hands off. Provider credit refusal pauses all live generation for that UTC day.

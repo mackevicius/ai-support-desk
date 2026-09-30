@@ -2,16 +2,29 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { generateTicket, getTickets, loginOwner, resetDemo, reviewTicket, saveHelpArticle, submitQuestion } from './data';
+import {
+  generateTicket,
+  getTickets,
+  loginOwner,
+  resetDemo,
+  reviewTicket,
+  saveHelpArticle,
+  submitQuestion,
+} from './data';
 
 export async function signInOwner(formData: FormData) {
   const password = formData.get('password');
   const sessionId = (await cookies()).get('demo_session')?.value;
-  if (typeof password !== 'string' || !sessionId) throw new Error('Invalid sign-in request');
+  if (typeof password !== 'string' || !sessionId)
+    throw new Error('Invalid sign-in request');
   const result = await loginOwner(password, sessionId);
-  if (result === 'invalid' || result === 'unavailable') redirect(`/owner?error=${result}`);
+  if (result === 'invalid' || result === 'unavailable')
+    redirect(`/owner?error=${result}`);
   (await cookies()).set('owner_session', result, {
-    httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 8 * 60 * 60,
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 8 * 60 * 60,
   });
   redirect('/');
 }
@@ -29,7 +42,10 @@ export async function generateRequest(formData: FormData) {
   if (typeof id !== 'string' || !/^\d+$/.test(id) || !sessionId)
     throw new Error('Invalid generation request');
   const status = await generateTicket(id, sessionId, ownerSession);
-  if (status !== 200) redirect(`/tickets/${id}?generation=${status === 429 ? 'limit' : 'unavailable'}`);
+  if (status !== 200)
+    redirect(
+      `/tickets/${id}?generation=${status === 429 ? 'limit' : 'unavailable'}`,
+    );
   redirect(`/tickets/${id}`);
 }
 
@@ -40,14 +56,25 @@ export async function saveArticle(formData: FormData) {
   const id = formData.get('id');
   const title = formData.get('title');
   const body = formData.get('body');
-  if (!sessionId || !ownerSession || typeof title !== 'string' || !title.trim() || title.length > 200 ||
-      typeof body !== 'string' || !body.trim() || body.length > 5000 ||
-      (id !== null && (typeof id !== 'string' || !/^\d+$/.test(id)))) {
+  if (
+    !sessionId ||
+    !ownerSession ||
+    typeof title !== 'string' ||
+    !title.trim() ||
+    title.length > 200 ||
+    typeof body !== 'string' ||
+    !body.trim() ||
+    body.length > 5000 ||
+    (id !== null && (typeof id !== 'string' || !/^\d+$/.test(id)))
+  ) {
     throw new Error('Invalid help article');
   }
   await saveHelpArticle(sessionId, ownerSession, {
-    ...(id === null ? {} : { id: Number(id), retired: formData.get('retired') === 'on' }),
-    title, body,
+    ...(id === null
+      ? {}
+      : { id: Number(id), retired: formData.get('retired') === 'on' }),
+    title,
+    body,
   });
   redirect('/articles');
 }
@@ -95,8 +122,13 @@ export async function reviewRequest(formData: FormData) {
     formData.get('priority')?.toString(),
     (await cookies()).get('owner_session')?.value,
   );
-  if (action === 'approve' && (await cookies()).get('demo_seat')?.value === 'agent') {
-    const next = (await getTickets(sessionId)).find((ticket) => ticket.status === 'open');
+  if (
+    action === 'approve' &&
+    (await cookies()).get('demo_seat')?.value === 'agent'
+  ) {
+    const next = (await getTickets(sessionId)).find(
+      (ticket) => ticket.status === 'open',
+    );
     redirect(next ? `/tickets/${next.id}` : '/');
   }
   redirect(`/tickets/${id}`);

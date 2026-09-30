@@ -8,26 +8,44 @@ export type TicketSummary = {
   review_state?: 'saved' | 'approved' | 'rejected' | 'reopened' | null;
 };
 
-export type HelpArticle = { id: number; title: string; body: string; retired: boolean };
+export type HelpArticle = {
+  id: number;
+  title: string;
+  body: string;
+  retired: boolean;
+};
 
-export async function getHelpArticles(sessionId: string, ownerSession: string): Promise<HelpArticle[] | null> {
-  const response = await fetch(`${process.env.API_URL ?? 'http://localhost:3001'}/help-articles`, {
-    cache: 'no-store',
-    headers: { cookie: `demo_session=${sessionId}; owner_session=${ownerSession}` },
-  });
+export async function getHelpArticles(
+  sessionId: string,
+  ownerSession: string,
+): Promise<HelpArticle[] | null> {
+  const response = await fetch(
+    `${process.env.API_URL ?? 'http://localhost:3001'}/help-articles`,
+    {
+      cache: 'no-store',
+      headers: {
+        cookie: `demo_session=${sessionId}; owner_session=${ownerSession}`,
+      },
+    },
+  );
   if (response.status === 403) return null;
   if (!response.ok) throw new Error('Could not load help articles');
   return response.json();
 }
 
 export async function saveHelpArticle(
-  sessionId: string, ownerSession: string, article: { id?: number; title: string; body: string; retired?: boolean },
+  sessionId: string,
+  ownerSession: string,
+  article: { id?: number; title: string; body: string; retired?: boolean },
 ) {
   const response = await fetch(
     `${process.env.API_URL ?? 'http://localhost:3001'}/help-articles${article.id ? `/${article.id}` : ''}`,
     {
       method: article.id ? 'PATCH' : 'POST',
-      headers: { 'content-type': 'application/json', cookie: `demo_session=${sessionId}; owner_session=${ownerSession}` },
+      headers: {
+        'content-type': 'application/json',
+        cookie: `demo_session=${sessionId}; owner_session=${ownerSession}`,
+      },
       body: JSON.stringify(article),
       cache: 'no-store',
     },
@@ -36,7 +54,16 @@ export async function saveHelpArticle(
 }
 
 export type Ticket = TicketSummary & {
-  decision?: { kind: 'automatic_reply' | 'hand_off'; reason: string; rule?: string; topic?: string; suggested_priority?: string; documents?: { id: number; title: string; kind?: string }[]; sources: { id: number; title: string; body: string }[]; paused: boolean };
+  decision?: {
+    kind: 'automatic_reply' | 'hand_off';
+    reason: string;
+    rule?: string;
+    topic?: string;
+    suggested_priority?: string;
+    documents?: { id: number; title: string; kind?: string }[];
+    sources: { id: number; title: string; body: string }[];
+    paused: boolean;
+  };
   live_ai?: { remaining: number; paused: boolean };
   question: string;
   approved_reply: string | null;
@@ -51,10 +78,16 @@ export type Ticket = TicketSummary & {
   history: { id: number; description: string; created_at: string }[];
 };
 
-export async function getLiveAllowance(sessionId?: string): Promise<{ remaining: number; paused: boolean }> {
-  const response = await fetch(`${process.env.API_URL ?? 'http://localhost:3001'}/live-ai`, {
-    cache: 'no-store', headers: sessionId ? { cookie: `demo_session=${sessionId}` } : undefined,
-  });
+export async function getLiveAllowance(
+  sessionId?: string,
+): Promise<{ remaining: number; paused: boolean }> {
+  const response = await fetch(
+    `${process.env.API_URL ?? 'http://localhost:3001'}/live-ai`,
+    {
+      cache: 'no-store',
+      headers: sessionId ? { cookie: `demo_session=${sessionId}` } : undefined,
+    },
+  );
   if (!response.ok) throw new Error('Could not load live AI allowance');
   return response.json();
 }
@@ -80,7 +113,11 @@ export async function getTicket(
     `${process.env.API_URL ?? 'http://localhost:3001'}/tickets/${encodeURIComponent(id)}`,
     {
       cache: 'no-store',
-      headers: sessionId ? { cookie: `demo_session=${sessionId}${ownerSession ? `; owner_session=${ownerSession}` : ''}` } : undefined,
+      headers: sessionId
+        ? {
+            cookie: `demo_session=${sessionId}${ownerSession ? `; owner_session=${ownerSession}` : ''}`,
+          }
+        : undefined,
     },
   );
   if (response.status === 404) return null;
@@ -145,24 +182,38 @@ export async function reviewTicket(
 }
 
 export async function loginOwner(password: string, sessionId: string) {
-  const response = await fetch(`${process.env.API_URL ?? 'http://localhost:3001'}/owner/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', cookie: `demo_session=${sessionId}` },
-    body: JSON.stringify({ password }),
-    cache: 'no-store',
-  });
+  const response = await fetch(
+    `${process.env.API_URL ?? 'http://localhost:3001'}/owner/login`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: `demo_session=${sessionId}`,
+      },
+      body: JSON.stringify({ password }),
+      cache: 'no-store',
+    },
+  );
   if (response.status === 503) return 'unavailable';
   if (!response.ok) return 'invalid';
-  const cookie = response.headers.getSetCookie().find((value) => value.startsWith('owner_session='));
+  const cookie = response.headers
+    .getSetCookie()
+    .find((value) => value.startsWith('owner_session='));
   return cookie?.split(';')[0].slice('owner_session='.length) ?? 'unavailable';
 }
 
-export async function generateTicket(id: string, sessionId: string, ownerSession?: string) {
+export async function generateTicket(
+  id: string,
+  sessionId: string,
+  ownerSession?: string,
+) {
   const response = await fetch(
     `${process.env.API_URL ?? 'http://localhost:3001'}/tickets/${encodeURIComponent(id)}/generate`,
     {
       method: 'POST',
-      headers: { cookie: `demo_session=${sessionId}${ownerSession ? `; owner_session=${ownerSession}` : ''}` },
+      headers: {
+        cookie: `demo_session=${sessionId}${ownerSession ? `; owner_session=${ownerSession}` : ''}`,
+      },
       cache: 'no-store',
     },
   );

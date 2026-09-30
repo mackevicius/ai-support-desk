@@ -4,13 +4,25 @@ import type { Pool } from 'pg';
 import { generateDraft, liveAllowance } from './generation.js';
 
 const ownerSessionAge = 8 * 60 * 60 * 1000;
-const statusOrder: Record<string, number> = { open: 0, pending: 1, resolved: 2 };
+const statusOrder: Record<string, number> = {
+  open: 0,
+  pending: 1,
+  resolved: 2,
+};
 
-function validArticle(input: unknown): input is { title: string; body: string; retired?: boolean } {
+function validArticle(
+  input: unknown,
+): input is { title: string; body: string; retired?: boolean } {
   if (!input || typeof input !== 'object') return false;
   const { title, body } = input as { title?: unknown; body?: unknown };
-  return typeof title === 'string' && !!title.trim() && title.length <= 200 &&
-    typeof body === 'string' && !!body.trim() && body.length <= 5000;
+  return (
+    typeof title === 'string' &&
+    !!title.trim() &&
+    title.length <= 200 &&
+    typeof body === 'string' &&
+    !!body.trim() &&
+    body.length <= 5000
+  );
 }
 
 function matchesSecret(provided: string, expected: string) {
@@ -23,38 +35,101 @@ function ownerSession(session: string) {
   const secret = process.env.OWNER_SESSION_SECRET;
   if (!secret) return null;
   const expiry = Date.now() + ownerSessionAge;
-  const signature = createHmac('sha256', secret).update(`${session}.${expiry}`).digest('hex');
+  const signature = createHmac('sha256', secret)
+    .update(`${session}.${expiry}`)
+    .digest('hex');
   return `${expiry}.${signature}`;
 }
 
 function isOwner(cookie: string | undefined, session: string) {
   const secret = process.env.OWNER_SESSION_SECRET;
-  const token = cookie?.match(/(?:^|;\s*)owner_session=(\d+\.[a-f0-9]{64})(?:;|$)/)?.[1];
+  const token = cookie?.match(
+    /(?:^|;\s*)owner_session=(\d+\.[a-f0-9]{64})(?:;|$)/,
+  )?.[1];
   if (!secret || !token) return false;
   const [expiry, signature] = token.split('.');
   if (Number(expiry) <= Date.now()) return false;
-  const expected = createHmac('sha256', secret).update(`${session}.${expiry}`).digest('hex');
-  return timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected, 'hex'));
+  const expected = createHmac('sha256', secret)
+    .update(`${session}.${expiry}`)
+    .digest('hex');
+  return timingSafeEqual(
+    Buffer.from(signature, 'hex'),
+    Buffer.from(expected, 'hex'),
+  );
 }
 
-function decide(question: string, generated: Awaited<ReturnType<typeof generateDraft>>, agentReview = false) {
+function decide(
+  question: string,
+  generated: Awaited<ReturnType<typeof generateDraft>>,
+  agentReview = false,
+) {
   const draft = generated.draft;
-  const risky = /\b(refunds?|charg(?:e|ed|es|ing)|bill(?:ed|s|ing)?|pay(?:ment|ments|ing)?|paid|price|pricing|cost|card|money|purchase|subscription|cancel|passwords?|credentials?|hack(?:ed|ing)?|compromis(?:e|ed)|breach(?:ed)?|security|stolen|unauthori[sz]ed|accounts?|log(?:ged|ging)?[ -]?in(?:to)?|sign.?in|two.factor|2fa|verification code|locked|identity|fraud)\b/i.test(question);
-  const internal = draft?.sources.some((source) => source.kind !== 'help_article');
+  const risky =
+    /\b(refunds?|charg(?:e|ed|es|ing)|bill(?:ed|s|ing)?|pay(?:ment|ments|ing)?|paid|price|pricing|cost|card|money|purchase|subscription|cancel|passwords?|credentials?|hack(?:ed|ing)?|compromis(?:e|ed)|breach(?:ed)?|security|stolen|unauthori[sz]ed|accounts?|log(?:ged|ging)?[ -]?in(?:to)?|sign.?in|two.factor|2fa|verification code|locked|identity|fraud)\b/i.test(
+      question,
+    );
+  const internal = draft?.sources.some(
+    (source) => source.kind !== 'help_article',
+  );
   const covered = draft?.clearly_covered === true && draft.sources.length > 0;
-  const automatic = covered && draft?.requires_team === false && !internal && !risky && !agentReview;
-  const outcome = generated.error === 'paused'
-    ? { rule: 'Live allowance exhausted', reason: 'Live AI is paused for today' }
-    : risky ? { rule: 'Money or account security', reason: 'A team member needs to check questions about money or account security.' }
-    : internal ? { rule: 'Staff-only information', reason: 'The answer relies on information meant for Tunely staff.' }
-    : !covered ? { rule: 'Weak help article coverage', reason: 'There is not enough clear help article coverage to answer automatically.' }
-    : draft?.requires_team !== false ? { rule: 'Provider requested team review', reason: 'A team member needs to check this question before we can answer.' }
-    : agentReview ? { rule: 'Agent review required', reason: 'An agent requested a new draft; it needs approval before delivery.' }
-    : { rule: 'Clearly covered by public help articles', reason: 'A help article clearly covers your question, and it does not need a team member to check it.' };
-  return { kind: automatic ? 'automatic_reply' : 'hand_off', ...outcome,
-    topic: draft?.topic ?? 'Unclassified', suggested_priority: draft?.suggested_priority ?? 'normal',
-    documents: draft?.sources.map(({ id, title, kind }) => ({ id, title, kind })) ?? [],
-    sources: draft?.sources.filter((source) => source.kind === 'help_article') ?? [], paused: generated.error === 'paused' };
+  const automatic =
+    covered &&
+    draft?.requires_team === false &&
+    !internal &&
+    !risky &&
+    !agentReview;
+  const outcome =
+    generated.error === 'paused'
+      ? {
+          rule: 'Live allowance exhausted',
+          reason: 'Live AI is paused for today',
+        }
+      : risky
+        ? {
+            rule: 'Money or account security',
+            reason:
+              'A team member needs to check questions about money or account security.',
+          }
+        : internal
+          ? {
+              rule: 'Staff-only information',
+              reason:
+                'The answer relies on information meant for Tunely staff.',
+            }
+          : !covered
+            ? {
+                rule: 'Weak help article coverage',
+                reason:
+                  'There is not enough clear help article coverage to answer automatically.',
+              }
+            : draft?.requires_team !== false
+              ? {
+                  rule: 'Provider requested team review',
+                  reason:
+                    'A team member needs to check this question before we can answer.',
+                }
+              : agentReview
+                ? {
+                    rule: 'Agent review required',
+                    reason:
+                      'An agent requested a new draft; it needs approval before delivery.',
+                  }
+                : {
+                    rule: 'Clearly covered by public help articles',
+                    reason:
+                      'A help article clearly covers your question, and it does not need a team member to check it.',
+                  };
+  return {
+    kind: automatic ? 'automatic_reply' : 'hand_off',
+    ...outcome,
+    topic: draft?.topic ?? 'Unclassified',
+    suggested_priority: draft?.suggested_priority ?? 'normal',
+    documents:
+      draft?.sources.map(({ id, title, kind }) => ({ id, title, kind })) ?? [],
+    sources:
+      draft?.sources.filter((source) => source.kind === 'help_article') ?? [],
+    paused: generated.error === 'paused',
+  };
 }
 
 export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
@@ -81,13 +156,16 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
        FROM saved_drafts d JOIN help_articles a ON a.id = d.article_id WHERE d.ticket_id = $1`,
       [id],
     );
-    const decision = ticket.rows[0].decision ? JSON.parse(ticket.rows[0].decision) : null;
-    const live = owner || decision
-      ? await pool.query(
-          'SELECT reply, suggested_priority, source_ids, source_articles FROM session_drafts WHERE ticket_id = $1 AND session_id = $2',
-          [id, session],
-        )
-      : { rows: [] };
+    const decision = ticket.rows[0].decision
+      ? JSON.parse(ticket.rows[0].decision)
+      : null;
+    const live =
+      owner || decision
+        ? await pool.query(
+            'SELECT reply, suggested_priority, source_ids, source_articles FROM session_drafts WHERE ticket_id = $1 AND session_id = $2',
+            [id, session],
+          )
+        : { rows: [] };
     const articles = live.rows.length
       ? await pool.query('SELECT id, title, body FROM help_articles')
       : null;
@@ -107,10 +185,15 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     const { decision: storedDecision, ...ticketFields } = ticket.rows[0];
     return {
       ...ticketFields,
-      ...(decision ? { decision, live_ai: await liveAllowance(pool, session) } : {}),
+      ...(decision
+        ? { decision, live_ai: await liveAllowance(pool, session) }
+        : {}),
       status: reviewedStatus(ticket.rows[0].status, current?.state),
       priority: current?.priority ?? ticket.rows[0].priority,
-      approved_reply: current?.approved_reply ?? (decision?.kind === 'automatic_reply' ? live.rows[0]?.reply : null) ?? null,
+      approved_reply:
+        current?.approved_reply ??
+        (decision?.kind === 'automatic_reply' ? live.rows[0]?.reply : null) ??
+        null,
       review_state: current?.state ?? null,
       draft: live.rows.length
         ? {
@@ -121,19 +204,19 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
             sources: liveSources,
           }
         : draft.rows.length
-        ? {
-            state: current?.state ?? 'saved',
-            reply: draft.rows[0].reply,
-            suggested_priority: draft.rows[0].suggested_priority,
-            sources: [
-              {
-                id: draft.rows[0].id,
-                title: draft.rows[0].title,
-                body: draft.rows[0].body,
-              },
-            ],
-          }
-        : null,
+          ? {
+              state: current?.state ?? 'saved',
+              reply: draft.rows[0].reply,
+              suggested_priority: draft.rows[0].suggested_priority,
+              sources: [
+                {
+                  id: draft.rows[0].id,
+                  title: draft.rows[0].title,
+                  body: draft.rows[0].body,
+                },
+              ],
+            }
+          : null,
       history: events.rows,
     };
   }
@@ -177,7 +260,10 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       response.status(503).json({ error: 'Owner login is unavailable' });
       return;
     }
-    if (typeof request.body?.password !== 'string' || !matchesSecret(request.body.password, password)) {
+    if (
+      typeof request.body?.password !== 'string' ||
+      !matchesSecret(request.body.password, password)
+    ) {
       response.sendStatus(401);
       return;
     }
@@ -196,7 +282,9 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       return;
     }
     try {
-      const articles = await pool.query('SELECT id, title, body, retired FROM help_articles ORDER BY id');
+      const articles = await pool.query(
+        'SELECT id, title, body, retired FROM help_articles ORDER BY id',
+      );
       response.json(articles.rows);
     } catch (error) {
       next(error);
@@ -209,7 +297,9 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       return;
     }
     if (!validArticle(request.body)) {
-      response.status(400).json({ error: 'Enter a title and body within the allowed lengths.' });
+      response
+        .status(400)
+        .json({ error: 'Enter a title and body within the allowed lengths.' });
       return;
     }
     const { title, body } = request.body;
@@ -229,9 +319,14 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       response.sendStatus(403);
       return;
     }
-    if (!/^\d+$/.test(request.params.id) || !validArticle(request.body) ||
-        typeof request.body.retired !== 'boolean') {
-      response.status(400).json({ error: 'Enter a valid article, title, body and status.' });
+    if (
+      !/^\d+$/.test(request.params.id) ||
+      !validArticle(request.body) ||
+      typeof request.body.retired !== 'boolean'
+    ) {
+      response
+        .status(400)
+        .json({ error: 'Enter a valid article, title, body and status.' });
       return;
     }
     const { title, body, retired } = request.body;
@@ -257,7 +352,11 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         response.sendStatus(404);
         return;
       }
-      const ticket = await detail(request.params.id, response.locals.session, true);
+      const ticket = await detail(
+        request.params.id,
+        response.locals.session,
+        true,
+      );
       if (!ticket) {
         response.sendStatus(404);
         return;
@@ -267,29 +366,64 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         return;
       }
       if (ticket.status === 'resolved') {
-        response.status(409).json({ error: 'Generation is not available for this request' });
+        response
+          .status(409)
+          .json({ error: 'Generation is not available for this request' });
         return;
       }
-      const generated = await generateDraft(pool, response.locals.session, ticket.question, owner);
+      const generated = await generateDraft(
+        pool,
+        response.locals.session,
+        ticket.question,
+        owner,
+      );
       if (!generated.draft) {
-        response.status(generated.error === 'paused' ? 429 : 502).json({ error: generated.error === 'paused' ? 'Live AI is paused for today' : 'Live generation is unavailable' });
+        response
+          .status(generated.error === 'paused' ? 429 : 502)
+          .json({
+            error:
+              generated.error === 'paused'
+                ? 'Live AI is paused for today'
+                : 'Live generation is unavailable',
+          });
         return;
       }
       const suggestion = generated.draft;
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        const state = !ticket.decision && ticket.review_state === 'reopened' ? 'reopened' : 'saved';
-        const changed = ticket.review_state === null
-          ? await client.query(`INSERT INTO ticket_reviews (session_id, ticket_id, state, priority, approved_reply)
+        const state =
+          !ticket.decision && ticket.review_state === 'reopened'
+            ? 'reopened'
+            : 'saved';
+        const changed =
+          ticket.review_state === null
+            ? await client.query(
+                `INSERT INTO ticket_reviews (session_id, ticket_id, state, priority, approved_reply)
               VALUES ($1, $2, $3, $4, $5) ON CONFLICT (session_id, ticket_id) DO NOTHING RETURNING state`,
-              [response.locals.session, request.params.id, state, ticket.priority, ticket.approved_reply])
-          : await client.query(`UPDATE ticket_reviews SET state = $3
+                [
+                  response.locals.session,
+                  request.params.id,
+                  state,
+                  ticket.priority,
+                  ticket.approved_reply,
+                ],
+              )
+            : await client.query(
+                `UPDATE ticket_reviews SET state = $3
               WHERE session_id = $1 AND ticket_id = $2 AND state = $4 RETURNING state`,
-              [response.locals.session, request.params.id, state, ticket.review_state]);
+                [
+                  response.locals.session,
+                  request.params.id,
+                  state,
+                  ticket.review_state,
+                ],
+              );
         if (!changed.rows.length) {
           await client.query('ROLLBACK');
-          response.status(409).json({ error: 'Generation is no longer available' });
+          response
+            .status(409)
+            .json({ error: 'Generation is no longer available' });
           return;
         }
         await client.query(
@@ -298,19 +432,41 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
            ON CONFLICT (session_id, ticket_id) DO UPDATE SET reply = EXCLUDED.reply,
            suggested_priority = EXCLUDED.suggested_priority, source_ids = EXCLUDED.source_ids,
            source_articles = EXCLUDED.source_articles`,
-          [response.locals.session, request.params.id, suggestion.reply.trim(), suggestion.suggested_priority,
-            JSON.stringify(suggestion.source_ids), JSON.stringify(suggestion.sources)],
+          [
+            response.locals.session,
+            request.params.id,
+            suggestion.reply.trim(),
+            suggestion.suggested_priority,
+            JSON.stringify(suggestion.source_ids),
+            JSON.stringify(suggestion.sources),
+          ],
         );
         if (ticket.decision) {
           const decision = decide(ticket.question, generated, true);
-          await client.query("UPDATE support_tickets SET status = 'open', decision = $1 WHERE id = $2", [JSON.stringify(decision), request.params.id]);
-          await client.query(`INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
+          await client.query(
+            "UPDATE support_tickets SET status = 'open', decision = $1 WHERE id = $2",
+            [JSON.stringify(decision), request.params.id],
+          );
+          await client.query(
+            `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
             VALUES (nextval('ticket_event_ids'), $1, $2, $3, $4)`,
-            [request.params.id, response.locals.session, `Hand-off: ${decision.reason}`, new Date().toISOString()]);
+            [
+              request.params.id,
+              response.locals.session,
+              `Hand-off: ${decision.reason}`,
+              new Date().toISOString(),
+            ],
+          );
         }
-        await client.query(`INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
+        await client.query(
+          `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
           VALUES (nextval('ticket_event_ids'), $1, $2, 'Agent requested a new answer draft', $3)`,
-          [request.params.id, response.locals.session, new Date().toISOString()]);
+          [
+            request.params.id,
+            response.locals.session,
+            new Date().toISOString(),
+          ],
+        );
         await client.query('COMMIT');
       } catch (error) {
         await client.query('ROLLBACK');
@@ -318,10 +474,14 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       } finally {
         client.release();
       }
-      response.json(await detail(request.params.id, response.locals.session, true));
+      response.json(
+        await detail(request.params.id, response.locals.session, true),
+      );
     } catch (error) {
       if ((error as { code?: string }).code === '23505') {
-        response.status(409).json({ error: 'Generation is no longer available' });
+        response
+          .status(409)
+          .json({ error: 'Generation is no longer available' });
         return;
       }
       next(error);
@@ -353,20 +513,31 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         [response.locals.session],
       );
       response.json(
-        result.rows.map((ticket) => {
-          const review = reviews.rows.find(
-            (item) => item.ticket_id === ticket.id,
-          );
-          return review
-            ? {
-                ...ticket,
-                status: reviewedStatus(ticket.status, review.state),
-                priority: review.priority,
-                review_state: review.state,
-              }
-            : ticket;
-        }).filter((ticket) => !['open', 'pending', 'resolved'].includes(String(request.query.status)) || ticket.status === request.query.status)
-          .sort((first, second) => (statusOrder[first.status] ?? 1) - (statusOrder[second.status] ?? 1)),
+        result.rows
+          .map((ticket) => {
+            const review = reviews.rows.find(
+              (item) => item.ticket_id === ticket.id,
+            );
+            return review
+              ? {
+                  ...ticket,
+                  status: reviewedStatus(ticket.status, review.state),
+                  priority: review.priority,
+                  review_state: review.state,
+                }
+              : ticket;
+          })
+          .filter(
+            (ticket) =>
+              !['open', 'pending', 'resolved'].includes(
+                String(request.query.status),
+              ) || ticket.status === request.query.status,
+          )
+          .sort(
+            (first, second) =>
+              (statusOrder[first.status] ?? 1) -
+              (statusOrder[second.status] ?? 1),
+          ),
       );
     } catch (error) {
       next(error);
@@ -426,18 +597,44 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       client.release();
     }
     try {
-      const generated = await generateDraft(pool, response.locals.session, question.trim(), isOwner(request.headers.cookie, response.locals.session));
+      const generated = await generateDraft(
+        pool,
+        response.locals.session,
+        question.trim(),
+        isOwner(request.headers.cookie, response.locals.session),
+      );
       const draft = generated.draft;
       const decision = decide(question, generated);
       const automatic = decision.kind === 'automatic_reply';
       if (draft) {
-        await pool.query(`INSERT INTO session_drafts (session_id, ticket_id, reply, suggested_priority, source_ids, source_articles)
-          VALUES ($1, $2, $3, $4, $5, $6)`, [response.locals.session, ticketId, draft.reply, draft.suggested_priority, JSON.stringify(draft.source_ids), JSON.stringify(draft.sources)]);
+        await pool.query(
+          `INSERT INTO session_drafts (session_id, ticket_id, reply, suggested_priority, source_ids, source_articles)
+          VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            response.locals.session,
+            ticketId,
+            draft.reply,
+            draft.suggested_priority,
+            JSON.stringify(draft.source_ids),
+            JSON.stringify(draft.sources),
+          ],
+        );
       }
-      await pool.query('UPDATE support_tickets SET status = $1, decision = $2 WHERE id = $3', [automatic ? 'resolved' : 'open', JSON.stringify(decision), ticketId]);
-      await pool.query(`INSERT INTO ticket_events (id, ticket_id, description, created_at) VALUES (nextval('ticket_event_ids'), $1, $2, $3)`,
-        [ticketId, `${automatic ? 'Automatic reply' : 'Hand-off'}: ${decision.reason}`, new Date().toISOString()]);
-      response.status(201).json(await detail(ticketId, response.locals.session));
+      await pool.query(
+        'UPDATE support_tickets SET status = $1, decision = $2 WHERE id = $3',
+        [automatic ? 'resolved' : 'open', JSON.stringify(decision), ticketId],
+      );
+      await pool.query(
+        `INSERT INTO ticket_events (id, ticket_id, description, created_at) VALUES (nextval('ticket_event_ids'), $1, $2, $3)`,
+        [
+          ticketId,
+          `${automatic ? 'Automatic reply' : 'Hand-off'}: ${decision.reason}`,
+          new Date().toISOString(),
+        ],
+      );
+      response
+        .status(201)
+        .json(await detail(ticketId, response.locals.session));
     } catch (error) {
       next(error);
     }
@@ -479,7 +676,8 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         return;
       }
       const ticket = await detail(
-        request.params.id, response.locals.session,
+        request.params.id,
+        response.locals.session,
         isOwner(request.headers.cookie, response.locals.session),
       );
       if (!ticket) {
@@ -499,14 +697,21 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         return;
       }
       const owner = isOwner(request.headers.cookie, response.locals.session);
-      const ticket = await detail(request.params.id, response.locals.session, owner);
+      const ticket = await detail(
+        request.params.id,
+        response.locals.session,
+        owner,
+      );
       if (!ticket) {
         response.sendStatus(404);
         return;
       }
       if (
         !ticket.draft &&
-        !(['approve', 'ask'].includes(request.body?.action) && ticket.status === 'open') &&
+        !(
+          ['approve', 'ask'].includes(request.body?.action) &&
+          ticket.status === 'open'
+        ) &&
         !(request.body?.action === 'reopen' && ticket.status === 'resolved') &&
         !(
           request.body?.action === 'approve' &&
@@ -520,12 +725,18 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       const state = ticket.review_state ?? ticket.draft?.state ?? 'saved';
       if (
         !(
-          (action === 'approve' && ticket.status !== 'resolved' &&
+          (action === 'approve' &&
+            ticket.status !== 'resolved' &&
             ['saved', 'rejected', 'reopened'].includes(state ?? '')) ||
           (action === 'reject' && state === 'saved') ||
-          (action === 'ask' && ticket.status === 'open' && ['saved', 'rejected', 'reopened'].includes(state)) ||
-          (action === 'priority' && state === 'saved' && ticket.draft &&
-            priority === ticket.draft.suggested_priority && priority !== ticket.priority) ||
+          (action === 'ask' &&
+            ticket.status === 'open' &&
+            ['saved', 'rejected', 'reopened'].includes(state)) ||
+          (action === 'priority' &&
+            state === 'saved' &&
+            ticket.draft &&
+            priority === ticket.draft.suggested_priority &&
+            priority !== ticket.priority) ||
           (action === 'reopen' && ticket.status === 'resolved')
         )
       ) {
@@ -537,7 +748,8 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         (typeof reply !== 'string' ||
           !reply.trim() ||
           reply.length > 5000 ||
-          (action === 'approve' && !['low', 'normal', 'high'].includes(priority)))
+          (action === 'approve' &&
+            !['low', 'normal', 'high'].includes(priority)))
       ) {
         response
           .status(400)
@@ -551,10 +763,13 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
             ? 'rejected'
             : action === 'ask'
               ? state
-            : action === 'priority'
-              ? 'saved'
-              : 'reopened';
-      const newPriority = action === 'approve' || action === 'priority' ? priority : ticket.priority;
+              : action === 'priority'
+                ? 'saved'
+                : 'reopened';
+      const newPriority =
+        action === 'approve' || action === 'priority'
+          ? priority
+          : ticket.priority;
       const approvedReply =
         action === 'approve' ? reply.trim() : ticket.approved_reply;
       const description =
@@ -564,9 +779,9 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
             ? 'Human rejected saved AI draft and priority suggestion'
             : action === 'ask'
               ? `Team asked for details: ${reply.trim()}`
-            : action === 'priority'
-              ? `Human approved ${priority} priority suggestion`
-            : 'Human reopened request';
+              : action === 'priority'
+                ? `Human approved ${priority} priority suggestion`
+                : 'Human reopened request';
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
@@ -625,27 +840,33 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       } finally {
         client.release();
       }
-      response.json(await detail(request.params.id, response.locals.session, owner));
+      response.json(
+        await detail(request.params.id, response.locals.session, owner),
+      );
     } catch (error) {
       next(error);
     }
   });
 
-  app.use((
-    _error: unknown,
-    request: express.Request,
-    response: express.Response,
-    _next: express.NextFunction,
-  ) => {
-    const status = request.path === '/health' ? 503 : 500;
-    console.error(JSON.stringify({
-      event: 'api_error',
-      method: request.method,
-      route: request.route?.path ?? 'unknown',
-      status,
-    }));
-    response.status(status).json({ error: 'Service unavailable' });
-  });
+  app.use(
+    (
+      _error: unknown,
+      request: express.Request,
+      response: express.Response,
+      _next: express.NextFunction,
+    ) => {
+      const status = request.path === '/health' ? 503 : 500;
+      console.error(
+        JSON.stringify({
+          event: 'api_error',
+          method: request.method,
+          route: request.route?.path ?? 'unknown',
+          status,
+        }),
+      );
+      response.status(status).json({ error: 'Service unavailable' });
+    },
+  );
 
   return app;
 }
