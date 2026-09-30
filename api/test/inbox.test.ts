@@ -118,6 +118,182 @@ test('a visitor can inspect a request and its history', async () => {
   assert.equal((await fetch(`${baseUrl}/tickets/999`)).status, 404);
 });
 
+test('a covered visitor question receives an automatic reply and a recorded explanation', async () => {
+  const previousUrl = process.env.PYTHON_URL;
+  const previousSecret = process.env.AI_SERVICE_SECRET;
+  let checkedOut = false;
+  const boundedServer = createApp({
+    query: pool.query.bind(pool),
+    connect: async () => {
+      assert.equal(checkedOut, false, 'Submission must release its connection before generation');
+      checkedOut = true;
+      const client = await pool.connect();
+      return { query: client.query.bind(client), release: () => { checkedOut = false; client.release(); } };
+    },
+  } as Parameters<typeof createApp>[0]).listen(0);
+  await once(boundedServer, 'listening');
+  const boundedAddress = boundedServer.address();
+  if (!boundedAddress || typeof boundedAddress === 'string') throw new Error('No bounded server address');
+  const boundedUrl = `http://127.0.0.1:${boundedAddress.port}`;
+  const generator = createServer(async (request, response) => {
+    let body = '';
+    for await (const chunk of request) body += chunk;
+    const input = JSON.parse(body);
+    const article = input.articles.find((item: { title: string }) => item.title === 'Offline downloads');
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({
+      reply: 'Open a playlist and tap Download. Downloads need a paid plan.',
+      suggested_priority: 'normal', source_ids: [article.id], clearly_covered: true, requires_team: false,
+    }));
+  });
+  generator.listen(0);
+  await once(generator, 'listening');
+  const address = generator.address();
+  if (!address || typeof address === 'string') throw new Error('No generator address');
+  process.env.PYTHON_URL = `http://127.0.0.1:${address.port}`;
+  process.env.AI_SERVICE_SECRET = 'test-service-secret';
+  try {
+    const response = await fetch(`${boundedUrl}/tickets`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'How do I download music for offline listening?' }),
+    });
+    assert.equal(response.status, 201);
+    const ticket = await response.json();
+    assert.equal(ticket.status, 'resolved');
+    assert.equal(ticket.decision.kind, 'automatic_reply');
+    assert.equal(ticket.decision.sources[0].title, 'Offline downloads');
+    assert.equal(ticket.approved_reply, 'Open a playlist and tap Download. Downloads need a paid plan.');
+    assert.equal(ticket.live_ai.remaining, 4);
+    assert.ok(ticket.history.some((event: { description: string }) => event.description.includes(ticket.decision.reason)));
+    const cookie = response.headers.get('set-cookie')!.split(';')[0];
+    const saved = await (await fetch(`${boundedUrl}/tickets/${ticket.id}`, { headers: { cookie } })).json();
+    assert.deepEqual(saved.decision, ticket.decision);
+    assert.equal(saved.approved_reply, ticket.approved_reply);
+  } finally {
+    if (previousUrl === undefined) delete process.env.PYTHON_URL;
+    else process.env.PYTHON_URL = previousUrl;
+    if (previousSecret === undefined) delete process.env.AI_SERVICE_SECRET;
+    else process.env.AI_SERVICE_SECRET = previousSecret;
+    await new Promise<void>((resolve) => generator.close(() => resolve()));
+    await new Promise<void>((resolve) => boundedServer.close(() => resolve()));
+  }
+});
+
+test('visitor and owner generation share daily limits and provider credit pauses', async () => {
+  const previous = { url: process.env.PYTHON_URL, secret: process.env.AI_SERVICE_SECRET, password: process.env.OWNER_PASSWORD, session: process.env.OWNER_SESSION_SECRET };
+  let calls = 0;
+  let providerStatus = 200;
+  const generator = createServer(async (request, response) => {
+    for await (const chunk of request) void chunk;
+    calls++;
+    response.writeHead(providerStatus, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ reply: 'Please share more details.', suggested_priority: 'normal', source_ids: [], clearly_covered: false }));
+  });
+  generator.listen(0);
+  await once(generator, 'listening');
+  const address = generator.address();
+  if (!address || typeof address === 'string') throw new Error('No generator address');
+  process.env.PYTHON_URL = `http://127.0.0.1:${address.port}`;
+  process.env.AI_SERVICE_SECRET = 'test-service-secret';
+  process.env.OWNER_PASSWORD = 'test-password';
+  process.env.OWNER_SESSION_SECRET = 'test-session-secret';
+  const day = new Date().toISOString().slice(0, 10);
+  const submit = async (cookie: string) => {
+    const response = await fetch(`${baseUrl}/tickets`, { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify({ question: 'A question without clear coverage' }) });
+    assert.equal(response.status, 201);
+    return response.json();
+  };
+  try {
+    await pool.query('DELETE FROM generation_usage WHERE day = $1', [day]);
+    const cookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
+    for (let draft = 1; draft <= 5; draft++) {
+      const ticket = await submit(cookie);
+      assert.equal(ticket.live_ai.remaining, 5 - draft);
+      assert.equal(ticket.decision.kind, 'hand_off');
+    }
+    const paused = await submit(cookie);
+    assert.equal(paused.decision.reason, 'Live AI is paused for today');
+    assert.equal(calls, 5);
+    await fetch(`${baseUrl}/reset`, { method: 'POST', headers: { cookie } });
+    assert.equal((await submit(cookie)).live_ai.remaining, 0);
+    assert.equal(calls, 5);
+    const login = await fetch(`${baseUrl}/owner/login`, { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify({ password: 'test-password' }) });
+    const ownerCookie = `${cookie}; ${login.headers.get('set-cookie')!.split(';')[0]}`;
+    await pool.query('UPDATE generation_usage SET requests = 199 WHERE day = $1', [day]);
+    const owner = await fetch(`${baseUrl}/tickets/1/generate`, { method: 'POST', headers: { cookie: ownerCookie } });
+    assert.equal(owner.status, 200);
+    assert.equal(calls, 6);
+    assert.equal((await fetch(`${baseUrl}/tickets/2/generate`, { method: 'POST', headers: { cookie: ownerCookie } })).status, 429);
+    const other = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
+    assert.equal((await submit(other)).decision.reason, 'Live AI is paused for today');
+    assert.equal(calls, 6);
+    await pool.query('UPDATE generation_usage SET requests = 0, paused = false WHERE day = $1', [day]);
+    providerStatus = 402;
+    const noCredit = await submit(other);
+    assert.equal(noCredit.decision.reason, 'Live AI is paused for today');
+    assert.equal(noCredit.live_ai.paused, true);
+    providerStatus = 200;
+    const third = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
+    assert.equal((await submit(third)).decision.reason, 'Live AI is paused for today');
+    assert.equal(calls, 7);
+  } finally {
+    await pool.query('DELETE FROM generation_usage WHERE day = $1', [day]);
+    if (previous.url === undefined) delete process.env.PYTHON_URL;
+    else process.env.PYTHON_URL = previous.url;
+    if (previous.secret === undefined) delete process.env.AI_SERVICE_SECRET;
+    else process.env.AI_SERVICE_SECRET = previous.secret;
+    if (previous.password === undefined) delete process.env.OWNER_PASSWORD;
+    else process.env.OWNER_PASSWORD = previous.password;
+    if (previous.session === undefined) delete process.env.OWNER_SESSION_SECRET;
+    else process.env.OWNER_SESSION_SECRET = previous.session;
+    await new Promise<void>((resolve) => generator.close(() => resolve()));
+  }
+});
+
+test('uncertain, risky, internal-note and invalid answers hand off without exposing drafts', async () => {
+  const previousUrl = process.env.PYTHON_URL;
+  const previousSecret = process.env.AI_SERVICE_SECRET;
+  await pool.query("INSERT INTO help_articles (id, title, body, kind) VALUES (9000, 'Staff investigation', 'Private investigation details', 'internal_note')");
+  const generator = createServer(async (request, response) => {
+    let body = '';
+    for await (const chunk of request) body += chunk;
+    const input = JSON.parse(body);
+    const internal = input.question.includes('internal');
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ reply: internal ? 'Private investigation details' : 'A suggested answer', suggested_priority: 'normal',
+      source_ids: input.question.includes('no sources') ? [] : [internal ? 9000 : 5],
+      clearly_covered: input.question.includes('uncertain') ? false : input.question.includes('invalid') ? 'yes' : true,
+      requires_team: input.question.includes('human check') ? true : input.question.includes('missing risk') ? undefined : false,
+    }));
+  });
+  generator.listen(0);
+  await once(generator, 'listening');
+  const address = generator.address();
+  if (!address || typeof address === 'string') throw new Error('No generator address');
+  process.env.PYTHON_URL = `http://127.0.0.1:${address.port}`;
+  process.env.AI_SERVICE_SECRET = 'test-service-secret';
+  try {
+    for (const question of ['Please refund my offline plan', 'I was billed twice', 'Why did my subscription price increase?', 'My account was hacked', 'An uncertain answer', 'An internal answer', 'An invalid answer', 'An answer with no sources', 'A human check is needed', 'A missing risk assessment']) {
+      const response = await fetch(`${baseUrl}/tickets`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ question }) });
+      assert.equal(response.status, 201);
+      const ticket = await response.json();
+      assert.equal(ticket.status, 'open');
+      assert.equal(ticket.decision.kind, 'hand_off');
+      assert.equal(ticket.approved_reply, null);
+      assert.equal(ticket.draft, null);
+      assert.ok(ticket.history.some((event: { description: string }) => event.description === `Hand-off: ${ticket.decision.reason}`));
+      assert.ok(!JSON.stringify(ticket).includes('Private investigation details'));
+    }
+  } finally {
+    await pool.query('DELETE FROM help_articles WHERE id = 9000');
+    if (previousUrl === undefined) delete process.env.PYTHON_URL;
+    else process.env.PYTHON_URL = previousUrl;
+    if (previousSecret === undefined) delete process.env.AI_SERVICE_SECRET;
+    else process.env.AI_SERVICE_SECRET = previousSecret;
+    await new Promise<void>((resolve) => generator.close(() => resolve()));
+  }
+});
+
 test('a visitor cannot request live generation', async () => {
   const inbox = await fetch(`${baseUrl}/tickets`);
   const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
@@ -250,12 +426,12 @@ test('owner edits and retires help articles without changing the guest demo', as
     ticket = await draft.json();
     assert.deepEqual(ticket.draft.sources, []);
     assert.match(ticket.draft.reply, /clarify/i);
-    assert.equal(calls.length, 3);
+    assert.equal(calls.length, 4);
     assert.ok(calls[0].articles.some((item) => item.id === article.id));
     assert.ok(calls[0].articles.length > 3);
     assert.ok(Buffer.byteLength(JSON.stringify(calls[0])) > 32768);
-    assert.ok(calls[1].articles.some((item) => item.body.includes('owner approval')));
-    assert.ok(calls[2].articles.every((item) => item.id !== article.id));
+    assert.ok(calls[2].articles.some((item) => item.body.includes('owner approval')));
+    assert.ok(calls[3].articles.every((item) => item.id !== article.id));
     const updatedSeed = await fetch(`${baseUrl}/help-articles/1`, {
       method: 'PATCH', headers,
       body: JSON.stringify({ title: 'New invitations', body: 'New invitation text.', retired: true }),
@@ -288,19 +464,29 @@ test('an owner generates a cited draft through Python without approving it', asy
     serviceSecret: process.env.AI_SERVICE_SECRET,
   };
   const calls: unknown[] = [];
+  let providerStatus = 200;
   const provider = createServer(async (request, response) => {
     assert.equal(request.url, '/v1/chat/completions');
     assert.equal(request.method, 'POST');
     assert.equal(request.headers.authorization, 'Bearer fake-provider-key');
     let body = '';
     for await (const chunk of request) body += chunk;
-    calls.push(JSON.parse(body));
+    const payload = JSON.parse(body);
+    calls.push(payload);
+    if (providerStatus !== 200) {
+      response.writeHead(providerStatus, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ error: { code: 'insufficient_quota' } }));
+      return;
+    }
+    const input = JSON.parse(payload.messages[1].content);
+    const offline = input.question.includes('offline');
+    const article = input.articles.find((item: { id: number }) => item.id === (offline ? 5 : 1));
     response.writeHead(200, { 'content-type': 'application/json' });
     response.end(JSON.stringify({
       choices: [{ message: { content: JSON.stringify({
-        reply: 'Workspace admins can resend invitations from Settings > Team.',
+        reply: offline ? 'You can save songs for offline play.' : 'Workspace admins can resend invitations from Settings > Team.',
         suggested_priority: 'high',
-        source_ids: [1],
+        source_ids: [article.id], clearly_covered: offline, requires_team: false,
       }) } }],
     }));
   });
@@ -365,9 +551,10 @@ test('an owner generates a cited draft through Python without approving it', asy
     assert.equal(ticket.draft.reply, 'Workspace admins can resend invitations from Settings > Team.');
     assert.equal(ticket.draft.suggested_priority, 'high');
     assert.equal(ticket.draft.sources[0].title, 'Inviting teammates');
-    assert.equal(calls.length, 1);
+    assert.equal(calls.length, 2);
     const providerCall = calls[0] as { max_tokens: number; messages: { content: string }[] };
     assert.equal(providerCall.max_tokens, 300);
+    assert.match(providerCall.messages[0].content, /clearly_covered/);
     const promptData = JSON.parse(providerCall.messages[1].content);
     assert.equal(promptData.question, 'How do I resend an invitation?');
     assert.equal(promptData.articles[0].id, 1);
@@ -396,17 +583,24 @@ test('an owner generates a cited draft through Python without approving it', asy
     assert.equal(approved.status, 200);
     assert.equal((await approved.json()).status, 'resolved');
     assert.equal((await fetch(`${baseUrl}/tickets/${id}/generate`, { method: 'POST', headers })).status, 409);
-    assert.equal(calls.length, 1);
-    await pool.query("UPDATE generation_usage SET requests = 20 WHERE day = $1", [new Date().toISOString().slice(0, 10)]);
+    assert.equal(calls.length, 2);
+    await pool.query("UPDATE generation_usage SET requests = 200 WHERE day = $1", [new Date().toISOString().slice(0, 10)]);
     const another = await fetch(`${baseUrl}/tickets`, {
       method: 'POST', headers, body: JSON.stringify({ question: 'How do I invite a teammate?' }),
     });
     const nextTicket = await another.json();
     assert.equal((await fetch(`${baseUrl}/tickets/${nextTicket.id}/generate`, { method: 'POST', headers })).status, 429);
-    assert.equal(calls.length, 1);
-    await pool.query('UPDATE generation_usage SET requests = 0, reserved_tokens = 400000 WHERE day = $1', [new Date().toISOString().slice(0, 10)]);
-    assert.equal((await fetch(`${baseUrl}/tickets/${nextTicket.id}/generate`, { method: 'POST', headers })).status, 429);
-    assert.equal(calls.length, 1);
+    assert.equal(calls.length, 2);
+    await pool.query('UPDATE generation_usage SET requests = 0 WHERE day = $1', [new Date().toISOString().slice(0, 10)]);
+    const covered = await fetch(`${baseUrl}/tickets`, {
+      method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify({ question: 'How do I listen offline?' }),
+    });
+    assert.equal((await covered.json()).decision.kind, 'automatic_reply');
+    providerStatus = 429;
+    const paused = await fetch(`${baseUrl}/tickets`, {
+      method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify({ question: 'How do I listen offline?' }),
+    });
+    assert.equal((await paused.json()).decision.reason, 'Live AI is paused for today');
   } finally {
     if (previous.password === undefined) delete process.env.OWNER_PASSWORD;
     else process.env.OWNER_PASSWORD = previous.password;
@@ -419,6 +613,7 @@ test('an owner generates a cited draft through Python without approving it', asy
     python.kill();
     await once(python, 'exit');
     await new Promise<void>((resolve) => provider.close(() => resolve()));
+    await pool.query('DELETE FROM generation_usage WHERE day = $1', [new Date().toISOString().slice(0, 10)]);
   }
 });
 
@@ -659,7 +854,7 @@ test('a submitted request belongs only to its visitor session', async () => {
   assert.equal(ticket.status, 'open');
   assert.deepEqual(
     ticket.history.map((event: { description: string }) => event.description),
-    ['Request received'],
+    ['Request received', 'Hand-off: There is not enough clear help article coverage to answer automatically.'],
   );
 
   const ownInbox = await fetch(`${baseUrl}/tickets`, {
@@ -761,6 +956,9 @@ test('an existing inbox keeps its data when the session schema is installed', as
     );
     INSERT INTO support_tickets VALUES
       (1, 'Maya Chen', 'Existing request', 'Can you help?', 'open', 'normal', '2026-09-20T10:00:00Z');
+    CREATE TABLE help_articles (id integer PRIMARY KEY, title text NOT NULL, body text NOT NULL);
+    INSERT INTO help_articles VALUES
+      (5, 'Owner article five', 'Keep five'), (6, 'Owner article six', 'Keep six'), (7, 'Owner article seven', 'Keep seven');
   `);
   const { Pool: OldPool } = oldDatabase.adapters.createPg();
   const oldPool = new OldPool();
@@ -769,6 +967,10 @@ test('an existing inbox keeps its data when the session schema is installed', as
   await oldPool.query('DROP SEQUENCE ticket_event_ids');
   await prepareDatabase(oldPool);
   const oldServer = createApp(oldPool).listen(0);
+  const previousPassword = process.env.OWNER_PASSWORD;
+  const previousSecret = process.env.OWNER_SESSION_SECRET;
+  process.env.OWNER_PASSWORD = 'test-password';
+  process.env.OWNER_SESSION_SECRET = 'test-session-secret';
   try {
     await new Promise<void>((resolve) => oldServer.once('listening', resolve));
     const address = oldServer.address();
@@ -777,6 +979,13 @@ test('an existing inbox keeps its data when the session schema is installed', as
     const url = `http://127.0.0.1:${address.port}`;
     const inbox = await fetch(`${url}/tickets`);
     assert.equal((await inbox.json())[0].subject, 'Existing request');
+    const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
+    const login = await fetch(`${url}/owner/login`, { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify({ password: 'test-password' }) });
+    const articles = await (await fetch(`${url}/help-articles`, { headers: { cookie: `${cookie}; ${login.headers.get('set-cookie')!.split(';')[0]}` } })).json();
+    for (const title of ['Offline downloads', 'Family plan invitations', 'Changing audio quality']) {
+      assert.equal(articles.filter((article: { title: string }) => article.title === title).length, 1);
+    }
+    assert.equal(articles.find((article: { id: number }) => article.id === 5).body, 'Keep five');
     const submitted = await fetch(`${url}/tickets`, {
       method: 'POST',
       headers: {
@@ -795,6 +1004,10 @@ test('an existing inbox keeps its data when the session schema is installed', as
       oldServer.close((error) => (error ? reject(error) : resolve())),
     );
     await oldPool.end();
+    if (previousPassword === undefined) delete process.env.OWNER_PASSWORD;
+    else process.env.OWNER_PASSWORD = previousPassword;
+    if (previousSecret === undefined) delete process.env.OWNER_SESSION_SECRET;
+    else process.env.OWNER_SESSION_SECRET = previousSecret;
   }
 });
 

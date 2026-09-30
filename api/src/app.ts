@@ -1,6 +1,7 @@
 import express from 'express';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { Pool } from 'pg';
+import { generateDraft, liveAllowance } from './generation.js';
 
 const ownerSessionAge = 8 * 60 * 60 * 1000;
 
@@ -45,7 +46,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
   }
   async function detail(id: string, session: string, owner = false) {
     const ticket = await pool.query(
-      `SELECT id, customer_name, subject, question, status, priority, created_at
+      `SELECT id, customer_name, subject, question, status, priority, created_at, decision
        FROM support_tickets WHERE id = $1 AND (session_id IS NULL OR (session_id = $2 AND created_at > NOW() - INTERVAL '1 day'))`,
       [id, session],
     );
@@ -59,7 +60,8 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
        FROM saved_drafts d JOIN help_articles a ON a.id = d.article_id WHERE d.ticket_id = $1`,
       [id],
     );
-    const live = owner
+    const decision = ticket.rows[0].decision ? JSON.parse(ticket.rows[0].decision) : null;
+    const live = owner || decision
       ? await pool.query(
           'SELECT reply, suggested_priority, source_ids, source_articles FROM session_drafts WHERE ticket_id = $1 AND session_id = $2',
           [id, session],
@@ -81,13 +83,15 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       [id, session],
     );
     const current = review.rows[0];
+    const { decision: storedDecision, ...ticketFields } = ticket.rows[0];
     return {
-      ...ticket.rows[0],
+      ...ticketFields,
+      ...(decision ? { decision, live_ai: await liveAllowance(pool, session) } : {}),
       status: reviewedStatus(ticket.rows[0].status, current?.state),
       priority: current?.priority ?? ticket.rows[0].priority,
-      approved_reply: current?.approved_reply ?? null,
+      approved_reply: current?.approved_reply ?? (decision?.kind === 'automatic_reply' ? live.rows[0]?.reply : null) ?? null,
       review_state: current?.state ?? null,
-      draft: live.rows.length
+      draft: live.rows.length && owner
         ? {
             live: true,
             state: current?.state ?? 'saved',
@@ -132,6 +136,14 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     try {
       await pool.query('SELECT 1');
       response.json({ status: 'ok' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/live-ai', async (_request, response, next) => {
+    try {
+      response.json(await liveAllowance(pool, response.locals.session));
     } catch (error) {
       next(error);
     }
@@ -236,55 +248,12 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         response.status(409).json({ error: 'Generation is not available for this request' });
         return;
       }
-      if (!process.env.PYTHON_URL || !process.env.AI_SERVICE_SECRET) {
-        response.status(503).json({ error: 'Live generation is unavailable' });
+      const generated = await generateDraft(pool, response.locals.session, ticket.question, true);
+      if (!generated.draft) {
+        response.status(generated.error === 'paused' ? 429 : 502).json({ error: generated.error === 'paused' ? 'Live AI is paused for today' : 'Live generation is unavailable' });
         return;
       }
-      const articles = (await pool.query('SELECT id, title, body FROM help_articles WHERE retired = false ORDER BY id')).rows;
-      const body = JSON.stringify({ question: ticket.question, articles });
-      const largestArticles = articles.map((article) => Buffer.byteLength(JSON.stringify(article)))
-        .sort((left, right) => right - left).slice(0, 3);
-      const reservedTokens = (Buffer.byteLength(JSON.stringify(ticket.question)) +
-        largestArticles.reduce((total, length) => total + length, 0)) * 3 + 4096 + 300;
-      const day = new Date().toISOString().slice(0, 10);
-      await pool.query(
-        'INSERT INTO generation_usage (day, requests, reserved_tokens) VALUES ($1, 0, 0) ON CONFLICT (day) DO NOTHING',
-        [day],
-      );
-      const allowance = await pool.query(
-        `UPDATE generation_usage SET requests = requests + 1, reserved_tokens = reserved_tokens + $2
-         WHERE day = $1 AND requests < 20 AND reserved_tokens + $2 <= 400000 RETURNING requests`,
-        [day, reservedTokens],
-      );
-      if (!allowance.rows.length) {
-        response.status(429).json({ error: 'Daily generation limit reached' });
-        return;
-      }
-      const generated = await fetch(`${process.env.PYTHON_URL}/generate`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${process.env.AI_SERVICE_SECRET}`,
-        },
-        body,
-        signal: AbortSignal.timeout(12000),
-      });
-      if (!generated.ok) {
-        response.status(502).json({ error: 'Live generation is unavailable' });
-        return;
-      }
-      const suggestion = await generated.json();
-      if (
-        typeof suggestion.reply !== 'string' || !suggestion.reply.trim() ||
-        suggestion.reply.length > 5000 ||
-        !['low', 'normal', 'high'].includes(suggestion.suggested_priority) ||
-        !Array.isArray(suggestion.source_ids) ||
-        suggestion.source_ids.some((id: unknown) => !Number.isInteger(id) || !articles.some((article) => article.id === id)) ||
-        new Set(suggestion.source_ids).size !== suggestion.source_ids.length
-      ) {
-        response.status(502).json({ error: 'Invalid generation response' });
-        return;
-      }
+      const suggestion = generated.draft;
       await pool.query(
         `INSERT INTO session_drafts (session_id, ticket_id, reply, suggested_priority, source_ids, source_articles)
          VALUES ($1, $2, $3, $4, $5, $6)
@@ -292,8 +261,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
          suggested_priority = EXCLUDED.suggested_priority, source_ids = EXCLUDED.source_ids,
          source_articles = EXCLUDED.source_articles`,
         [response.locals.session, request.params.id, suggestion.reply.trim(), suggestion.suggested_priority,
-          JSON.stringify(suggestion.source_ids), JSON.stringify(suggestion.source_ids.map((id: number) =>
-            articles.find((article) => article.id === id)))],
+          JSON.stringify(suggestion.source_ids), JSON.stringify(suggestion.sources)],
       );
       response.json(await detail(request.params.id, response.locals.session, true));
     } catch (error) {
@@ -360,6 +328,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         .json({ error: 'Enter a question of up to 5000 characters.' });
       return;
     }
+    let ticketId: string;
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -384,19 +353,43 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
           createdAt,
         ],
       );
-      const event = await client.query(
+      await client.query(
         `INSERT INTO ticket_events (id, ticket_id, description, created_at)
          VALUES (nextval('ticket_event_ids'), $1, 'Request received', $2)
          RETURNING id, description, created_at`,
         [ticket.rows[0].id, createdAt],
       );
       await client.query('COMMIT');
-      response.status(201).json({ ...ticket.rows[0], history: event.rows });
+      ticketId = String(ticket.rows[0].id);
     } catch (error) {
       await client.query('ROLLBACK');
       next(error);
+      return;
     } finally {
       client.release();
+    }
+    try {
+      const generated = await generateDraft(pool, response.locals.session, question.trim(), isOwner(request.headers.cookie, response.locals.session));
+      const draft = generated.draft;
+      const risky = /\b(refund|charg(?:e|ed|es|ing)|bill(?:ed|s|ing)?|pay(?:ment|ments|ing)?|paid|price|pricing|cost|card|money|purchase|subscription|cancel|password|credentials?|hack(?:ed|ing)?|security|stolen|unauthori[sz]ed|account access|login|sign.?in|locked|identity|fraud)\b/i.test(question);
+      const automatic = draft?.clearly_covered === true && draft.requires_team === false && draft.sources.length > 0 && draft.sources.every((source) => source.kind === 'help_article') && !risky;
+      const reason = automatic ? 'A help article clearly covers your question, and it does not need a team member to check it.'
+        : generated.error === 'paused' ? 'Live AI is paused for today'
+        : risky ? 'A team member needs to check questions about money or account security.'
+        : draft?.sources.some((source) => source.kind !== 'help_article') ? 'The answer relies on information meant for Tunely staff.'
+        : draft?.requires_team !== false && draft ? 'A team member needs to check this question before we can answer.'
+        : 'There is not enough clear help article coverage to answer automatically.';
+      const decision = { kind: automatic ? 'automatic_reply' : 'hand_off', reason, sources: draft?.sources.filter((source) => source.kind === 'help_article') ?? [], paused: generated.error === 'paused' };
+      if (draft) {
+        await pool.query(`INSERT INTO session_drafts (session_id, ticket_id, reply, suggested_priority, source_ids, source_articles)
+          VALUES ($1, $2, $3, $4, $5, $6)`, [response.locals.session, ticketId, draft.reply, draft.suggested_priority, JSON.stringify(draft.source_ids), JSON.stringify(draft.sources)]);
+      }
+      await pool.query('UPDATE support_tickets SET status = $1, decision = $2 WHERE id = $3', [automatic ? 'resolved' : 'open', JSON.stringify(decision), ticketId]);
+      await pool.query(`INSERT INTO ticket_events (id, ticket_id, description, created_at) VALUES (nextval('ticket_event_ids'), $1, $2, $3)`,
+        [ticketId, `${automatic ? 'Automatic reply' : 'Hand-off'}: ${reason}`, new Date().toISOString()]);
+      response.status(201).json(await detail(ticketId, response.locals.session));
+    } catch (error) {
+      next(error);
     }
   });
 

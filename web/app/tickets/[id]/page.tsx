@@ -6,6 +6,7 @@ import { generateRequest, reviewRequest } from '../../actions';
 import { getTicket, getTickets } from '../../data';
 import { ReviewButtons, SubmitButton } from '../../_components/submit-button';
 import { Textarea } from '../../../components/ui/textarea';
+import { SupportChat } from '../../_components/support-chat';
 
 export default async function TicketPage({
   params,
@@ -22,6 +23,9 @@ export default async function TicketPage({
   const ticket = await getTicket(id, sessionId, jar.get('owner_session')?.value);
   if (!ticket) notFound();
   const queue = await getTickets(sessionId);
+  if (ticket.decision && jar.get('demo_seat')?.value !== 'agent') {
+    return <main className="workspace customer-ticket"><SupportChat tickets={queue} ticket={ticket} allowance={ticket.live_ai!} /></main>;
+  }
   const position = queue.findIndex((item) => item.id === ticket.id);
   const next = [...queue.slice(position + 1), ...queue.slice(0, position)].find(
     (item) => item.id !== ticket.id && item.status !== 'resolved',
@@ -53,7 +57,7 @@ export default async function TicketPage({
         </section>
         {generation && (
           <p role="alert" className="draft-notice">
-            {generation === 'limit' ? 'Daily live generation limit reached.' : 'Live generation is unavailable. Please try again later.'}
+            {generation === 'limit' ? 'Live AI is paused for today' : 'Live generation is unavailable. Please try again later.'}
           </p>
         )}
         {owner && ticket.status === 'open' && !ticket.review_state && (

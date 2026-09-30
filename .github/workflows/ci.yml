@@ -56,6 +56,10 @@ jobs:
             --from-literal=ai-service-secret="$(openssl rand -hex 32)"
           kubectl create configmap support-seed --from-file=seed.sql=api/seed.sql
           kubectl apply -f k8s/
+          kubectl run fake-provider --image=support-api:ci --image-pull-policy=Never --port=8001 --env=PORT=8001 --command -- node --import tsx api/test/fake-provider.ts
+          kubectl expose pod fake-provider --port=8001
+          kubectl set env deployment/ai OPENAI_BASE_URL=http://fake-provider:8001 OPENAI_API_KEY=fake-key
+          kubectl wait --for=condition=Ready pod/fake-provider --timeout=180s
           for service in db ai api web; do
             kubectl rollout status "deployment/$service" --timeout=180s
           done

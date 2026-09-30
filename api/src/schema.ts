@@ -34,6 +34,10 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
       'generation_usage',
       'day text PRIMARY KEY, requests integer NOT NULL, reserved_tokens integer NOT NULL DEFAULT 0',
     ],
+    [
+      'visitor_generation_usage',
+      'session_id text PRIMARY KEY, requests integer NOT NULL, created_at timestamptz NOT NULL DEFAULT NOW()',
+    ],
   ]) {
     try {
       await pool.query(`CREATE TABLE ${table} (${columns})`);
@@ -63,6 +67,10 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
   await pool.query('ALTER TABLE saved_drafts ADD COLUMN IF NOT EXISTS article_title text');
   await pool.query('ALTER TABLE saved_drafts ADD COLUMN IF NOT EXISTS article_body text');
   await pool.query('ALTER TABLE session_drafts ADD COLUMN IF NOT EXISTS source_articles text');
+  await pool.query("ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'help_article'");
+  await pool.query('ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS starter_key text UNIQUE');
+  await pool.query('ALTER TABLE generation_usage ADD COLUMN IF NOT EXISTS paused boolean NOT NULL DEFAULT false');
+  await pool.query('ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS decision text');
   const unsnapshotted = await pool.query(
     `SELECT d.ticket_id, a.title, a.body FROM saved_drafts d
      JOIN help_articles a ON a.id = d.article_id WHERE d.article_title IS NULL`,
@@ -172,5 +180,12 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
         maximum.rows[0].id,
       ]);
     }
+  }
+  for (const [key, title, body] of [
+    ['offline-downloads', 'Offline downloads', 'Tunely paid plans include offline listening. Open a playlist or album and tap Download. Keep Tunely online at least once every 30 days to keep downloads available.'],
+    ['family-invitations', 'Family plan invitations', 'The family plan owner can invite members from Settings > Plan > Family. Members must live at the same address. Open the invitation link and sign in to join.'],
+    ['audio-quality', 'Changing audio quality', 'Open Settings > Audio quality in Tunely and choose the streaming or download quality. Higher quality uses more data and storage.'],
+  ] as const) {
+    await pool.query("INSERT INTO help_articles (id, starter_key, title, body) VALUES (nextval('help_article_ids'), $1, $2, $3) ON CONFLICT (starter_key) DO NOTHING", [key, title, body]);
   }
 }

@@ -1,6 +1,8 @@
 # AI Support Desk
 
-Browse a fictional support inbox and submit a support request. Seeded requests have saved AI drafts with fictional help articles. You can edit or reject a suggestion, approve its priority independently, approve an in-app reply, reopen a resolved request, move to the next request, and reset your demo workspace. Reviews and new requests belong to each visitor's temporary session; reset does not change another visitor's data. New requests do not generate an answer draft or call an AI provider for visitors. A signed-in owner can add, edit, and retire help articles, generate or regenerate a live draft from current articles, inspect its citations, and approve or reject it. Retired articles are excluded from new drafts; guest saved drafts keep their original citations. No email is sent.
+Ask Tunely a question in the customer chat or choose an example problem. A clearly covered, non-risky question receives an automatic reply using public help articles. Everything else shows "A Tunely team member will reply soon" and "With our team", with a suggestion to switch to the Agent seat. "How was this answered?" shows the reason and public articles used; the decision is also saved in ticket history. The customer panel lists each visitor's conversations separately. New requests and reviews belong to a temporary visitor session; reset does not change another visitor's data or replenish live-AI allowance.
+
+The Agent seat retains the sample inbox with saved drafts: edit or reject a suggestion, approve its priority independently, approve an in-app reply, reopen a resolved request, and move to the next request. Handling new handed-off conversations is a later slice. A signed-in owner can manage help articles and generate live drafts. Retired articles are excluded from new drafts; saved drafts keep their original citations. No email is sent.
 
 ## Run locally
 
@@ -31,6 +33,10 @@ kubectl create secret generic support-secrets \
 	--from-literal=ai-service-secret="$(openssl rand -hex 32)"
 kubectl create configmap support-seed --from-file=seed.sql=api/seed.sql
 kubectl apply -f k8s/
+kubectl run fake-provider --image=support-api:ci --image-pull-policy=Never --port=8001 --env=PORT=8001 --command -- node --import tsx api/test/fake-provider.ts
+kubectl expose pod fake-provider --port=8001
+kubectl set env deployment/ai OPENAI_BASE_URL=http://fake-provider:8001 OPENAI_API_KEY=fake-key
+kubectl wait --for=condition=Ready pod/fake-provider --timeout=180s
 for service in db ai api web; do kubectl rollout status "deployment/$service" --timeout=180s; done
 kubectl port-forward service/web 3100:3000
 ```
@@ -63,7 +69,9 @@ Run these steps from the repository root. You do not need any credentials to bro
 	All four should say `set`. If `AI_SERVICE_SECRET` says `using local default`, replace it with your own value in `.env`. For missing values, check that the file is named exactly `.env`, has no blank values, and is in the repository root. Values already exported in your shell take precedence over the file when Compose starts; unset conflicting exports and recreate the containers.
 6. Open http://localhost:3000, select **Owner sign in**, and enter the value of `OWNER_PASSWORD`. Use **Help articles** to add, edit, or retire fictional documentation. Open an unresolved request and select **Generate live draft**; after a document change, use **Regenerate live draft** to replace an unreviewed live suggestion. The owner password is for the app; the OpenAI key goes only to the Python service. Never paste either key or secret into the browser, a ticket, a commit, or chat.
 
-The root `.env` is ignored by Git. The owner login lasts eight hours in the current demo session. The Node API checks owner authorization and holds database-backed caps of 20 generation requests and 400,000 conservatively reserved input/output tokens per UTC day across all sessions (failed provider calls count). Python retrieves up to three relevant current articles and asks for clarification when none match. Supported questions use the fixed `gpt-4o-mini` model with a 300-token output cap, a 3.2 MB internal input limit, and an eight-second provider timeout. If a draft introduces words or numbers absent from its cited articles, the service uses a matching sentence from those articles instead; if no sentence supports the question, it asks for clarification. This lexical check cannot prove every supported-sounding claim is true. A person must explicitly approve priority changes or delivery of a reply, separately. The Python service is internal to Compose and requires `AI_SERVICE_SECRET`; provider credentials never reach the browser.
+The root `.env` is ignored by Git. Owner login lasts eight hours in the current demo session. The Node API holds database-backed limits of **5 drafts per visitor session** and **200 drafts per UTC day** across visitors and owners. Failed provider attempts count. Owner generation is exempt from the visitor cap, not the daily cap. Visitors see their remaining allowance. Reset does not replenish it. A reached cap or provider credit refusal shows "Live AI is paused for today"; a question still creates a conversation and hands off. Provider credit refusal pauses all live generation for that UTC day.
+
+Python retrieves up to three relevant current articles and asks for clarification when none match. It uses `gpt-4o-mini` with a 300-token output cap, a 3.2 MB internal input limit, and an eight-second provider timeout. Automatic replies require explicit clear coverage, a separate non-risky decision, and public help articles. Money, account security, uncertainty, and internal notes hand off. If a draft introduces words or numbers absent from its sources, a clearly covered, non-risky answer can quote the complete cited public article text when it fits the reply limit and contains no embedded instructions. Otherwise Python substitutes a matching sentence or asks for clarification; neither is eligible for automatic delivery. These checks cannot prove every supported-sounding claim is true. The Python service requires `AI_SERVICE_SECRET`; provider credentials never reach the browser.
 
 ## Public demo
 
@@ -74,7 +82,7 @@ One [Vercel Services](https://vercel.com/docs/services) project runs Next.js, th
 3. In the Vercel project's Environment Variables settings, set `DATABASE_URL` to the Neon URL, `OWNER_PASSWORD` to a strong password, `OWNER_SESSION_SECRET` and `AI_SERVICE_SECRET` to two distinct outputs of `openssl rand -hex 32`, and `OPENAI_API_KEY` to a provider key. Apply these to Production (and Preview if previews need live data), then deploy. Do not set `API_URL` or `PYTHON_URL` yourself, put secrets under `NEXT_PUBLIC_`, commit `.env`, or paste secrets into the browser. The API initializes an empty database on first invocation; later invocations preserve data.
 4. Open the Vercel deployment URL. Submit a request, approve a saved reply, reset the demo, and verify the seeded inbox returns. In a private browser session, verify visitor isolation. Sign in as owner, generate a live draft, and open Answer quality. After an idle day, verify the first page and API-backed action respond promptly before retiring the Render services.
 
-GitHub Actions runs typechecking, API, Python, and browser tests, and a production build without AI credentials. Public visitors cannot initiate paid AI calls: the Node API denies visitor generation and Python requires a server-only service secret. Vercel and Neon Free are subject to usage limits; monitor both dashboards.
+GitHub Actions runs typechecking, API, Python, and browser tests, and a production build without paid AI credentials. Browser tests exercise the real Python service against a fake provider, including in Kubernetes. Public visitors can initiate bounded live drafts on submission; the API reserves allowance before contacting Python. Direct owner-generation and knowledge-base editing endpoints still require owner authorization. Vercel and Neon Free are subject to usage limits; monitor both dashboards.
 
 ## Answer quality
 
@@ -98,4 +106,4 @@ The API's `/health` checks database availability. Vercel function logs show fail
 
 ## Checks
 
-With Node.js 24+ and Python 3.13+, run `npm ci`, `npx playwright install chromium`, `npm run typecheck`, `npm test`, and `npm run build --workspace web`. The browser test starts Next.js and an in-memory API on ports 3100 and 3101; it needs neither Docker nor paid credentials. The API and Python tests use fake provider responses.
+With Node.js 24+ and Python 3.13+, run `npm ci`, `npx playwright install chromium`, `npm run typecheck`, `npm test`, and `npm run build --workspace web`. Browser tests start Next.js, an in-memory API, a fake provider, and Python on ports 3100 through 3103; they need neither Docker nor paid credentials. API and Python tests also use fake provider responses.

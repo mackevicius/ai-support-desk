@@ -35,6 +35,8 @@ export async function saveHelpArticle(
 }
 
 export type Ticket = TicketSummary & {
+  decision?: { kind: 'automatic_reply' | 'hand_off'; reason: string; sources: { id: number; title: string; body: string }[]; paused: boolean };
+  live_ai?: { remaining: number; paused: boolean };
   question: string;
   approved_reply: string | null;
   review_state: 'approved' | 'rejected' | 'reopened' | null;
@@ -47,6 +49,14 @@ export type Ticket = TicketSummary & {
   };
   history: { id: number; description: string; created_at: string }[];
 };
+
+export async function getLiveAllowance(sessionId?: string): Promise<{ remaining: number; paused: boolean }> {
+  const response = await fetch(`${process.env.API_URL ?? 'http://localhost:3001'}/live-ai`, {
+    cache: 'no-store', headers: sessionId ? { cookie: `demo_session=${sessionId}` } : undefined,
+  });
+  if (!response.ok) throw new Error('Could not load live AI allowance');
+  return response.json();
+}
 
 export async function getTickets(sessionId?: string): Promise<TicketSummary[]> {
   const response = await fetch(

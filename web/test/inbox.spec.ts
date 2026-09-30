@@ -1,5 +1,49 @@
 import { expect, test } from '@playwright/test';
 
+test('a customer gets a covered answer by keyboard and an example answer on a phone', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('textbox', { name: 'New support request' }).focus();
+  await page.keyboard.type('How do I download music for offline listening?');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/tickets\/\d+$/);
+  const chat = page.getByRole('region', { name: 'Support chat' });
+  await expect(chat.getByText('Answered', { exact: true })).toBeVisible();
+  await expect(chat.getByRole('article', { name: 'Tunely reply' }).getByText(/Tunely paid plans include offline listening/)).toBeVisible();
+  await expect(chat.getByText('4 live drafts left')).toBeVisible();
+  await chat.getByText('How was this answered?', { exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(chat.getByRole('heading', { name: 'Offline downloads' })).toBeVisible();
+  await expect(chat.getByText('A help article clearly covers your question, and it does not need a team member to check it.', { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('link', { name: 'New conversation', exact: true }).click();
+  await page.getByRole('button', { name: 'Offline downloads', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Support chat' }).getByText('Answered', { exact: true })).toBeVisible();
+  await expect(page.getByText('3 live drafts left')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/customer-phone.png', fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({ path: 'test-results/customer-desktop.png', fullPage: true });
+});
+
+test('uncovered questions hand off and exhausted visitors still start conversations', async ({ page }) => {
+  await page.goto('/');
+  for (let draft = 0; draft < 6; draft++) {
+    if (draft) await page.getByRole('link', { name: 'New conversation', exact: true }).click();
+    await page.getByRole('textbox', { name: 'New support request' }).fill(`Please help with a double charge ${draft}`);
+    await page.getByRole('button', { name: 'Submit request', exact: true }).click();
+    const chat = page.getByRole('region', { name: 'Support chat' });
+    await expect(chat.getByText('With our team', { exact: true })).toBeVisible();
+    await expect(chat.getByText('A Tunely team member will reply soon', { exact: true })).toBeVisible();
+    await expect(chat.getByRole('button', { name: 'Switch to Agent seat' })).toBeVisible();
+    if (draft === 4) await expect(chat.getByRole('status')).toHaveText('Live AI is paused for today');
+  }
+  await expect(page.getByRole('region', { name: 'Support chat' }).getByRole('status')).toHaveText('Live AI is paused for today');
+  await expect(page.getByText('0 live drafts left')).toBeVisible();
+  await page.getByRole('button', { name: 'Switch to Agent seat' }).click();
+  await expect(page.getByRole('heading', { name: 'Support inbox' })).toBeVisible();
+});
+
 test('owner inspects quality failures and guests cannot open the quality view', async ({ page }) => {
   await page.goto('/quality');
   await expect(page.getByRole('heading', { name: 'Owner sign in' })).toBeVisible();
@@ -79,6 +123,7 @@ test('a visitor submits a request that another session cannot see', async ({
   page,
 }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await expect(
     page.getByRole('link', { name: /Team invitations are not arriving/ }),
   ).toBeVisible();
@@ -130,6 +175,7 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
   page,
 }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await page
     .getByRole('link', { name: /Team invitations are not arriving/ })
     .click();
@@ -268,6 +314,7 @@ test('inbox actions stay disabled while their requests are in flight', async ({ 
 
 test('a visitor resets only their own demo workspace', async ({ browser, page }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await page.getByRole('link', { name: /Team invitations are not arriving/ }).click();
   await page.getByRole('button', { name: 'Approve in-app reply' }).click();
   await expect(page.getByText('resolved', { exact: true })).toBeVisible();
@@ -281,6 +328,7 @@ test('a visitor resets only their own demo workspace', async ({ browser, page })
   try {
     const otherPage = await otherVisitor.newPage();
     await otherPage.goto('/');
+    await otherPage.getByRole('button', { name: 'Agent', exact: true }).click();
     await otherPage.getByRole('link', { name: /Team invitations are not arriving/ }).click();
     await otherPage.getByRole('button', { name: 'Approve in-app reply' }).click();
     await expect(otherPage.getByText('resolved', { exact: true })).toBeVisible();

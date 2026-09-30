@@ -153,6 +153,117 @@
 .workspace {
   @apply min-h-screen bg-background;
 }
+.customer-home {
+  @apply mx-auto grid max-w-7xl items-start gap-8 px-5 py-10 lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8 lg:py-14;
+}
+.tunely-intro h1 {
+  @apply mt-0 text-4xl;
+}
+.tunely-intro > p {
+  @apply mt-4 text-2xl leading-snug;
+}
+.tunely-intro img {
+  @apply mt-6 hidden aspect-4/3 w-full rounded-lg object-cover lg:block;
+}
+.customer-ticket {
+  @apply mx-auto max-w-6xl px-5 py-8 sm:px-8;
+}
+.customer-panel {
+  @apply grid min-w-0 overflow-hidden rounded-lg border border-border bg-card md:grid-cols-[210px_minmax(0,1fr)];
+}
+.conversations {
+  @apply min-w-0 border-b border-border p-4 md:border-r md:border-b-0;
+}
+.conversation-heading h2 {
+  @apply mb-3;
+}
+.new-conversation {
+  @apply inline-block text-sm font-bold text-primary underline underline-offset-4;
+}
+.conversations nav {
+  @apply my-4 max-h-40 overflow-y-auto md:max-h-96;
+}
+.conversations nav a {
+  @apply mb-1 block rounded-md border border-transparent px-2 py-3 text-sm hover:bg-secondary;
+}
+.conversations nav a[aria-current='page'] {
+  @apply border-border bg-secondary;
+}
+.conversations nav strong {
+  @apply block wrap-break-word;
+}
+.conversations nav span,
+.conversations nav > p {
+  @apply mt-1 block text-xs text-muted;
+}
+.support-chat {
+  @apply min-w-0 p-5 sm:p-6;
+}
+.chat-heading {
+  @apply mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4;
+}
+.chat-heading h2 {
+  @apply mb-1 text-foreground;
+}
+.chat-heading span,
+.chat-heading > p {
+  @apply text-xs text-muted;
+}
+.chat-welcome h3 {
+  @apply mb-5 text-xl font-bold;
+}
+.chat-subject {
+  @apply mb-5 text-xl;
+}
+.chat-request {
+  @apply grid gap-3;
+}
+.chat-request label {
+  @apply text-sm font-bold;
+}
+.chat-request button {
+  @apply justify-self-end;
+}
+.chat-examples {
+  @apply mt-6 flex flex-wrap gap-2 border-t border-border pt-5;
+}
+.chat-message {
+  @apply mb-5 border-l-2 border-border pl-4;
+}
+.chat-message > span {
+  @apply text-xs font-bold text-muted;
+}
+.chat-message p,
+.answer-explanation p {
+  @apply my-2 text-sm whitespace-pre-wrap wrap-break-word;
+}
+.tunely-message {
+  @apply border-primary;
+}
+.answer-explanation,
+.chat-history {
+  @apply mt-5 border-t border-border pt-4 text-sm;
+}
+.answer-explanation summary,
+.chat-history summary {
+  @apply cursor-pointer font-bold text-primary;
+}
+.answer-explanation summary:focus-visible,
+.chat-history summary:focus-visible {
+  @apply outline-2 outline-offset-2 outline-ring;
+}
+.answer-explanation article {
+  @apply mt-4;
+}
+.answer-explanation h3 {
+  @apply font-bold;
+}
+.chat-history li {
+  @apply mt-3 wrap-break-word;
+}
+.paused-notice {
+  @apply mb-4 text-sm text-primary;
+}
 .inbox-view {
   @apply mx-auto max-w-6xl px-5 py-8 sm:px-10 sm:py-12;
 }
