@@ -1,66 +1,156 @@
 import { expect, test } from '@playwright/test';
 
-test('an agent edits a risky draft, asks for details and delivers a team reply', async ({ page }) => {
+test('an agent edits a risky draft, asks for details and delivers a team reply', async ({
+  page,
+}) => {
   await page.goto('/');
-  await page.getByRole('textbox', { name: 'New support request' }).fill('I was charged twice for offline downloads.');
-  await page.getByRole('button', { name: 'Submit request', exact: true }).click();
+  await page
+    .getByRole('textbox', { name: 'New support request' })
+    .fill('I was charged twice for offline downloads.');
+  await page
+    .getByRole('button', { name: 'Submit request', exact: true })
+    .click();
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
   const ticketPath = new URL(page.url()).pathname;
   await page.getByRole('button', { name: 'Switch to Agent seat' }).click();
-  await page.getByRole('link', { name: /I was charged twice for offline downloads/ }).click();
+  await page
+    .getByRole('link', { name: /I was charged twice for offline downloads/ })
+    .click();
   const trail = page.getByRole('complementary', { name: 'How the AI decided' });
-  await expect(trail.getByText('Money or account security', { exact: true })).toBeVisible();
+  await expect(
+    trail.getByText('Money or account security', { exact: true }),
+  ).toBeVisible();
   await expect(trail.getByText('Hand-off', { exact: true })).toBeVisible();
-  await page.getByRole('textbox', { name: 'Reply', exact: true }).fill('Which dates were the two charges taken?');
-  await page.getByRole('button', { name: 'Ask for details', exact: true }).click();
+  await page
+    .getByRole('textbox', { name: 'Reply', exact: true })
+    .fill('Which dates were the two charges taken?');
+  await page
+    .getByRole('button', { name: 'Ask for details', exact: true })
+    .click();
   await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
-  await expect(page.getByRole('article', { name: 'Team question' })).toContainText('Which dates were the two charges taken?');
+  await expect(
+    page.getByRole('article', { name: 'Team question' }),
+  ).toContainText('Which dates were the two charges taken?');
   await page.getByRole('button', { name: 'Redraft', exact: true }).click();
-  await expect(page.getByText('3 live drafts left', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('3 live drafts left', { exact: true }),
+  ).toBeVisible();
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.screenshot({ path: 'test-results/agent-desktop.png', fullPage: true });
+  await page.screenshot({
+    path: 'test-results/agent-desktop.png',
+    fullPage: true,
+  });
   await page.setViewportSize({ width: 390, height: 844 });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/agent-phone.png', fullPage: true });
-  await page.getByRole('textbox', { name: 'Reply', exact: true }).fill('Our team checked the charges and will contact you about the duplicate.');
-  await page.getByRole('button', { name: 'Approve in-app reply', exact: true }).click();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: 'test-results/agent-phone.png',
+    fullPage: true,
+  });
+  await page
+    .getByRole('textbox', { name: 'Reply', exact: true })
+    .fill(
+      'Our team checked the charges and will contact you about the duplicate.',
+    );
+  await page
+    .getByRole('button', { name: 'Approve in-app reply', exact: true })
+    .click();
   await expect(page).not.toHaveURL(new RegExp(`${ticketPath}$`));
-  await page.getByRole('combobox', { name: 'Filter by status' }).selectOption('resolved');
-  await expect(page.getByRole('link', { name: /I was charged twice for offline downloads/ })).toContainText('resolved');
-  await expect(page.getByRole('link', { name: /Team invitations are not arriving/ })).toHaveCount(0);
+  await page
+    .getByRole('combobox', { name: 'Filter by status' })
+    .selectOption('resolved');
+  await expect(
+    page.getByRole('link', {
+      name: /I was charged twice for offline downloads/,
+    }),
+  ).toContainText('resolved');
+  await expect(
+    page.getByRole('link', { name: /Team invitations are not arriving/ }),
+  ).toHaveCount(0);
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
+  await expect(
+    page.getByRole('region', { name: 'Support chat' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('article', { name: 'Request detail' }),
+  ).toHaveCount(0);
   await page.goto(ticketPath);
   const chat = page.getByRole('region', { name: 'Support chat' });
-  await expect(chat.getByText('Replied by our team', { exact: true })).toBeVisible();
-  await expect(chat.getByRole('article', { name: 'Team question' })).toContainText('Which dates were the two charges taken?');
-  await expect(chat.getByRole('article', { name: 'Tunely reply' })).toContainText('Our team checked the charges');
+  await expect(
+    chat.getByText('Replied by our team', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    chat.getByRole('article', { name: 'Team question' }),
+  ).toContainText('Which dates were the two charges taken?');
+  await expect(
+    chat.getByRole('article', { name: 'Tunely reply' }),
+  ).toContainText('Our team checked the charges');
   await chat.getByText('Ticket history', { exact: true }).click();
   await expect(chat.getByText(/Human approved in-app reply/)).toBeVisible();
-  const handOffs = chat.getByText('Hand-off: A team member needs to check questions about money or account security.', { exact: true });
+  const handOffs = chat.getByText(
+    'Hand-off: A team member needs to check questions about money or account security.',
+    { exact: true },
+  );
   await expect(handOffs).toHaveCount(2);
   await expect(handOffs.first()).toBeVisible();
+  await page.getByRole('button', { name: 'Agent', exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(
+    page.getByRole('heading', { name: 'Support inbox', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Support chat' })).toHaveCount(
+    0,
+  );
 });
 
-test('a reopened conversation shows its new redraft and suggested priority', async ({ page }) => {
+test('a reopened conversation shows its new redraft and suggested priority', async ({
+  page,
+}) => {
   await page.goto('/');
-  const question = 'How do I use offline downloads and audio quality? redraft review';
-  await page.getByRole('textbox', { name: 'New support request' }).fill(question);
-  await page.getByRole('button', { name: 'Submit request', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Support chat' }).getByText('Answered', { exact: true })).toBeVisible();
+  const question =
+    'How do I use offline downloads and audio quality? redraft review';
+  await page
+    .getByRole('textbox', { name: 'New support request' })
+    .fill(question);
+  await page
+    .getByRole('button', { name: 'Submit request', exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole('region', { name: 'Support chat' })
+      .getByText('Answered', { exact: true }),
+  ).toBeVisible();
   const ticketPath = new URL(page.url()).pathname;
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await page.goto(ticketPath);
   await page.getByRole('button', { name: 'Reopen request' }).click();
   await page.getByRole('button', { name: 'Redraft', exact: true }).click();
-  await expect(page.getByRole('textbox', { name: 'Reply', exact: true })).toHaveValue(/Open Settings > Audio quality/);
-  await expect(page.getByRole('combobox', { name: 'Priority', exact: true })).toHaveValue('high');
-  await expect(page.getByRole('article', { name: 'Request detail' }).getByText('open', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('textbox', { name: 'Reply', exact: true }),
+  ).toHaveValue(/Open Settings > Audio quality/);
+  await expect(
+    page.getByRole('combobox', { name: 'Priority', exact: true }),
+  ).toHaveValue('high');
+  await expect(
+    page
+      .getByRole('article', { name: 'Request detail' })
+      .getByText('open', { exact: true }),
+  ).toBeVisible();
   const trail = page.getByRole('complementary', { name: 'How the AI decided' });
-  await expect(trail.getByText('Audio quality · high priority', { exact: true })).toBeVisible();
-  await expect(trail.getByRole('heading', { name: 'Changing audio quality' })).toBeVisible();
+  await expect(
+    trail.getByText('Audio quality · high priority', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    trail.getByRole('heading', { name: 'Changing audio quality' }),
+  ).toBeVisible();
 });
 
-test('a customer gets a covered answer by keyboard and an example answer on a phone', async ({ page }) => {
+test('a customer gets a covered answer by keyboard and an example answer on a phone', async ({
+  page,
+}) => {
   await page.goto('/');
   await page.getByRole('textbox', { name: 'New support request' }).focus();
   await page.keyboard.type('How do I download music for offline listening?');
@@ -69,85 +159,176 @@ test('a customer gets a covered answer by keyboard and an example answer on a ph
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
   const chat = page.getByRole('region', { name: 'Support chat' });
   await expect(chat.getByText('Answered', { exact: true })).toBeVisible();
-  await expect(chat.getByRole('article', { name: 'Tunely reply' }).getByText(/Tunely paid plans include offline listening/)).toBeVisible();
+  await expect(
+    chat
+      .getByRole('article', { name: 'Tunely reply' })
+      .getByText(/Tunely paid plans include offline listening/),
+  ).toBeVisible();
   await expect(chat.getByText('4 live drafts left')).toBeVisible();
   await chat.getByText('How was this answered?', { exact: true }).focus();
   await page.keyboard.press('Enter');
-  await expect(chat.getByRole('heading', { name: 'Offline downloads' })).toBeVisible();
-  await expect(chat.getByText('A help article clearly covers your question, and it does not need a team member to check it.', { exact: true })).toBeVisible();
+  await expect(
+    chat.getByRole('heading', { name: 'Offline downloads' }),
+  ).toBeVisible();
+  await expect(
+    chat.getByText(
+      'A help article clearly covers your question, and it does not need a team member to check it.',
+      { exact: true },
+    ),
+  ).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('link', { name: 'New conversation', exact: true }).click();
-  await page.getByRole('button', { name: 'Offline downloads', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Support chat' }).getByText('Answered', { exact: true })).toBeVisible();
+  await page
+    .getByRole('link', { name: 'New conversation', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Offline downloads', exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole('region', { name: 'Support chat' })
+      .getByText('Answered', { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText('3 live drafts left')).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/customer-phone.png', fullPage: true });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: 'test-results/customer-phone.png',
+    fullPage: true,
+  });
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.screenshot({ path: 'test-results/customer-desktop.png', fullPage: true });
+  await page.screenshot({
+    path: 'test-results/customer-desktop.png',
+    fullPage: true,
+  });
 });
 
-test('uncovered questions hand off and exhausted visitors still start conversations', async ({ page }) => {
+test('uncovered questions hand off and exhausted visitors still start conversations', async ({
+  page,
+}) => {
   await page.goto('/');
   for (let draft = 0; draft < 6; draft++) {
-    if (draft) await page.getByRole('link', { name: 'New conversation', exact: true }).click();
-    await page.getByRole('textbox', { name: 'New support request' }).fill(`Please help with a double charge ${draft}`);
-    await page.getByRole('button', { name: 'Submit request', exact: true }).click();
+    if (draft)
+      await page
+        .getByRole('link', { name: 'New conversation', exact: true })
+        .click();
+    await page
+      .getByRole('textbox', { name: 'New support request' })
+      .fill(`Please help with a double charge ${draft}`);
+    await page
+      .getByRole('button', { name: 'Submit request', exact: true })
+      .click();
     const chat = page.getByRole('region', { name: 'Support chat' });
-    await expect(chat.getByText('With our team', { exact: true })).toBeVisible();
-    await expect(chat.getByText('A Tunely team member will reply soon', { exact: true })).toBeVisible();
-    await expect(chat.getByRole('button', { name: 'Switch to Agent seat' })).toBeVisible();
-    if (draft === 4) await expect(chat.getByRole('status')).toHaveText('Live AI is paused for today');
+    await expect(
+      chat.getByText('With our team', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      chat.getByText('A Tunely team member will reply soon', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      chat.getByRole('button', { name: 'Switch to Agent seat' }),
+    ).toBeVisible();
+    if (draft === 4)
+      await expect(chat.getByRole('status')).toHaveText(
+        'Live AI is paused for today',
+      );
   }
-  await expect(page.getByRole('region', { name: 'Support chat' }).getByRole('status')).toHaveText('Live AI is paused for today');
+  await expect(
+    page.getByRole('region', { name: 'Support chat' }).getByRole('status'),
+  ).toHaveText('Live AI is paused for today');
   await expect(page.getByText('0 live drafts left')).toBeVisible();
   await page.getByRole('button', { name: 'Switch to Agent seat' }).click();
-  await expect(page.getByRole('heading', { name: 'Support inbox' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Support inbox' }),
+  ).toBeVisible();
 });
 
-test('owner inspects quality failures and guests cannot open the quality view', async ({ page }) => {
+test('owner inspects quality failures and guests cannot open the quality view', async ({
+  page,
+}) => {
   await page.goto('/quality');
-  await expect(page.getByRole('heading', { name: 'Owner sign in' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Owner sign in' }),
+  ).toBeVisible();
   await page.getByLabel('Password').fill('test-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await page.getByRole('link', { name: 'Answer quality' }).click();
-  await expect(page.getByRole('heading', { name: 'Answer quality' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Answer quality' }),
+  ).toBeVisible();
   await expect(page.getByText('fictional-support-v1')).toBeVisible();
   await expect(page.getByRole('link', { name: /known-failure/ })).toBeVisible();
   await page.getByRole('link', { name: /known-failure/ }).click();
-  await expect(page.getByRole('heading', { name: 'Known failure' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Known failure' }),
+  ).toBeVisible();
   await expect(page.getByText('When are invoices available?')).toBeVisible();
-  await expect(page.getByText('Invoices are available before the billing period closes.')).toBeVisible();
-  await expect(page.getByText('Invoices are available after the billing period closes.', { exact: true })).toBeVisible();
-  await expect(page.getByText(/Before the billing period closes, invoices are unavailable/).first()).toBeVisible();
+  await expect(
+    page.getByText('Invoices are available before the billing period closes.'),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Invoices are available after the billing period closes.', {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByText(/Before the billing period closes, invoices are unavailable/)
+      .first(),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('link', { name: 'Owner sign in' })).toBeVisible();
   await page.goto('/quality/known-failure');
-  await expect(page.getByRole('heading', { name: 'Owner sign in' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Owner sign in' }),
+  ).toBeVisible();
 });
 
-test('owner manages help articles while visitors cannot open the editor', async ({ page }) => {
+test('owner manages help articles while visitors cannot open the editor', async ({
+  page,
+}) => {
   await page.goto('/articles');
-  await expect(page.getByRole('heading', { name: 'Owner sign in' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Owner sign in' }),
+  ).toBeVisible();
   await page.getByLabel('Password').fill('test-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await page.getByRole('link', { name: 'Help articles' }).click();
-  await expect(page.getByRole('heading', { name: 'Help articles' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Help articles' }),
+  ).toBeVisible();
   const add = page.getByRole('region', { name: 'Add article' });
   await add.getByLabel('Title').fill('Orbit access');
   await add.getByLabel('Content').fill('Orbit access starts in Settings.');
   await add.getByRole('button', { name: 'Add article' }).click();
-  const editor = page.locator('.article-editor').filter({ has: page.locator('input[value="Orbit access"]') });
+  const editor = page
+    .locator('.article-editor')
+    .filter({ has: page.locator('input[value="Orbit access"]') });
   await expect(editor).toBeVisible();
-  await editor.getByLabel('Content').fill('Orbit access requires owner approval.');
+  await editor
+    .getByLabel('Content')
+    .fill('Orbit access requires owner approval.');
   await Promise.all([
-    page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/articles'),
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === '/articles',
+    ),
     editor.getByRole('button', { name: 'Save article' }).click(),
   ]);
   await page.reload();
-  await expect(editor.getByLabel('Content')).toHaveValue('Orbit access requires owner approval.');
+  await expect(editor.getByLabel('Content')).toHaveValue(
+    'Orbit access requires owner approval.',
+  );
   await editor.getByRole('checkbox', { name: /Retired/ }).check();
   await Promise.all([
-    page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/articles'),
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === '/articles',
+    ),
     editor.getByRole('button', { name: 'Save article' }).click(),
   ]);
   await page.reload();
@@ -155,27 +336,39 @@ test('owner manages help articles while visitors cannot open the editor', async 
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('link', { name: 'Owner sign in' })).toBeVisible();
   await page.goto('/articles');
-  await expect(page.getByRole('heading', { name: 'Owner sign in' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Owner sign in' }),
+  ).toBeVisible();
 });
 
 test('only a signed-in owner sees live generation', async ({ page }) => {
   await page.goto('/tickets/1');
-  await expect(page.getByRole('button', { name: 'Generate live draft' })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Generate live draft' }),
+  ).toHaveCount(0);
   await page.getByRole('link', { name: 'Owner sign in' }).click();
   await page.getByLabel('Password').fill('wrong-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.locator('main [role="alert"]')).toHaveText('Incorrect password.');
+  await expect(page.locator('main [role="alert"]')).toHaveText(
+    'Incorrect password.',
+  );
   await page.getByLabel('Password').fill('test-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
   await page.goto('/tickets/1');
   await page.getByRole('button', { name: 'Generate live draft' }).click();
-  await expect(page.locator('main [role="alert"]')).toHaveText('Live generation is unavailable. Please try again later.');
-  await expect(page.getByRole('heading', { name: 'Saved AI draft' })).toBeVisible();
+  await expect(page.locator('main [role="alert"]')).toHaveText(
+    'Live generation is unavailable. Please try again later.',
+  );
+  await expect(
+    page.getByRole('heading', { name: 'Saved AI draft' }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('link', { name: 'Owner sign in' })).toBeVisible();
   await page.goto('/tickets/1');
-  await expect(page.getByRole('button', { name: 'Generate live draft' })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Generate live draft' }),
+  ).toHaveCount(0);
 });
 
 test('a visitor submits a request that another session cannot see', async ({
@@ -250,7 +443,11 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
   await page.getByRole('button', { name: 'Approve in-app reply' }).click();
   await expect(page).toHaveURL(/\/tickets\/2$/);
   await page.goto('/tickets/1');
-  await expect(page.getByRole('article', { name: 'Request detail' }).getByText('resolved', { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole('article', { name: 'Request detail' })
+      .getByText('resolved', { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByText('Please resend the invitations.', { exact: true }),
   ).toBeVisible();
@@ -277,10 +474,18 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
   await page.getByRole('button', { name: 'Approve in-app reply' }).click();
   await expect(page).toHaveURL(/\/$/);
   await page.goto('/tickets/2');
-  await expect(page.getByRole('article', { name: 'Request detail' }).getByText('resolved', { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole('article', { name: 'Request detail' })
+      .getByText('resolved', { exact: true }),
+  ).toBeVisible();
   await page.goto('/tickets/1');
   await page.getByRole('button', { name: 'Reopen request' }).click();
-  await expect(page.getByRole('article', { name: 'Request detail' }).getByText('open', { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole('article', { name: 'Request detail' })
+      .getByText('open', { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText('Human reopened request')).toBeVisible();
   await page
     .getByRole('textbox', { name: 'Reply' })
@@ -302,10 +507,16 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
   await expect(
     page.getByText('Existing workspace links still work.', { exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole('article', { name: 'Request detail' }).getByText('resolved', { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole('article', { name: 'Request detail' })
+      .getByText('resolved', { exact: true }),
+  ).toBeVisible();
 });
 
-test('review actions stay disabled while approval is in flight', async ({ page }) => {
+test('review actions stay disabled while approval is in flight', async ({
+  page,
+}) => {
   await page.goto('/tickets/1');
   let releaseRequest: () => void = () => {};
   const heldRequest = new Promise<void>((resolve) => {
@@ -321,13 +532,25 @@ test('review actions stay disabled while approval is in flight', async ({ page }
   });
 
   try {
-    await page.getByRole('button', { name: 'Approve in-app reply' }).click({ noWaitAfter: true });
+    await page
+      .getByRole('button', { name: 'Approve in-app reply' })
+      .click({ noWaitAfter: true });
     await expect.poll(() => requests).toBe(1);
-    await expect(page.getByRole('button', { name: /Approving/ })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Reject suggestion' })).toBeDisabled();
+    await expect(
+      page.getByRole('button', { name: /Approving/ }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole('button', { name: 'Reject suggestion' }),
+    ).toBeDisabled();
     await page.evaluate(() => {
-      (document.querySelector('.review-form button') as HTMLButtonElement).click();
-      (document.querySelector('.review-controls form:last-child button') as HTMLButtonElement).click();
+      (
+        document.querySelector('.review-form button') as HTMLButtonElement
+      ).click();
+      (
+        document.querySelector(
+          '.review-controls form:last-child button',
+        ) as HTMLButtonElement
+      ).click();
     });
     expect(requests).toBe(1);
   } finally {
@@ -337,7 +560,9 @@ test('review actions stay disabled while approval is in flight', async ({ page }
   expect(requests).toBe(1);
 });
 
-test('inbox actions stay disabled while their requests are in flight', async ({ page }) => {
+test('inbox actions stay disabled while their requests are in flight', async ({
+  page,
+}) => {
   await page.goto('/');
 
   async function checkPending(label: string, pendingLabel: string) {
@@ -347,7 +572,10 @@ test('inbox actions stay disabled while their requests are in flight', async ({ 
     });
     let requests = 0;
     const holdPost = async (route: import('@playwright/test').Route) => {
-      if (route.request().method() === 'POST' && new URL(route.request().url()).pathname === '/') {
+      if (
+        route.request().method() === 'POST' &&
+        new URL(route.request().url()).pathname === '/'
+      ) {
         requests += 1;
         await heldRequest;
       }
@@ -355,7 +583,9 @@ test('inbox actions stay disabled while their requests are in flight', async ({ 
     };
     await page.route('**/*', holdPost);
     try {
-      await page.getByRole('button', { name: label }).click({ noWaitAfter: true });
+      await page
+        .getByRole('button', { name: label })
+        .click({ noWaitAfter: true });
       await expect.poll(() => requests).toBe(1);
       const button = page.getByRole('button', { name: pendingLabel });
       await expect(button).toBeDisabled();
@@ -369,25 +599,41 @@ test('inbox actions stay disabled while their requests are in flight', async ({ 
     };
   }
 
-  await page.getByRole('textbox', { name: 'New support request' }).fill('Pending test request');
-  const checkSubmit = await checkPending('Submit request', 'Submitting request...');
+  await page
+    .getByRole('textbox', { name: 'New support request' })
+    .fill('Pending test request');
+  const checkSubmit = await checkPending(
+    'Submit request',
+    'Submitting request...',
+  );
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
   await checkSubmit();
 
   await page.goto('/');
   const checkReset = await checkPending('Reset demo', 'Resetting demo...');
-  await expect(page.getByRole('link', { name: /Pending test request/ })).toHaveCount(0);
+  await expect(
+    page.getByRole('link', { name: /Pending test request/ }),
+  ).toHaveCount(0);
   await checkReset();
 });
 
-test('a visitor resets only their own demo workspace', async ({ browser, page }) => {
+test('a visitor resets only their own demo workspace', async ({
+  browser,
+  page,
+}) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
-  await page.getByRole('link', { name: /Team invitations are not arriving/ }).click();
+  await page
+    .getByRole('link', { name: /Team invitations are not arriving/ })
+    .click();
   await page.getByRole('button', { name: 'Approve in-app reply' }).click();
-  await expect(page.getByRole('link', { name: /Team invitations are not arriving/ })).toContainText('resolved');
+  await expect(
+    page.getByRole('link', { name: /Team invitations are not arriving/ }),
+  ).toContainText('resolved');
   await page.getByRole('link', { name: 'Back to inbox' }).click();
-  await page.getByRole('textbox', { name: 'New support request' }).fill('Reset my request');
+  await page
+    .getByRole('textbox', { name: 'New support request' })
+    .fill('Reset my request');
   await page.getByRole('button', { name: 'Submit request' }).click();
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
   const submittedUrl = new URL(page.url()).pathname;
@@ -397,18 +643,34 @@ test('a visitor resets only their own demo workspace', async ({ browser, page })
     const otherPage = await otherVisitor.newPage();
     await otherPage.goto('/');
     await otherPage.getByRole('button', { name: 'Agent', exact: true }).click();
-    await otherPage.getByRole('link', { name: /Team invitations are not arriving/ }).click();
-    await otherPage.getByRole('button', { name: 'Approve in-app reply' }).click();
-    await expect(otherPage.getByRole('link', { name: /Team invitations are not arriving/ })).toContainText('resolved');
+    await otherPage
+      .getByRole('link', { name: /Team invitations are not arriving/ })
+      .click();
+    await otherPage
+      .getByRole('button', { name: 'Approve in-app reply' })
+      .click();
+    await expect(
+      otherPage.getByRole('link', {
+        name: /Team invitations are not arriving/,
+      }),
+    ).toContainText('resolved');
 
     await page.getByRole('link', { name: 'Back to inbox' }).click();
     await page.getByRole('button', { name: 'Reset demo' }).click();
-    await expect(page.getByRole('link', { name: /Reset my request/ })).toHaveCount(0);
-    await expect(page.getByRole('link', { name: /Team invitations are not arriving/ })).toContainText('open');
+    await expect(
+      page.getByRole('link', { name: /Reset my request/ }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('link', { name: /Team invitations are not arriving/ }),
+    ).toContainText('open');
     const removed = await page.goto(submittedUrl);
     expect(removed?.status()).toBe(404);
     await otherPage.reload();
-    await expect(otherPage.getByRole('link', { name: /Team invitations are not arriving/ })).toContainText('resolved');
+    await expect(
+      otherPage.getByRole('link', {
+        name: /Team invitations are not arriving/,
+      }),
+    ).toContainText('resolved');
   } finally {
     await otherVisitor.close();
   }
