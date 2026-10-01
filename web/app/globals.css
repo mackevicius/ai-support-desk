@@ -266,11 +266,13 @@
   @apply mt-5 border-t border-border pt-4 text-sm;
 }
 .answer-explanation summary,
-.chat-history summary {
+.chat-history summary,
+.draft-notice summary {
   @apply cursor-pointer font-bold text-primary;
 }
 .answer-explanation summary:focus-visible,
-.chat-history summary:focus-visible {
+.chat-history summary:focus-visible,
+.draft-notice summary:focus-visible {
   @apply outline-2 outline-offset-2 outline-ring;
 }
 .answer-explanation article {
