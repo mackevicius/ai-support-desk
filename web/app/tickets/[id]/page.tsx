@@ -94,24 +94,25 @@ export default async function TicketPage({
               : 'Live generation is unavailable. Please try again later.'}
           </p>
         )}
-        {(owner || (!ticket.is_sample && ticket.decision)) && ticket.status !== 'resolved' && (
-          <form action={generateRequest} className="draft-notice">
-            <input type="hidden" name="id" value={ticket.id} />
-            <SubmitButton
-              label={
-                !ticket.is_sample && ticket.decision
-                  ? 'Redraft'
-                  : ticket.draft?.live
-                    ? 'Regenerate live draft'
-                    : 'Generate live draft'
-              }
-              pendingLabel="Generating draft..."
-            />
-            {ticket.live_ai && (
-              <p>{ticket.live_ai.remaining} live drafts left</p>
-            )}
-          </form>
-        )}
+        {(owner || (!ticket.is_sample && ticket.decision)) &&
+          ticket.status !== 'resolved' && (
+            <form action={generateRequest} className="draft-notice">
+              <input type="hidden" name="id" value={ticket.id} />
+              <SubmitButton
+                label={
+                  !ticket.is_sample && ticket.decision
+                    ? 'Redraft'
+                    : ticket.draft?.live
+                      ? 'Regenerate live draft'
+                      : 'Generate live draft'
+                }
+                pendingLabel="Generating draft..."
+              />
+              {ticket.live_ai && (
+                <p>{ticket.live_ai.remaining} live drafts left</p>
+              )}
+            </form>
+          )}
         {ticket.customer_name === 'Visitor' && !ticket.draft && (
           <section className="draft-notice" aria-label="Answer draft">
             No answer draft has been generated for this request.

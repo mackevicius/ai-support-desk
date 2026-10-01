@@ -1,31 +1,206 @@
 {
   "articles": [
-    {"id":1,"key":"family-invitations","title":"Family plan invitations","kind":"help_article","body":"The Tunely family plan owner can invite members from Settings > Plan > Family. Members must live at the same address. Open the invitation link and sign in to join. Invitations expire after seven days."},
-    {"id":2,"key":"billing-invoices","title":"Downloading Tunely invoices","kind":"help_article","body":"Download PDF invoices from Settings > Billing > Invoices. Before the billing period closes, invoices are unavailable. Invoices are available after the billing period closes."},
-    {"id":3,"key":"playback","title":"Playback troubleshooting","kind":"help_article","body":"If music stops playing, check your internet connection, restart Tunely, and install the latest app update. If playback still stops, tell support your device and app version."},
-    {"id":4,"key":"display-name","title":"Changing your display name","kind":"help_article","body":"Change your Tunely display name from Settings > Profile. Your saved playlists and shared playlist links stay the same."},
-    {"id":5,"key":"offline-downloads","title":"Offline downloads","kind":"help_article","body":"Tunely paid plans include offline listening. Open a playlist or album and tap Download. Keep Tunely online at least once every 30 days to keep downloads available."},
-    {"id":6,"key":"audio-quality","title":"Changing audio quality","kind":"help_article","body":"Open Settings > Audio quality in Tunely and choose the streaming or download quality. Higher quality uses more data and storage."},
-    {"id":7,"key":"plan-options","title":"Tunely plans","kind":"help_article","body":"Tunely Free includes ad-supported streaming. Individual includes ad-free music and offline downloads. Family includes the same listening features for up to six people at one address."},
-    {"id":8,"key":"payment-method","title":"Updating your payment method","kind":"help_article","body":"The plan owner can update payment details from Settings > Billing > Payment method. Never send card details in a support message."},
-    {"id":9,"key":"account-security","title":"Protecting your Tunely account","kind":"help_article","body":"Use a unique password and enable two-factor authentication in Settings > Security. If you notice unfamiliar activity, contact Tunely support. Never share passwords or verification codes."},
-    {"id":10,"key":"devices","title":"Managing listening devices","kind":"help_article","body":"View your listening devices in Settings > Devices. Remove a device you no longer use. Downloaded music on a removed device will no longer play offline."},
-    {"id":11,"key":"cancel-plan","title":"Cancelling a paid plan","kind":"help_article","body":"The plan owner can cancel from Settings > Plan > Cancel. Paid listening features remain available until the current billing period ends."},
-    {"id":12,"key":"playlists","title":"Creating and sharing playlists","kind":"help_article","body":"Choose New playlist in Your library, add tracks, and use Share to copy a playlist link. A shared playlist link does not grant access to your account."},
-    {"id":13,"key":"android-playback-bug","title":"Android playback incident","kind":"internal_note","body":"Staff incident TUN-482: Android 15 playback may stop after Bluetooth reconnection. Ask for the app version and Bluetooth device model. The confidential playback workaround requires clearing the device entitlement cache. Do not quote this incident record to customers."},
-    {"id":14,"key":"offline-sync-bug","title":"Offline sync investigation","kind":"internal_note","body":"Staff incident TUN-491: downloads can remain queued after switching networks on app version 4.8. Collect the device model and app version before proposing a fix. Do not promise a release date."},
-    {"id":15,"key":"refund-policy","title":"Refund review policy","kind":"internal_note","body":"Staff policy: a support agent checks duplicate charges against the billing ledger before approving a refund. Never guarantee a refund or ask the customer for full card details."},
-    {"id":16,"key":"response-time","title":"Support response-time promise","kind":"internal_note","body":"Staff target: acknowledge handed-off questions within one working day. Account security incidents receive priority review. This is a staffing target, not a guaranteed resolution deadline."},
-    {"id":17,"key":"plan-limits","title":"Plan and device limits","kind":"internal_note","body":"Staff reference: Family allows six members including the owner. Individual allows offline downloads on three devices. A support agent must check device records before changing a download entitlement."},
-    {"id":18,"key":"release-notes","title":"Tunely 4.9 release notes","kind":"internal_note","body":"Staff preview: version 4.9 improves download queue recovery. Rollout is staged and has no confirmed completion date. Do not promise availability to a specific customer."},
-    {"id":19,"key":"family-link-bug","title":"Family invitation link investigation","kind":"internal_note","body":"Staff incident TUN-477: some expired family links show a blank page rather than an expiry message. Ask the owner to create a new invitation and collect the browser version if the new link fails."},
-    {"id":20,"key":"security-review","title":"Account security review procedure","kind":"internal_note","body":"Staff procedure: route unfamiliar device activity to the security queue. Verify ownership using the secure recovery flow. Never request passwords, verification codes, or identity documents in chat."}
+    {
+      "id": 1,
+      "key": "family-invitations",
+      "title": "Family plan invitations",
+      "kind": "help_article",
+      "body": "The Tunely family plan owner can invite members from Settings > Plan > Family. Members must live at the same address. Open the invitation link and sign in to join. Invitations expire after seven days."
+    },
+    {
+      "id": 2,
+      "key": "billing-invoices",
+      "title": "Downloading Tunely invoices",
+      "kind": "help_article",
+      "body": "Download PDF invoices from Settings > Billing > Invoices. Before the billing period closes, invoices are unavailable. Invoices are available after the billing period closes."
+    },
+    {
+      "id": 3,
+      "key": "playback",
+      "title": "Playback troubleshooting",
+      "kind": "help_article",
+      "body": "If music stops playing, check your internet connection, restart Tunely, and install the latest app update. If playback still stops, tell support your device and app version."
+    },
+    {
+      "id": 4,
+      "key": "display-name",
+      "title": "Changing your display name",
+      "kind": "help_article",
+      "body": "Change your Tunely display name from Settings > Profile. Your saved playlists and shared playlist links stay the same."
+    },
+    {
+      "id": 5,
+      "key": "offline-downloads",
+      "title": "Offline downloads",
+      "kind": "help_article",
+      "body": "Tunely paid plans include offline listening. Open a playlist or album and tap Download. Keep Tunely online at least once every 30 days to keep downloads available."
+    },
+    {
+      "id": 6,
+      "key": "audio-quality",
+      "title": "Changing audio quality",
+      "kind": "help_article",
+      "body": "Open Settings > Audio quality in Tunely and choose the streaming or download quality. Higher quality uses more data and storage."
+    },
+    {
+      "id": 7,
+      "key": "plan-options",
+      "title": "Tunely plans",
+      "kind": "help_article",
+      "body": "Tunely Free includes ad-supported streaming. Individual includes ad-free music and offline downloads. Family includes the same listening features for up to six people at one address."
+    },
+    {
+      "id": 8,
+      "key": "payment-method",
+      "title": "Updating your payment method",
+      "kind": "help_article",
+      "body": "The plan owner can update payment details from Settings > Billing > Payment method. Never send card details in a support message."
+    },
+    {
+      "id": 9,
+      "key": "account-security",
+      "title": "Protecting your Tunely account",
+      "kind": "help_article",
+      "body": "Use a unique password and enable two-factor authentication in Settings > Security. If you notice unfamiliar activity, contact Tunely support. Never share passwords or verification codes."
+    },
+    {
+      "id": 10,
+      "key": "devices",
+      "title": "Managing listening devices",
+      "kind": "help_article",
+      "body": "View your listening devices in Settings > Devices. Remove a device you no longer use. Downloaded music on a removed device will no longer play offline."
+    },
+    {
+      "id": 11,
+      "key": "cancel-plan",
+      "title": "Cancelling a paid plan",
+      "kind": "help_article",
+      "body": "The plan owner can cancel from Settings > Plan > Cancel. Paid listening features remain available until the current billing period ends."
+    },
+    {
+      "id": 12,
+      "key": "playlists",
+      "title": "Creating and sharing playlists",
+      "kind": "help_article",
+      "body": "Choose New playlist in Your library, add tracks, and use Share to copy a playlist link. A shared playlist link does not grant access to your account."
+    },
+    {
+      "id": 13,
+      "key": "android-playback-bug",
+      "title": "Android playback incident",
+      "kind": "internal_note",
+      "body": "Staff incident TUN-482: Android 15 playback may stop after Bluetooth reconnection. Ask for the app version and Bluetooth device model. The confidential playback workaround requires clearing the device entitlement cache. Do not quote this incident record to customers."
+    },
+    {
+      "id": 14,
+      "key": "offline-sync-bug",
+      "title": "Offline sync investigation",
+      "kind": "internal_note",
+      "body": "Staff incident TUN-491: downloads can remain queued after switching networks on app version 4.8. Collect the device model and app version before proposing a fix. Do not promise a release date."
+    },
+    {
+      "id": 15,
+      "key": "refund-policy",
+      "title": "Refund review policy",
+      "kind": "internal_note",
+      "body": "Staff policy: a support agent checks duplicate charges against the billing ledger before approving a refund. Never guarantee a refund or ask the customer for full card details."
+    },
+    {
+      "id": 16,
+      "key": "response-time",
+      "title": "Support response-time promise",
+      "kind": "internal_note",
+      "body": "Staff target: acknowledge handed-off questions within one working day. Account security incidents receive priority review. This is a staffing target, not a guaranteed resolution deadline."
+    },
+    {
+      "id": 17,
+      "key": "plan-limits",
+      "title": "Plan and device limits",
+      "kind": "internal_note",
+      "body": "Staff reference: Family allows six members including the owner. Individual allows offline downloads on three devices. A support agent must check device records before changing a download entitlement."
+    },
+    {
+      "id": 18,
+      "key": "release-notes",
+      "title": "Tunely 4.9 release notes",
+      "kind": "internal_note",
+      "body": "Staff preview: version 4.9 improves download queue recovery. Rollout is staged and has no confirmed completion date. Do not promise availability to a specific customer."
+    },
+    {
+      "id": 19,
+      "key": "family-link-bug",
+      "title": "Family invitation link investigation",
+      "kind": "internal_note",
+      "body": "Staff incident TUN-477: some expired family links show a blank page rather than an expiry message. Ask the owner to create a new invitation and collect the browser version if the new link fails."
+    },
+    {
+      "id": 20,
+      "key": "security-review",
+      "title": "Account security review procedure",
+      "kind": "internal_note",
+      "body": "Staff procedure: route unfamiliar device activity to the security queue. Verify ownership using the secure recovery flow. Never request passwords, verification codes, or identity documents in chat."
+    }
   ],
   "tickets": [
-    {"id":1,"customer":"Maya Chen","subject":"Family invitation keeps failing","question":"My family invitation opens, but I cannot finish joining. What should I try?","priority":"high","reason_code":"uncertain","source_key":"family-invitations","reply":"Please ask the family plan owner to create a new invitation from Settings > Plan > Family. What message appears when you open the new link?","rule":"Weak help article coverage","reason":"There is not enough clear help article coverage to answer automatically."},
-    {"id":2,"customer":"Luis Ortega","subject":"Music stops after Bluetooth reconnects","question":"Music stops on my Android phone whenever my Bluetooth headphones reconnect. Can you help?","priority":"normal","reason_code":"internal_note","source_key":"android-playback-bug","reply":"Please tell us your Tunely app version and the model of your Bluetooth headphones so our team can investigate the playback issue.","rule":"Staff-only information","reason":"The answer relies on information meant for Tunely staff."},
-    {"id":3,"customer":"Samira Khan","subject":"Charged twice for my plan","question":"I was charged twice for my Tunely plan this month. Can I get a refund?","priority":"high","reason_code":"risky","source_key":"refund-policy","reply":"Our team needs to check the two charges before deciding on a refund. Please share the charge dates and amounts, but not your card details.","rule":"Money or account security","reason":"A team member needs to check questions about money or account security."},
-    {"id":4,"customer":"Elliot Park","subject":"Move playlists from another service","question":"Can I import my playlists from another music service into Tunely?","priority":"normal","reason_code":"knowledge_gap","source_key":null,"reply":"We do not have a help article covering playlist imports yet. Which music service would you like to move your playlists from?","rule":"Weak help article coverage","reason":"There is not enough clear help article coverage to answer automatically."},
-    {"id":5,"customer":"Noor Ali","subject":"Listen to music offline","question":"How do I download music for offline listening?","priority":"normal","reason_code":"well_supported","source_key":"offline-downloads","reply":"Tunely paid plans include offline listening. Open a playlist or album and tap Download. Keep Tunely online at least once every 30 days to keep downloads available.","rule":"Clearly covered by public help articles","reason":"A help article clearly covers your question, and it does not need a team member to check it."}
+    {
+      "id": 1,
+      "customer": "Maya Chen",
+      "subject": "Family invitation keeps failing",
+      "question": "My family invitation opens, but I cannot finish joining. What should I try?",
+      "priority": "high",
+      "reason_code": "uncertain",
+      "source_key": "family-invitations",
+      "reply": "Please ask the family plan owner to create a new invitation from Settings > Plan > Family. What message appears when you open the new link?",
+      "rule": "Weak help article coverage",
+      "reason": "There is not enough clear help article coverage to answer automatically."
+    },
+    {
+      "id": 2,
+      "customer": "Luis Ortega",
+      "subject": "Music stops after Bluetooth reconnects",
+      "question": "Music stops on my Android phone whenever my Bluetooth headphones reconnect. Can you help?",
+      "priority": "normal",
+      "reason_code": "internal_note",
+      "source_key": "android-playback-bug",
+      "reply": "Please tell us your Tunely app version and the model of your Bluetooth headphones so our team can investigate the playback issue.",
+      "rule": "Staff-only information",
+      "reason": "The answer relies on information meant for Tunely staff."
+    },
+    {
+      "id": 3,
+      "customer": "Samira Khan",
+      "subject": "Charged twice for my plan",
+      "question": "I was charged twice for my Tunely plan this month. Can I get a refund?",
+      "priority": "high",
+      "reason_code": "risky",
+      "source_key": "refund-policy",
+      "reply": "Our team needs to check the two charges before deciding on a refund. Please share the charge dates and amounts, but not your card details.",
+      "rule": "Money or account security",
+      "reason": "A team member needs to check questions about money or account security."
+    },
+    {
+      "id": 4,
+      "customer": "Elliot Park",
+      "subject": "Move playlists from another service",
+      "question": "Can I import my playlists from another music service into Tunely?",
+      "priority": "normal",
+      "reason_code": "knowledge_gap",
+      "source_key": null,
+      "reply": "We do not have a help article covering playlist imports yet. Which music service would you like to move your playlists from?",
+      "rule": "Weak help article coverage",
+      "reason": "There is not enough clear help article coverage to answer automatically."
+    },
+    {
+      "id": 5,
+      "customer": "Noor Ali",
+      "subject": "Listen to music offline",
+      "question": "How do I download music for offline listening?",
+      "priority": "normal",
+      "reason_code": "well_supported",
+      "source_key": "offline-downloads",
+      "reply": "Tunely paid plans include offline listening. Open a playlist or album and tap Download. Keep Tunely online at least once every 30 days to keep downloads available.",
+      "rule": "Clearly covered by public help articles",
+      "reason": "A help article clearly covers your question, and it does not need a team member to check it."
+    }
   ]
 }

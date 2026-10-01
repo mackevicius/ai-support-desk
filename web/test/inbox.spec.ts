@@ -1,25 +1,47 @@
 import { expect, test } from '@playwright/test';
 
-test('a visitor explores saved cases and starts chats from every topic tile', async ({ page }) => {
+test('a visitor explores saved cases and starts chats from every topic tile', async ({
+  page,
+}) => {
   await page.goto('/');
   const steps = page.getByRole('region', { name: 'How Tunely Support works' });
   await expect(steps).toContainText('Tell us');
   await expect(steps).toContainText('Get an answer in seconds');
   await expect(steps).toContainText('A person steps in when it matters');
-  const conversations = page.getByRole('navigation', { name: 'Conversations', exact: true });
+  const conversations = page.getByRole('navigation', {
+    name: 'Conversations',
+    exact: true,
+  });
   await expect(conversations.getByRole('link')).toHaveCount(5);
   await expect(page.getByText('5 live drafts left')).toBeVisible();
-  for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+  for (const viewport of [
+    { width: 1440, height: 1000 },
+    { width: 390, height: 844 },
+  ]) {
     await page.setViewportSize(viewport);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({ path: `test-results/explore-${viewport.width}.png`, fullPage: true });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: `test-results/explore-${viewport.width}.png`,
+      fullPage: true,
+    });
   }
-  await conversations.getByRole('link', { name: /Listen to music offline/ }).click();
-  await expect(page.getByRole('article', { name: 'Tunely reply' })).toContainText('tap Download');
+  await conversations
+    .getByRole('link', { name: /Listen to music offline/ })
+    .click();
+  await expect(
+    page.getByRole('article', { name: 'Tunely reply' }),
+  ).toContainText('tap Download');
   await expect(page.getByText('5 live drafts left')).toBeVisible();
   const topics = [
     ['Offline downloads', 'How do I download music for offline listening?'],
-    ['Playback', 'Why does music stop after my Bluetooth headphones reconnect?'],
+    [
+      'Playback',
+      'Why does music stop after my Bluetooth headphones reconnect?',
+    ],
     ['Family invitations', 'How do I invite someone to my family plan?'],
     ['Billing', 'I was charged twice for my Tunely plan. Can you help?'],
     ['Playlist imports', 'Can I import playlists from another music service?'],
@@ -27,10 +49,14 @@ test('a visitor explores saved cases and starts chats from every topic tile', as
     ['Audio quality', 'How do I change audio quality?'],
   ];
   for (const [label, question] of topics) {
-    await page.getByRole('link', { name: 'New conversation', exact: true }).click();
+    await page
+      .getByRole('link', { name: 'New conversation', exact: true })
+      .click();
     await page.getByRole('button', { name: label, exact: true }).click();
     await expect(page).toHaveURL(/\/tickets\/\d+$/);
-    await expect(page.getByRole('region', { name: 'Support chat' })).toContainText(question);
+    await expect(
+      page.getByRole('region', { name: 'Support chat' }),
+    ).toContainText(question);
   }
 });
 
@@ -58,7 +84,9 @@ test('agent home opens the shared inbox workspace and seat switches keep the sel
 
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
   await expect(page).toHaveURL(/\/tickets\/1$/);
-  await page.getByRole('link', { name: 'New conversation', exact: true }).click();
+  await page
+    .getByRole('link', { name: 'New conversation', exact: true })
+    .click();
   await page
     .getByRole('textbox', { name: 'New support request' })
     .fill('How do I download music for offline listening?');
@@ -581,10 +609,16 @@ test('a visitor submits a request that another session cannot see', async ({
   await page
     .getByRole('link', { name: /Family invitation keeps failing/ })
     .click();
-  await expect(page.getByText('Hand-off: There is not enough clear help article coverage to answer automatically.')).toBeVisible();
+  await expect(
+    page.getByText(
+      'Hand-off: There is not enough clear help article coverage to answer automatically.',
+    ),
+  ).toBeVisible();
 
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
-  await page.getByRole('link', { name: 'New conversation', exact: true }).click();
+  await page
+    .getByRole('link', { name: 'New conversation', exact: true })
+    .click();
   await page
     .getByRole('textbox', { name: 'New support request' })
     .fill('How do I invite my team?');
@@ -665,7 +699,9 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
     .click();
   await page.getByRole('link', { name: 'Next request' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Music stops after Bluetooth reconnects' }),
+    page.getByRole('heading', {
+      name: 'Music stops after Bluetooth reconnects',
+    }),
   ).toBeVisible();
   await page.getByRole('textbox', { name: 'Reply' }).fill('');
   await page.getByRole('button', { name: 'Reject suggestion' }).click();
@@ -709,7 +745,9 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
   await expect(page).toHaveURL(/\/tickets\/3$/);
   await page.goto('/tickets/5');
   await expect(
-    page.getByText('Downloaded music stays available offline.', { exact: true }),
+    page.getByText('Downloaded music stays available offline.', {
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     page
@@ -854,7 +892,9 @@ test('a visitor resets only their own demo workspace', async ({
     page.getByRole('link', { name: /Family invitation keeps failing/ }),
   ).toContainText('resolved');
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
-  await page.getByRole('link', { name: 'New conversation', exact: true }).click();
+  await page
+    .getByRole('link', { name: 'New conversation', exact: true })
+    .click();
   await page
     .getByRole('textbox', { name: 'New support request' })
     .fill('Reset my request');

@@ -25,10 +25,15 @@ createServer(async (request, response) => {
         (item: { title: string }) => item.title === 'Changing audio quality',
       )
     : /offline/i.test(input.question)
-      ? input.articles.find((item: { title: string }) => item.title === 'Offline downloads') ?? input.articles[0]
+      ? (input.articles.find(
+          (item: { title: string }) => item.title === 'Offline downloads',
+        ) ?? input.articles[0])
       : /staff playback/i.test(input.question)
-      ? input.articles.find((item: { title: string }) => item.title === 'Staff playback incident') ?? input.articles[0]
-      : input.articles[0];
+        ? (input.articles.find(
+            (item: { title: string }) =>
+              item.title === 'Staff playback incident',
+          ) ?? input.articles[0])
+        : input.articles[0];
   const answer = covered
     ? {
         topic: redrafted

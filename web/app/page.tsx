@@ -27,12 +27,27 @@ export default async function Home() {
           />
         </section>
         <SupportChat tickets={tickets} allowance={allowance} />
-        <section className="support-steps" aria-label="How Tunely Support works">
+        <section
+          className="support-steps"
+          aria-label="How Tunely Support works"
+        >
           <h2>How Tunely Support works</h2>
           <ol>
-            <li><span>01</span><h3>Tell us</h3><p>What happened with your music?</p></li>
-            <li><span>02</span><h3>Get an answer in seconds</h3><p>Answers grounded in Tunely's knowledge base.</p></li>
-            <li><span>03</span><h3>A person steps in when it matters</h3><p>Our team checks sensitive or uncertain answers.</p></li>
+            <li>
+              <span>01</span>
+              <h3>Tell us</h3>
+              <p>What happened with your music?</p>
+            </li>
+            <li>
+              <span>02</span>
+              <h3>Get an answer in seconds</h3>
+              <p>Answers grounded in Tunely's knowledge base.</p>
+            </li>
+            <li>
+              <span>03</span>
+              <h3>A person steps in when it matters</h3>
+              <p>Our team checks sensitive or uncertain answers.</p>
+            </li>
           </ol>
         </section>
       </main>

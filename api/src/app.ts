@@ -138,8 +138,16 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       : [];
     const savedSources = draft.rows[0]?.source_articles
       ? JSON.parse(draft.rows[0].source_articles)
-      : draft.rows[0]?.id ? [{ id: draft.rows[0].id, title: draft.rows[0].title,
-          body: draft.rows[0].body, kind: draft.rows[0].kind }] : [];
+      : draft.rows[0]?.id
+        ? [
+            {
+              id: draft.rows[0].id,
+              title: draft.rows[0].title,
+              body: draft.rows[0].body,
+              kind: draft.rows[0].kind,
+            },
+          ]
+        : [];
     if (decision) {
       decision.documents = (decision.documents ?? []).map(
         (source: { id: number; kind?: string }) => ({
@@ -158,7 +166,11 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       [id, session],
     );
     const current = review.rows[0];
-    const { decision: storedDecision, session_id: ticketSession, ...ticketFields } = ticket.rows[0];
+    const {
+      decision: storedDecision,
+      session_id: ticketSession,
+      ...ticketFields
+    } = ticket.rows[0];
     return {
       ...ticketFields,
       is_sample: ticketSession === null,
@@ -169,7 +181,9 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       priority: current?.priority ?? ticket.rows[0].priority,
       approved_reply:
         current?.approved_reply ??
-        (decision?.kind === 'automatic_reply' ? live.rows[0]?.reply ?? draft.rows[0]?.reply : null) ??
+        (decision?.kind === 'automatic_reply'
+          ? (live.rows[0]?.reply ?? draft.rows[0]?.reply)
+          : null) ??
         null,
       review_state: current?.state ?? null,
       draft: live.rows.length

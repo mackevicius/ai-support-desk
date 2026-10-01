@@ -79,8 +79,13 @@ test('a visitor can inspect a request and its history', async () => {
       internal_copies: [],
     },
   });
-  assert.deepEqual(history.map((event: { description: string }) => event.description),
-    ['Request received', 'Hand-off: There is not enough clear help article coverage to answer automatically.']);
+  assert.deepEqual(
+    history.map((event: { description: string }) => event.description),
+    [
+      'Request received',
+      'Hand-off: There is not enough clear help article coverage to answer automatically.',
+    ],
+  );
   assert.equal((await fetch(`${baseUrl}/tickets/999`)).status, 404);
 });
 

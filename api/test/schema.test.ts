@@ -107,7 +107,9 @@ test('an empty database starts with the fictional inbox and keeps visitor change
       assert.equal(submitted.status, 201);
       const { id } = await submitted.json();
       await prepareDatabase(freshPool);
-      const starter = await (await fetch(`${url}/tickets/1`, { headers: { cookie } })).json();
+      const starter = await (
+        await fetch(`${url}/tickets/1`, { headers: { cookie } })
+      ).json();
       assert.ok(starter.draft.reply);
       assert.equal(starter.history.length, 2);
       const kept = await fetch(`${url}/tickets/${id}`, { headers: { cookie } });
@@ -153,23 +155,31 @@ test('a Dayline-era inbox is replaced with saved Tunely cases only once', async 
     const inbox = await fetch(`${url}/tickets`);
     const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
     assert.equal((await inbox.json()).length, 6);
-    const detail = async () => (await fetch(`${url}/tickets/1`, { headers: { cookie } })).json();
+    const detail = async () =>
+      (await fetch(`${url}/tickets/1`, { headers: { cookie } })).json();
     const before = await detail();
     assert.equal(before.subject, 'Family invitation keeps failing');
     assert.equal(before.draft.sources[0].title, 'Family plan invitations');
-    const custom = await (await fetch(`${url}/tickets/9`, { headers: { cookie } })).json();
+    const custom = await (
+      await fetch(`${url}/tickets/9`, { headers: { cookie } })
+    ).json();
     assert.equal(custom.draft.reply, 'Keep this saved reply');
     assert.equal(custom.draft.sources[0].body, 'Workspace invitations');
     await prepareDatabase(pool);
     assert.deepEqual(await detail(), before);
     await withEnv(ownerEnv, async () => {
       const login = await fetch(`${url}/owner/login`, {
-        method: 'POST', headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
         body: JSON.stringify({ password: 'test-password' }),
       });
-      const articles = await (await fetch(`${url}/help-articles`, {
-        headers: { cookie: `${cookie}; ${login.headers.get('set-cookie')!.split(';')[0]}` },
-      })).json();
+      const articles = await (
+        await fetch(`${url}/help-articles`, {
+          headers: {
+            cookie: `${cookie}; ${login.headers.get('set-cookie')!.split(';')[0]}`,
+          },
+        })
+      ).json();
       assert.equal(articles.length, 20);
       assert.ok(!JSON.stringify(articles).includes('Workspace invitations'));
     });

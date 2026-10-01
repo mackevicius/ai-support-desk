@@ -354,10 +354,7 @@ test('rejection and reopening require explicit human actions', async () => {
     })
   ).json();
   assert.equal(manual.status, 'resolved');
-  assert.equal(
-    manual.approved_reply,
-    'Downloaded music is available offline.',
-  );
+  assert.equal(manual.approved_reply, 'Downloaded music is available offline.');
 });
 
 test('only one simultaneous review action changes a request', async () => {
