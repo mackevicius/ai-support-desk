@@ -34,6 +34,7 @@ function drafted(overrides: object = {}) {
 test('a clearly covered, safe question gets an automatic reply', () => {
   assert.deepEqual(decide('How do I download music?', drafted()), {
     kind: 'automatic_reply',
+    reason_code: 'well_supported',
     rule: 'Clearly covered by public help articles',
     reason:
       'A help article clearly covers your question, and it does not need a team member to check it.',
@@ -122,6 +123,7 @@ test('an exhausted live allowance hands off with an unclassified topic', () => {
     decide('How do I download music?', { error: 'paused' as const }),
     {
       kind: 'hand_off',
+      reason_code: 'paused',
       rule: 'Live allowance exhausted',
       reason: 'Live AI is paused for today',
       topic: 'Unclassified',

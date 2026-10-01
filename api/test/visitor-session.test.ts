@@ -4,6 +4,91 @@ import { startInbox, withProvider } from './helpers.js';
 
 const { pool, baseUrl } = await startInbox();
 
+test('only the Agent seat can add help articles to its own private copy', async () => {
+  const cookie = (await fetch(`${baseUrl}/tickets`)).headers
+    .get('set-cookie')!
+    .split(';')[0];
+  const article = {
+    title: 'Sharing playlists',
+    body: 'Open the playlist and choose Share.',
+  };
+  const write = (seat: string, content = article) =>
+    fetch(`${baseUrl}/visitor/help-articles`, {
+      method: 'POST',
+      headers: {
+        cookie: `${cookie}; demo_seat=${seat}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(content),
+    });
+  assert.equal((await write('customer')).status, 403);
+  const created = await write('agent');
+  assert.equal(created.status, 201);
+  const saved = await created.json();
+  assert.equal(saved.kind, 'help_article');
+  const own = await fetch(`${baseUrl}/visitor/help-articles`, {
+    headers: { cookie: `${cookie}; demo_seat=agent` },
+  });
+  assert.deepEqual(await own.json(), [saved]);
+  const other = await fetch(`${baseUrl}/visitor/help-articles`, {
+    headers: { cookie: 'demo_seat=agent' },
+  });
+  assert.deepEqual(await other.json(), []);
+  assert.equal(
+    (
+      await write('agent', {
+        ...article,
+        kind: 'internal_note',
+      } as typeof article)
+    ).status,
+    400,
+  );
+});
+
+test('private help articles have size and count limits and reset removes only their own copy', async () => {
+  const session = async () =>
+    (await fetch(`${baseUrl}/tickets`)).headers
+      .get('set-cookie')!
+      .split(';')[0];
+  const first = await session();
+  const second = await session();
+  const write = (
+    cookie: string,
+    title = 'Playlist sharing',
+    body = 'Choose Share.',
+  ) =>
+    fetch(`${baseUrl}/visitor/help-articles`, {
+      method: 'POST',
+      headers: {
+        cookie: `${cookie}; demo_seat=agent`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ title, body }),
+    });
+  assert.equal((await write(first, 'x'.repeat(201))).status, 400);
+  assert.equal((await write(first, 'Title', 'x'.repeat(5001))).status, 400);
+  assert.equal((await write(first, ' ', 'Body')).status, 400);
+  const writes = await Promise.all(
+    Array.from({ length: 6 }, () => write(first)),
+  );
+  assert.equal(writes.filter((response) => response.status === 201).length, 5);
+  assert.equal(writes.filter((response) => response.status === 429).length, 1);
+  assert.equal((await write(second)).status, 201);
+  await fetch(`${baseUrl}/reset`, {
+    method: 'POST',
+    headers: { cookie: first },
+  });
+  const list = async (cookie: string) =>
+    (
+      await fetch(`${baseUrl}/visitor/help-articles`, {
+        headers: { cookie: `${cookie}; demo_seat=agent` },
+      })
+    ).json();
+  assert.deepEqual(await list(first), []);
+  assert.equal((await list(second)).length, 1);
+  assert.equal((await write(first)).status, 429);
+});
+
 test('a new visitor sees five saved Tunely outcomes without an AI call', async () => {
   let calls = 0;
   await withProvider(

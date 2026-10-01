@@ -96,6 +96,15 @@ export async function generateDraft(
       'SELECT id, title, body, kind FROM help_articles WHERE retired = false ORDER BY id',
     )
   ).rows;
+  articles.push(
+    ...(
+      await pool.query(
+        `SELECT id, title, body, 'help_article' AS kind FROM visitor_help_articles
+       WHERE session_id = $1 AND created_at > NOW() - INTERVAL '1 day' ORDER BY id`,
+        [session],
+      )
+    ).rows,
+  );
   try {
     const response = await fetch(`${process.env.PYTHON_URL}/generate`, {
       method: 'POST',
