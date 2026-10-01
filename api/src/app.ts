@@ -17,9 +17,7 @@ const statusOrder: Record<string, number> = {
   resolved: 2,
 };
 
-function validArticle(
-  input: unknown,
-): input is {
+function validArticle(input: unknown): input is {
   title: string;
   body: string;
   retired?: boolean;
@@ -718,13 +716,11 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
             request.body.internal_confirmed !== reply.trim()
           ) {
             await client.query('ROLLBACK');
-            response
-              .status(409)
-              .json({
-                error:
-                  'Internal text copied. Review the highlighted text before delivery.',
-                internal_copies: copies,
-              });
+            response.status(409).json({
+              error:
+                'Internal text copied. Review the highlighted text before delivery.',
+              internal_copies: copies,
+            });
             return;
           }
         }
