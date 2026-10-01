@@ -11,12 +11,12 @@ test('a visitor can browse tickets through the API', async () => {
   const tickets = await response.json();
   assert.deepEqual(
     tickets.map((ticket: { id: number }) => ticket.id),
-    [1, 2, 3, 4],
+    [1, 2, 3, 4, 5],
   );
   assert.deepEqual(tickets[0], {
     id: 1,
     customer_name: 'Maya Chen',
-    subject: 'Team invitations are not arriving',
+    subject: 'Family invitation keeps failing',
     status: 'open',
     priority: 'high',
     created_at: '2026-09-20T10:00:00.000Z',
@@ -46,12 +46,18 @@ test('health reports database availability without exposing private details', as
 test('a visitor can inspect a request and its history', async () => {
   const response = await fetch(`${baseUrl}/tickets/1`);
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), {
+  const ticket = await response.json();
+  assert.equal(ticket.decision.kind, 'hand_off');
+  assert.equal(ticket.decision.rule, 'Weak help article coverage');
+  assert.deepEqual(ticket.live_ai, { remaining: 5, paused: false });
+  const { decision, live_ai, history, ...fields } = ticket;
+  assert.deepEqual(fields, {
     id: 1,
+    is_sample: true,
     customer_name: 'Maya Chen',
-    subject: 'Team invitations are not arriving',
+    subject: 'Family invitation keeps failing',
     question:
-      'I invited three teammates this morning, but none of them received an email. Can you help us get access before our onboarding call?',
+      'My family invitation opens, but I cannot finish joining. What should I try?',
     status: 'open',
     priority: 'high',
     created_at: '2026-09-20T10:00:00.000Z',
@@ -60,31 +66,21 @@ test('a visitor can inspect a request and its history', async () => {
     draft: {
       state: 'saved',
       reply:
-        'Please check the email addresses and spam folders, then resend the invitations from Settings > Team. Invitations expire after seven days.',
+        'Please ask the family plan owner to create a new invitation from Settings > Plan > Family. What message appears when you open the new link?',
       suggested_priority: 'high',
       sources: [
         {
           id: 1,
-          title: 'Inviting teammates',
-          body: 'Workspace admins can resend invitations from Settings > Team. Check the invitation email address and ask teammates to check spam. Invitations expire after seven days.',
+          title: 'Family plan invitations',
+          body: 'The Tunely family plan owner can invite members from Settings > Plan > Family. Members must live at the same address. Open the invitation link and sign in to join. Invitations expire after seven days.',
           kind: 'help_article',
         },
       ],
       internal_copies: [],
     },
-    history: [
-      {
-        id: 1,
-        description: 'Request received',
-        created_at: '2026-09-20T10:00:00.000Z',
-      },
-      {
-        id: 2,
-        description: 'Assigned to the support inbox',
-        created_at: '2026-09-20T10:05:00.000Z',
-      },
-    ],
   });
+  assert.deepEqual(history.map((event: { description: string }) => event.description),
+    ['Request received', 'Hand-off: There is not enough clear help article coverage to answer automatically.']);
   assert.equal((await fetch(`${baseUrl}/tickets/999`)).status, 404);
 });
 
@@ -107,23 +103,23 @@ test('the inbox sorts reviewed tickets after open tickets and filters by status'
   ).json();
   assert.deepEqual(
     tickets.map((ticket: { id: number }) => ticket.id),
-    [2, 3, 1, 4],
+    [2, 3, 4, 1, 5],
   );
   const open = await (
     await fetch(`${baseUrl}/tickets?status=open`, { headers: { cookie } })
   ).json();
   assert.deepEqual(
     open.map((ticket: { id: number }) => ticket.id),
-    [2],
+    [2, 3, 4],
   );
   const resolved = await (
     await fetch(`${baseUrl}/tickets?status=resolved`, { headers: { cookie } })
   ).json();
   assert.deepEqual(
     resolved.map((ticket: { id: number }) => ticket.id),
-    [1, 4],
+    [1, 5],
   );
-  const reopened = await fetch(`${baseUrl}/tickets/4/review`, {
+  const reopened = await fetch(`${baseUrl}/tickets/5/review`, {
     method: 'POST',
     headers: { cookie, 'content-type': 'application/json' },
     body: JSON.stringify({ action: 'reopen' }),
@@ -134,6 +130,6 @@ test('the inbox sorts reviewed tickets after open tickets and filters by status'
   ).json();
   assert.deepEqual(
     reordered.map((ticket: { id: number }) => ticket.id),
-    [2, 4, 3, 1],
+    [2, 3, 4, 5, 1],
   );
 });

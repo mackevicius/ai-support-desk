@@ -10,7 +10,7 @@ createServer(async (request, response) => {
   let body = '';
   for await (const chunk of request) body += chunk;
   const input = JSON.parse(JSON.parse(body).messages[1].content);
-  if (input.question.includes('teammate')) {
+  if (input.question.includes('cannot finish joining')) {
     response.writeHead(503).end();
     return;
   }
@@ -24,7 +24,11 @@ createServer(async (request, response) => {
     ? input.articles.find(
         (item: { title: string }) => item.title === 'Changing audio quality',
       )
-    : input.articles[0];
+    : /offline/i.test(input.question)
+      ? input.articles.find((item: { title: string }) => item.title === 'Offline downloads') ?? input.articles[0]
+      : /staff playback/i.test(input.question)
+      ? input.articles.find((item: { title: string }) => item.title === 'Staff playback incident') ?? input.articles[0]
+      : input.articles[0];
   const answer = covered
     ? {
         topic: redrafted

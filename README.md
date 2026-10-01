@@ -1,5 +1,9 @@
 # AI Support Desk
 
+Every visitor starts with five saved Tunely cases: an unsure family invitation draft, a playback draft informed by an internal note, a risky duplicate charge, an uncovered playlist import question, and a resolved offline-listening automatic reply. Browsing and resetting these cases makes no AI calls. The homepage topic tiles submit example questions, and its three-step section explains how customer questions reach an answer or a person.
+
+The fictional starter corpus in `api/starter-data.json` contains 12 help articles and 8 internal notes and is shared with the evaluation fixtures. Playlist imports and listening statistics deliberately remain uncovered. Startup replaces the known Dayline seed records, preserves custom documents and requests, and leaves visitor reviews and saved source snapshots intact.
+
 Ask Tunely a question in the customer chat or choose an example problem. A clearly covered, non-risky question receives an automatic reply using public help articles. Everything else shows "A Tunely team member will reply soon" and "With our team", with a suggestion to switch to the Agent seat. "How was this answered?" shows the reason and public articles used; the decision is also saved in ticket history. The customer panel lists each visitor's conversations separately. New requests and reviews belong to a temporary visitor session; reset does not change another visitor's data or replenish live-AI allowance.
 
 The Agent seat handles sample requests and new handed-off conversations in three columns: an open-first inbox with a status filter, the customer thread and editable answer draft, and a numbered "How the AI decided" trail. Fixed code rules hand off refunds, double charges, account security and weakly supported answers even when the provider suggests replying. Agents can ask for details without closing the request, redraft, reject, approve a priority or reply, and reopen. Approval delivers the edited reply as "Replied by our team" and opens the next unresolved request. Redrafts count toward the visitor's live-draft allowance. The decision trail uses the saved decision and reason recorded in history. A signed-in owner can manage help articles and generate live drafts for sample requests. Retired articles are excluded from new drafts; saved drafts keep their original citations. No email is sent.
@@ -20,7 +24,7 @@ With Docker Compose installed, run from the repository root:
 docker compose up --build
 ```
 
-Open http://localhost:3000 to browse or submit requests. The API is available at http://localhost:3001/tickets. The browser gets a 24-hour demo session cookie; submitted requests stop appearing after 24 hours and expired rows are cleaned up on later submissions. On first start, Postgres loads fictional requests from `api/seed.sql`. The API also applies the additive session schema on first request, so existing Docker volumes keep their data.
+Open http://localhost:3000 to browse or submit requests. The API is available at http://localhost:3001/tickets. The browser gets a 24-hour demo session cookie; submitted requests stop appearing after 24 hours and expired rows are cleaned up on later submissions. On first start, Postgres loads the base schema from `api/seed.sql`. The API installs the session schema and saved Tunely cases on first request; existing Docker volumes keep custom data.
 
 ### Test the Kubernetes deployment locally
 

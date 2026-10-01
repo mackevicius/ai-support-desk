@@ -94,12 +94,12 @@ export default async function TicketPage({
               : 'Live generation is unavailable. Please try again later.'}
           </p>
         )}
-        {(owner || ticket.decision) && ticket.status !== 'resolved' && (
+        {(owner || (!ticket.is_sample && ticket.decision)) && ticket.status !== 'resolved' && (
           <form action={generateRequest} className="draft-notice">
             <input type="hidden" name="id" value={ticket.id} />
             <SubmitButton
               label={
-                ticket.decision
+                !ticket.is_sample && ticket.decision
                   ? 'Redraft'
                   : ticket.draft?.live
                     ? 'Regenerate live draft'

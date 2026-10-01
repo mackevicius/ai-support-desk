@@ -398,7 +398,7 @@ test('an owner generates a cited draft through Python without approving it', asy
             content: JSON.stringify({
               reply: offline
                 ? 'You can save songs for offline play.'
-                : 'Workspace admins can resend invitations from Settings > Team.',
+                : 'The Tunely family plan owner can invite members from Settings > Plan > Family.',
               suggested_priority: 'high',
               source_ids: [article.id],
               clearly_covered: offline,
@@ -492,10 +492,10 @@ test('an owner generates a cited draft through Python without approving it', asy
         assert.equal(ticket.approved_reply, null);
         assert.equal(
           ticket.draft.reply,
-          'Workspace admins can resend invitations from Settings > Team.',
+          'The Tunely family plan owner can invite members from Settings > Plan > Family.',
         );
         assert.equal(ticket.draft.suggested_priority, 'high');
-        assert.equal(ticket.draft.sources[0].title, 'Inviting teammates');
+        assert.equal(ticket.draft.sources[0].title, 'Family plan invitations');
         assert.equal(calls.length, 2);
         const providerCall = calls[0] as {
           max_tokens: number;

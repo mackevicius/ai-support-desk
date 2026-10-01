@@ -1,8 +1,34 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { startInbox } from './helpers.js';
+import { startInbox, withProvider } from './helpers.js';
 
 const { pool, baseUrl } = await startInbox();
+
+test('a new visitor sees five saved Tunely outcomes without an AI call', async () => {
+  let calls = 0;
+  await withProvider((_request, response) => {
+    calls++;
+    response.writeHead(500).end();
+  }, async () => {
+    const inbox = await fetch(`${baseUrl}/tickets`);
+    const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
+    const tickets = await inbox.json();
+    assert.equal(tickets.length, 5);
+    const details = await Promise.all(tickets.map(async (ticket: { id: number }) =>
+      (await fetch(`${baseUrl}/tickets/${ticket.id}`, { headers: { cookie } })).json(),
+    ));
+    assert.deepEqual(details.sort((first, second) => first.id - second.id)
+      .map((ticket) => ticket.decision?.reason_code),
+    ['uncertain', 'internal_note', 'risky', 'knowledge_gap', 'well_supported']);
+    assert.ok(details.every((ticket) => ticket.draft?.reply));
+    const automatic = details.find((ticket) => ticket.id === 5);
+    assert.equal(automatic.status, 'resolved');
+    assert.equal(automatic.approved_reply, automatic.draft.reply);
+    assert.equal(details[1].draft.sources[0].kind, 'internal_note');
+    assert.equal(details[3].draft.sources.length, 0);
+    assert.equal(calls, 0);
+  });
+});
 
 test('expired visitor reviews and their events are removed from the demo inbox', async () => {
   const inbox = await fetch(`${baseUrl}/tickets`);

@@ -225,7 +225,28 @@
   @apply justify-self-end;
 }
 .chat-examples {
-  @apply mt-6 flex flex-wrap gap-2 border-t border-border pt-5;
+  @apply mt-6 grid grid-cols-1 gap-2 border-t border-border pt-5 sm:grid-cols-2;
+}
+.chat-examples button {
+  @apply h-full min-h-12 w-full justify-start whitespace-normal text-left;
+}
+.support-steps {
+  @apply border-t border-border pt-6 lg:col-span-2;
+}
+.support-steps ol {
+  @apply m-0 grid list-none gap-6 p-0 sm:grid-cols-3;
+}
+.support-steps li {
+  @apply min-w-0;
+}
+.support-steps li > span {
+  @apply font-mono text-sm text-primary;
+}
+.support-steps h3 {
+  @apply mt-2 text-base font-bold;
+}
+.support-steps p {
+  @apply mt-2 text-sm text-muted;
 }
 .chat-message {
   @apply mb-5 border-l-2 border-border pl-4;

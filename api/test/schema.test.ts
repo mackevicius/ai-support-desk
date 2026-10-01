@@ -96,7 +96,7 @@ test('an empty database starts with the fictional inbox and keeps visitor change
       const inbox = await fetch(`${url}/tickets`);
       assert.deepEqual(
         (await inbox.json()).map((ticket: { id: number }) => ticket.id),
-        [1, 2, 3, 4],
+        [1, 2, 3, 4, 5],
       );
       const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
       const submitted = await fetch(`${url}/tickets`, {
@@ -107,6 +107,9 @@ test('an empty database starts with the fictional inbox and keeps visitor change
       assert.equal(submitted.status, 201);
       const { id } = await submitted.json();
       await prepareDatabase(freshPool);
+      const starter = await (await fetch(`${url}/tickets/1`, { headers: { cookie } })).json();
+      assert.ok(starter.draft.reply);
+      assert.equal(starter.history.length, 2);
       const kept = await fetch(`${url}/tickets/${id}`, { headers: { cookie } });
       assert.equal(kept.status, 200);
     } finally {
@@ -114,5 +117,54 @@ test('an empty database starts with the fictional inbox and keeps visitor change
     }
   } finally {
     await freshPool.end();
+  }
+});
+
+test('a Dayline-era inbox is replaced with saved Tunely cases only once', async () => {
+  const database = newDb();
+  database.public.none(`
+    CREATE TABLE support_tickets (
+      id integer PRIMARY KEY, customer_name text NOT NULL, subject text NOT NULL,
+      question text NOT NULL, status text NOT NULL, priority text NOT NULL,
+      created_at timestamptz NOT NULL
+    );
+    CREATE TABLE ticket_events (
+      id integer PRIMARY KEY, ticket_id integer NOT NULL REFERENCES support_tickets(id),
+      description text NOT NULL, created_at timestamptz NOT NULL
+    );
+    INSERT INTO support_tickets VALUES
+      (1, 'Maya Chen', 'Team invitations are not arriving', 'Invite teammates', 'open', 'high', '2026-09-20T10:00:00Z');
+    CREATE TABLE help_articles (id integer PRIMARY KEY, title text NOT NULL, body text NOT NULL);
+    INSERT INTO help_articles VALUES (1, 'Inviting teammates', 'Workspace invitations');
+  `);
+  const { Pool } = database.adapters.createPg();
+  const pool = new Pool();
+  await prepareDatabase(pool);
+  const server = createApp(pool).listen(0);
+  try {
+    const url = await listening(server);
+    const inbox = await fetch(`${url}/tickets`);
+    const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
+    assert.equal((await inbox.json()).length, 5);
+    const detail = async () => (await fetch(`${url}/tickets/1`, { headers: { cookie } })).json();
+    const before = await detail();
+    assert.equal(before.subject, 'Family invitation keeps failing');
+    assert.equal(before.draft.sources[0].title, 'Family plan invitations');
+    await prepareDatabase(pool);
+    assert.deepEqual(await detail(), before);
+    await withEnv(ownerEnv, async () => {
+      const login = await fetch(`${url}/owner/login`, {
+        method: 'POST', headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ password: 'test-password' }),
+      });
+      const articles = await (await fetch(`${url}/help-articles`, {
+        headers: { cookie: `${cookie}; ${login.headers.get('set-cookie')!.split(';')[0]}` },
+      })).json();
+      assert.equal(articles.length, 20);
+      assert.ok(!JSON.stringify(articles).includes('Workspace invitations'));
+    });
+  } finally {
+    await close(server);
+    await pool.end();
   }
 });

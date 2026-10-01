@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readJson, sendJson, startInbox, withProvider } from './helpers.js';
 
-const { baseUrl } = await startInbox();
+const { pool, baseUrl } = await startInbox();
 
 test('a risky live draft can be reviewed by the visitor acting as a support agent', async () => {
   await withProvider(
@@ -258,6 +258,7 @@ test('a saved draft requires approval and review stays in the visitor session', 
 });
 
 test('rejection and reopening require explicit human actions', async () => {
+  await pool.query('DELETE FROM saved_drafts WHERE ticket_id = 5');
   const inbox = await fetch(`${baseUrl}/tickets`);
   const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
   const review = (id: number, body: object) =>
@@ -278,7 +279,7 @@ test('rejection and reopening require explicit human actions', async () => {
   assert.equal((await review(2, { action: 'reopen' })).status, 409);
   assert.equal(
     (
-      await review(4, {
+      await review(5, {
         action: 'approve',
         reply: 'No draft',
         priority: 'high',
@@ -291,7 +292,7 @@ test('rejection and reopening require explicit human actions', async () => {
   ).json();
   assert.equal(unchanged.status, 'open');
   assert.equal(unchanged.priority, 'normal');
-  assert.equal(unchanged.history.length, 1);
+  assert.equal(unchanged.history.length, 2);
 
   const rejected = await (await review(2, { action: 'reject' })).json();
   assert.equal(rejected.draft.state, 'rejected');
@@ -341,21 +342,21 @@ test('rejection and reopening require explicit human actions', async () => {
     2,
   );
 
-  const oldResolved = await (await review(4, { action: 'reopen' })).json();
+  const oldResolved = await (await review(5, { action: 'reopen' })).json();
   assert.equal(oldResolved.status, 'open');
   assert.equal(oldResolved.draft, null);
   assert.ok(oldResolved.history.at(-1).description.includes('reopened'));
   const manual = await (
-    await review(4, {
+    await review(5, {
       action: 'approve',
-      reply: 'The workspace links still work after the rename.',
+      reply: 'Downloaded music is available offline.',
       priority: 'low',
     })
   ).json();
   assert.equal(manual.status, 'resolved');
   assert.equal(
     manual.approved_reply,
-    'The workspace links still work after the rename.',
+    'Downloaded music is available offline.',
   );
 });
 
