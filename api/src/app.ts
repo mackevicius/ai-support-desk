@@ -322,7 +322,9 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
   });
 
   app.get('/visitor/help-articles', async (request, response, next) => {
-    if (!/(?:^|;\s*)demo_seat=agent(?:;|$)/.test(request.headers.cookie ?? '')) {
+    if (
+      !/(?:^|;\s*)demo_seat=agent(?:;|$)/.test(request.headers.cookie ?? '')
+    ) {
       response.sendStatus(403);
       return;
     }
@@ -339,7 +341,9 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
   });
 
   app.post('/visitor/help-articles', async (request, response, next) => {
-    if (!/(?:^|;\s*)demo_seat=agent(?:;|$)/.test(request.headers.cookie ?? '')) {
+    if (
+      !/(?:^|;\s*)demo_seat=agent(?:;|$)/.test(request.headers.cookie ?? '')
+    ) {
       response.sendStatus(403);
       return;
     }
@@ -348,7 +352,8 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       (request.body.kind !== undefined && request.body.kind !== 'help_article')
     ) {
       response.status(400).json({
-        error: 'Enter a help article with a title up to 200 characters and content up to 5000 characters.',
+        error:
+          'Enter a help article with a title up to 200 characters and content up to 5000 characters.',
       });
       return;
     }

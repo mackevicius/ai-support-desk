@@ -1,27 +1,67 @@
 import { expect, test } from '@playwright/test';
 
-test('an agent fills the saved knowledge gap with a private help article and redrafts with its citation', async ({ page, browser }) => {
+test('an agent fills the saved knowledge gap with a private help article and redrafts with its citation', async ({
+  page,
+  browser,
+}) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await expect(page).toHaveURL(/\/tickets\/1$/);
   await page.goto('/tickets/4');
-  await expect(page.getByRole('heading', { name: 'Knowledge gap', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Knowledge gap', exact: true }),
+  ).toBeVisible();
   await page.getByText('Write help article', { exact: true }).click();
-  const editor = page.getByRole('region', { name: 'Knowledge gap', exact: true });
-  await editor.getByLabel('Title', { exact: true }).fill('Importing Spotify playlists');
-  await editor.getByLabel('Content', { exact: true }).fill('To import playlists from Spotify, open Settings > Music > Import and choose Spotify.');
-  await editor.getByRole('button', { name: 'Save help article', exact: true }).click();
-  await expect(page.getByText('Help article saved.', { exact: true })).toBeVisible();
-  await expect(page.getByText('5 live drafts left', { exact: true }).first()).toBeVisible();
+  const editor = page.getByRole('region', {
+    name: 'Knowledge gap',
+    exact: true,
+  });
+  await editor
+    .getByLabel('Title', { exact: true })
+    .fill('Importing Spotify playlists');
+  await editor
+    .getByLabel('Content', { exact: true })
+    .fill(
+      'To import playlists from Spotify, open Settings > Music > Import and choose Spotify.',
+    );
+  await editor
+    .getByRole('button', { name: 'Save help article', exact: true })
+    .click();
+  await expect(
+    page.getByText('Help article saved.', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('5 live drafts left', { exact: true }).first(),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Redraft', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Live AI draft', exact: true })).toBeVisible();
-  await expect(page.locator('.source-links').getByRole('link', { name: 'Importing Spotify playlists' })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: 'Reply', exact: true })).toHaveValue(/Settings > Music > Import/);
-  await expect(page.getByText('4 live drafts left', { exact: true }).first()).toBeVisible();
-  for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+  await expect(
+    page.getByRole('heading', { name: 'Live AI draft', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator('.source-links')
+      .getByRole('link', { name: 'Importing Spotify playlists' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('textbox', { name: 'Reply', exact: true }),
+  ).toHaveValue(/Settings > Music > Import/);
+  await expect(
+    page.getByText('4 live drafts left', { exact: true }).first(),
+  ).toBeVisible();
+  for (const viewport of [
+    { width: 1440, height: 1000 },
+    { width: 390, height: 844 },
+  ]) {
     await page.setViewportSize(viewport);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({ path: `test-results/knowledge-gap-${viewport.width}.png`, fullPage: true });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: `test-results/knowledge-gap-${viewport.width}.png`,
+      fullPage: true,
+    });
   }
   const other = await browser.newContext();
   try {
@@ -30,15 +70,28 @@ test('an agent fills the saved knowledge gap with a private help article and red
     await otherPage.getByRole('button', { name: 'Agent', exact: true }).click();
     await expect(otherPage).toHaveURL(/\/tickets\/1$/);
     await otherPage.goto('/tickets/4');
-    await expect(otherPage.getByRole('heading', { name: 'Knowledge gap', exact: true })).toBeVisible();
-    await expect(otherPage.getByRole('heading', { name: 'Importing Spotify playlists', exact: true })).toHaveCount(0);
-    await expect(otherPage.getByRole('button', { name: 'Redraft', exact: true })).toHaveCount(0);
+    await expect(
+      otherPage.getByRole('heading', { name: 'Knowledge gap', exact: true }),
+    ).toBeVisible();
+    await expect(
+      otherPage.getByRole('heading', {
+        name: 'Importing Spotify playlists',
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(
+      otherPage.getByRole('button', { name: 'Redraft', exact: true }),
+    ).toHaveCount(0);
   } finally {
     await other.close();
   }
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Support chat' })).toBeVisible();
-  await expect(page.getByText('Write help article', { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole('region', { name: 'Support chat' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Write help article', { exact: true }),
+  ).toHaveCount(0);
 });
 
 test('a visitor explores saved cases and starts chats from every topic tile', async ({

@@ -19,80 +19,142 @@ import {
 const { pool, baseUrl } = await startInbox();
 
 test('a private help article fills a knowledge gap only for its visitor and redrafts spend the live cap', async () => {
-  await withProvider(async (request, response) => {
-    const input = await readJson(request);
-    const article = input.articles.find((item: { title: string }) => item.title === 'Collaborative playlists');
-    sendJson(response, {
-      reply: article ? 'Open the playlist menu and choose Invite collaborators.' : 'Which playlist are you trying to share?',
-      suggested_priority: 'normal',
-      source_ids: article ? [article.id] : [],
-      clearly_covered: Boolean(article),
-      requires_team: !article,
-    });
-  }, async () => {
-    const cookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
-    const submit = async (session: string) => (await fetch(`${baseUrl}/tickets`, {
-      method: 'POST', headers: { cookie: session, 'content-type': 'application/json' },
-      body: JSON.stringify({ question: 'How do I make a collaborative playlist?' }),
-    })).json();
-    const ticket = await submit(cookie);
-    assert.equal(ticket.decision.kind, 'hand_off');
-    assert.equal(ticket.decision.reason_code, 'knowledge_gap');
-    assert.match(ticket.draft.reply, /Which playlist/);
-    assert.equal(ticket.live_ai.remaining, 4);
-    const article = await (await fetch(`${baseUrl}/visitor/help-articles`, {
-      method: 'POST',
-      headers: { cookie: `${cookie}; demo_seat=agent`, 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Collaborative playlists', body: 'Open the playlist menu and choose Invite collaborators.' }),
-    })).json();
-    const redraft = () => fetch(`${baseUrl}/tickets/${ticket.id}/generate`, { method: 'POST', headers: { cookie } });
-    const drafted = await (await redraft()).json();
-    assert.deepEqual(drafted.draft.sources, [article]);
-    assert.equal(drafted.decision.kind, 'hand_off');
-    assert.equal(drafted.decision.reason_code, 'agent_review');
-    assert.equal(drafted.approved_reply, null);
-    assert.equal(drafted.live_ai.remaining, 3);
-    const otherCookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
-    const other = await submit(otherCookie);
-    assert.equal(other.decision.reason_code, 'knowledge_gap');
-    assert.deepEqual(other.draft.sources, []);
-    for (let remaining = 2; remaining >= 0; remaining--) {
-      const replacement = await (await redraft()).json();
-      assert.equal(replacement.live_ai.remaining, remaining);
-    }
-    assert.equal((await redraft()).status, 429);
-    await fetch(`${baseUrl}/reset`, { method: 'POST', headers: { cookie } });
-    assert.equal((await (await fetch(`${baseUrl}/live-ai`, { headers: { cookie } })).json()).remaining, 0);
-  });
+  await withProvider(
+    async (request, response) => {
+      const input = await readJson(request);
+      const article = input.articles.find(
+        (item: { title: string }) => item.title === 'Collaborative playlists',
+      );
+      sendJson(response, {
+        reply: article
+          ? 'Open the playlist menu and choose Invite collaborators.'
+          : 'Which playlist are you trying to share?',
+        suggested_priority: 'normal',
+        source_ids: article ? [article.id] : [],
+        clearly_covered: Boolean(article),
+        requires_team: !article,
+      });
+    },
+    async () => {
+      const cookie = (await fetch(`${baseUrl}/tickets`)).headers
+        .get('set-cookie')!
+        .split(';')[0];
+      const submit = async (session: string) =>
+        (
+          await fetch(`${baseUrl}/tickets`, {
+            method: 'POST',
+            headers: { cookie: session, 'content-type': 'application/json' },
+            body: JSON.stringify({
+              question: 'How do I make a collaborative playlist?',
+            }),
+          })
+        ).json();
+      const ticket = await submit(cookie);
+      assert.equal(ticket.decision.kind, 'hand_off');
+      assert.equal(ticket.decision.reason_code, 'knowledge_gap');
+      assert.match(ticket.draft.reply, /Which playlist/);
+      assert.equal(ticket.live_ai.remaining, 4);
+      const article = await (
+        await fetch(`${baseUrl}/visitor/help-articles`, {
+          method: 'POST',
+          headers: {
+            cookie: `${cookie}; demo_seat=agent`,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            title: 'Collaborative playlists',
+            body: 'Open the playlist menu and choose Invite collaborators.',
+          }),
+        })
+      ).json();
+      const redraft = () =>
+        fetch(`${baseUrl}/tickets/${ticket.id}/generate`, {
+          method: 'POST',
+          headers: { cookie },
+        });
+      const drafted = await (await redraft()).json();
+      assert.deepEqual(drafted.draft.sources, [article]);
+      assert.equal(drafted.decision.kind, 'hand_off');
+      assert.equal(drafted.decision.reason_code, 'agent_review');
+      assert.equal(drafted.approved_reply, null);
+      assert.equal(drafted.live_ai.remaining, 3);
+      const otherCookie = (await fetch(`${baseUrl}/tickets`)).headers
+        .get('set-cookie')!
+        .split(';')[0];
+      const other = await submit(otherCookie);
+      assert.equal(other.decision.reason_code, 'knowledge_gap');
+      assert.deepEqual(other.draft.sources, []);
+      for (let remaining = 2; remaining >= 0; remaining--) {
+        const replacement = await (await redraft()).json();
+        assert.equal(replacement.live_ai.remaining, remaining);
+      }
+      assert.equal((await redraft()).status, 429);
+      await fetch(`${baseUrl}/reset`, { method: 'POST', headers: { cookie } });
+      assert.equal(
+        (
+          await (
+            await fetch(`${baseUrl}/live-ai`, { headers: { cookie } })
+          ).json()
+        ).remaining,
+        0,
+      );
+    },
+  );
 });
 
 test('filling the saved knowledge gap redrafts only that visitor copy', async () => {
-  await withProvider(async (request, response) => {
-    const input = await readJson(request);
-    const article = input.articles.find((item: { title: string }) => item.title === 'Playlist imports');
-    sendJson(response, { reply: article.body, suggested_priority: 'normal', source_ids: [article.id], clearly_covered: true, requires_team: false });
-  }, async () => {
-    const cookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
-    const redraft = () => fetch(`${baseUrl}/tickets/4/generate`, { method: 'POST', headers: { cookie } });
-    assert.equal((await redraft()).status, 403);
-    await fetch(`${baseUrl}/visitor/help-articles`, {
-      method: 'POST', headers: { cookie: `${cookie}; demo_seat=agent`, 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Playlist imports', body: 'To import playlists, open Settings > Music > Import and choose Spotify.' }),
-    });
-    const response = await redraft();
-    assert.equal(response.status, 200);
-    const ticket = await response.json();
-    assert.equal(ticket.draft.sources[0].title, 'Playlist imports');
-    assert.equal(ticket.decision.reason_code, 'agent_review');
-    assert.equal(ticket.live_ai.remaining, 4);
-    const other = await (await fetch(`${baseUrl}/tickets/4`)).json();
-    assert.equal(other.decision.reason_code, 'knowledge_gap');
-    assert.deepEqual(other.draft.sources, []);
-    await fetch(`${baseUrl}/reset`, { method: 'POST', headers: { cookie } });
-    const reset = await (await fetch(`${baseUrl}/tickets/4`, { headers: { cookie } })).json();
-    assert.equal(reset.decision.reason_code, 'knowledge_gap');
-    assert.deepEqual(reset.draft.sources, []);
-  });
+  await withProvider(
+    async (request, response) => {
+      const input = await readJson(request);
+      const article = input.articles.find(
+        (item: { title: string }) => item.title === 'Playlist imports',
+      );
+      sendJson(response, {
+        reply: article.body,
+        suggested_priority: 'normal',
+        source_ids: [article.id],
+        clearly_covered: true,
+        requires_team: false,
+      });
+    },
+    async () => {
+      const cookie = (await fetch(`${baseUrl}/tickets`)).headers
+        .get('set-cookie')!
+        .split(';')[0];
+      const redraft = () =>
+        fetch(`${baseUrl}/tickets/4/generate`, {
+          method: 'POST',
+          headers: { cookie },
+        });
+      assert.equal((await redraft()).status, 403);
+      await fetch(`${baseUrl}/visitor/help-articles`, {
+        method: 'POST',
+        headers: {
+          cookie: `${cookie}; demo_seat=agent`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: 'Playlist imports',
+          body: 'To import playlists, open Settings > Music > Import and choose Spotify.',
+        }),
+      });
+      const response = await redraft();
+      assert.equal(response.status, 200);
+      const ticket = await response.json();
+      assert.equal(ticket.draft.sources[0].title, 'Playlist imports');
+      assert.equal(ticket.decision.reason_code, 'agent_review');
+      assert.equal(ticket.live_ai.remaining, 4);
+      const other = await (await fetch(`${baseUrl}/tickets/4`)).json();
+      assert.equal(other.decision.reason_code, 'knowledge_gap');
+      assert.deepEqual(other.draft.sources, []);
+      await fetch(`${baseUrl}/reset`, { method: 'POST', headers: { cookie } });
+      const reset = await (
+        await fetch(`${baseUrl}/tickets/4`, { headers: { cookie } })
+      ).json();
+      assert.equal(reset.decision.reason_code, 'knowledge_gap');
+      assert.deepEqual(reset.draft.sources, []);
+    },
+  );
 });
 
 test('a covered visitor question receives an automatic reply and a recorded explanation', async () => {

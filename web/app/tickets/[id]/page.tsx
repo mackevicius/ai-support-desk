@@ -96,37 +96,41 @@ export default async function TicketPage({
           </p>
         )}
         {article === 'saved' && (
-          <p role="status" className="draft-notice">Help article saved.</p>
+          <p role="status" className="draft-notice">
+            Help article saved.
+          </p>
         )}
         {ticket.decision?.reason_code === 'knowledge_gap' &&
           ticket.status !== 'resolved' && (
-            <section className="draft-notice" aria-labelledby="knowledge-gap-title">
+            <section
+              className="draft-notice"
+              aria-labelledby="knowledge-gap-title"
+            >
               <h2 id="knowledge-gap-title">Knowledge gap</h2>
               <details>
                 <summary>Write help article</summary>
                 <HelpArticleForm ticketId={ticket.id} />
               </details>
             </section>
-        )}
-        {ticket.can_redraft &&
-          ticket.status !== 'resolved' && (
-            <form action={generateRequest} className="draft-notice">
-              <input type="hidden" name="id" value={ticket.id} />
-              <SubmitButton
-                label={
-                  (!owner || !ticket.is_sample) && ticket.decision
-                    ? 'Redraft'
-                    : ticket.draft?.live
-                      ? 'Regenerate live draft'
-                      : 'Generate live draft'
-                }
-                pendingLabel="Generating draft..."
-              />
-              {ticket.live_ai && (
-                <p>{ticket.live_ai.remaining} live drafts left</p>
-              )}
-            </form>
           )}
+        {ticket.can_redraft && ticket.status !== 'resolved' && (
+          <form action={generateRequest} className="draft-notice">
+            <input type="hidden" name="id" value={ticket.id} />
+            <SubmitButton
+              label={
+                (!owner || !ticket.is_sample) && ticket.decision
+                  ? 'Redraft'
+                  : ticket.draft?.live
+                    ? 'Regenerate live draft'
+                    : 'Generate live draft'
+              }
+              pendingLabel="Generating draft..."
+            />
+            {ticket.live_ai && (
+              <p>{ticket.live_ai.remaining} live drafts left</p>
+            )}
+          </form>
+        )}
         {ticket.customer_name === 'Visitor' && !ticket.draft && (
           <section className="draft-notice" aria-label="Answer draft">
             No answer draft has been generated for this request.

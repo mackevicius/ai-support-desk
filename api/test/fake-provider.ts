@@ -15,28 +15,33 @@ createServer(async (request, response) => {
     return;
   }
   const imported = /import.*playlist/i.test(input.question)
-    ? input.articles.find((item: { title: string }) => item.title === 'Importing Spotify playlists')
+    ? input.articles.find(
+        (item: { title: string }) =>
+          item.title === 'Importing Spotify playlists',
+      )
     : undefined;
-  const covered = Boolean(imported) || /offline|family plan|audio quality|staff playback/i.test(
-    input.question,
-  );
+  const covered =
+    Boolean(imported) ||
+    /offline|family plan|audio quality|staff playback/i.test(input.question);
   const calls = (questionCalls.get(input.question) ?? 0) + 1;
   questionCalls.set(input.question, calls);
   const redrafted = input.question.includes('redraft review') && calls > 1;
-  const article = imported ?? (redrafted
-    ? input.articles.find(
-        (item: { title: string }) => item.title === 'Changing audio quality',
-      )
-    : /offline/i.test(input.question)
-      ? (input.articles.find(
-          (item: { title: string }) => item.title === 'Offline downloads',
-        ) ?? input.articles[0])
-      : /staff playback/i.test(input.question)
+  const article =
+    imported ??
+    (redrafted
+      ? input.articles.find(
+          (item: { title: string }) => item.title === 'Changing audio quality',
+        )
+      : /offline/i.test(input.question)
         ? (input.articles.find(
-            (item: { title: string }) =>
-              item.title === 'Staff playback incident',
+            (item: { title: string }) => item.title === 'Offline downloads',
           ) ?? input.articles[0])
-        : input.articles[0]);
+        : /staff playback/i.test(input.question)
+          ? (input.articles.find(
+              (item: { title: string }) =>
+                item.title === 'Staff playback incident',
+            ) ?? input.articles[0])
+          : input.articles[0]);
   const answer = covered
     ? {
         topic: redrafted
