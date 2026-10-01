@@ -3,12 +3,13 @@ import os
 import re
 import hmac
 import unicodedata
+import math
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
+from retrieval import retrieve, selected_method, terms
 
 
-STOP_WORDS = {'a', 'an', 'and', 'are', 'can', 'do', 'find', 'for', 'from', 'how', 'i', 'in', 'is', 'my', 'of', 'please', 'the', 'to', 'under', 'what', 'where', 'you', 'your'}
 STAFF_REVIEW_REPLY = 'A Tunely team member needs to review this request.'
 
 
@@ -24,10 +25,6 @@ def copies_internal_phrase(reply, articles):
     return any(tuple(words[index:index + 8]) in phrases for index in range(len(words) - 7))
 
 
-def terms(text):
-    return {word.rstrip('s') for word in re.findall(r'[a-z]{3,}|\d+', text.lower()) if word not in STOP_WORDS}
-
-
 def is_instruction(sentence):
     return bool(re.search(
         r'\b(?:ignore|disregard|override|forget|follow|obey)\b.{0,80}\b'
@@ -39,8 +36,8 @@ def is_instruction(sentence):
     ))
 
 
-def generate(question, articles, metadata_callback=None):
-    answer = _generate(question, articles, metadata_callback)
+def generate(question, articles, metadata_callback=None, question_embedding=None):
+    answer = _generate(question, articles, metadata_callback, question_embedding)
     if copies_internal_phrase(answer['reply'], articles):
         answer['reply'] = STAFF_REVIEW_REPLY
         answer['clearly_covered'] = False
@@ -48,14 +45,10 @@ def generate(question, articles, metadata_callback=None):
     return answer
 
 
-def _generate(question, articles, metadata_callback=None):
+def _generate(question, articles, metadata_callback=None, question_embedding=None):
     keywords = terms(question)
-    matches = sorted(
-        ((len(keywords & terms(f"{article['title']} {article['body']}")), article) for article in articles),
-        key=lambda item: item[0],
-        reverse=True,
-    )
-    relevant = [article for score, article in matches if score > 0][:3]
+    method = selected_method() if question_embedding is not None else 'word_matching'
+    relevant = retrieve(question, articles, method, question_embedding)
     if not relevant:
         return {
             'reply': 'Could you clarify your request? The available help articles do not support an answer yet.',
@@ -86,7 +79,10 @@ def _generate(question, articles, metadata_callback=None):
         'response_format': {'type': 'json_object'},
         'messages': [
             {'role': 'system', 'content': prompt},
-            {'role': 'user', 'content': json.dumps({'question': question, 'articles': relevant})},
+            {'role': 'user', 'content': json.dumps({'question': question, 'articles': [
+                {field: article[field] for field in ('id', 'title', 'body', 'kind') if field in article}
+                for article in relevant
+            ]})},
         ],
     }
     request = Request(
@@ -136,7 +132,7 @@ def _generate(question, articles, metadata_callback=None):
         if (answer.get('clearly_covered') is True and answer.get('requires_team') is False and
                 all(article.get('kind', 'help_article') == 'help_article' for article in cited_articles) and
                 len(grounded_reply) <= 5000 and not is_instruction(grounded_reply) and
-                keywords & terms(grounded_reply)):
+                (method == 'embeddings' or keywords & terms(grounded_reply))):
             return {
                 **topic,
                 'reply': grounded_reply, 'suggested_priority': answer['suggested_priority'],
@@ -173,13 +169,19 @@ def generate_request(authorization, content_length, body_stream):
             return 400, None
         body = json.loads(body_stream.read(length))
         question, articles = body['question'], body['articles']
+        question_embedding = body.get('question_embedding')
+        def valid_vector(vector):
+            return (isinstance(vector, list) and len(vector) == 384 and
+                    all(type(value) in (int, float) and math.isfinite(value) for value in vector))
         if (not isinstance(question, str) or not question.strip() or len(question) > 5000 or
+                question_embedding is not None and not valid_vector(question_embedding) or
                 not isinstance(articles, list) or len(articles) > 100 or
                 any(not isinstance(article, dict) or type(article.get('id')) is not int or
-                    not isinstance(article.get('title'), str) or not isinstance(article.get('body'), str)
+                    not isinstance(article.get('title'), str) or not isinstance(article.get('body'), str) or
+                    'embedding' in article and not valid_vector(article['embedding'])
                     for article in articles)):
             return 400, None
-        return 200, generate(question, articles)
+        return 200, generate(question, articles, question_embedding=question_embedding)
     except HTTPError as error:
         if error.code == 402:
             return 402, None

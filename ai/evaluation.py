@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from server import STAFF_REVIEW_REPLY, copies_internal_phrase, generate, is_instruction, terms
+from retrieval import comparison
 
 
 DATASET_VERSION = 'tunely-support-v2'
@@ -194,7 +195,8 @@ def evaluate(live=False):
             **telemetry,
         })
     return {'mode': 'live' if live else 'deterministic', 'dataset_version': DATASET_VERSION,
-            'model': 'gpt-4o-mini' if live else 'fixture provider (no model)', 'cases': results}
+            'model': 'gpt-4o-mini' if live else 'fixture provider (no model)', 'cases': results,
+            'retrieval': comparison()}
 
 
 if __name__ == '__main__':
@@ -206,4 +208,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     report = evaluate(live=args.live)
     args.output.write_text(json.dumps(report, indent=2) + '\n')
+    if args.deterministic:
+        Path(__file__).with_name('retrieval-results.json').write_text(json.dumps(report['retrieval'], indent=2) + '\n')
     print(f"{len(report['cases'])} cases, {sum(not all(case['checks'].values()) for case in report['cases'])} failures")

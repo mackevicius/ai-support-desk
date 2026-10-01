@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { embedText } from './embeddings.js';
 import {
   internalCopies,
   internalDocuments,
@@ -6,7 +7,13 @@ import {
   type InternalCopy,
 } from './internal-copy.js';
 
-type Article = { id: number; title: string; body: string; kind?: string };
+type Article = {
+  id: number;
+  title: string;
+  body: string;
+  kind?: string;
+  embedding?: number[];
+};
 const visitorDraftLimit = 5;
 const dailyDraftLimit = 200;
 export type Generation = {
@@ -93,26 +100,36 @@ export async function generateDraft(
   }
   const articles: Article[] = (
     await pool.query(
-      'SELECT id, title, body, kind FROM help_articles WHERE retired = false ORDER BY id',
+      'SELECT id, title, body, kind, embedding FROM help_articles WHERE retired = false ORDER BY id',
     )
   ).rows;
   articles.push(
     ...(
       await pool.query(
-        `SELECT id, title, body, 'help_article' AS kind FROM visitor_help_articles
+        `SELECT id, title, body, embedding, 'help_article' AS kind FROM visitor_help_articles
        WHERE session_id = $1 AND created_at > NOW() - INTERVAL '1 day' ORDER BY id`,
         [session],
       )
     ).rows,
   );
   try {
+    const questionEmbedding = await embedText(
+      pool,
+      question,
+      'question',
+      session,
+    );
     const response = await fetch(`${process.env.PYTHON_URL}/generate`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         authorization: `Bearer ${process.env.AI_SERVICE_SECRET}`,
       },
-      body: JSON.stringify({ question, articles }),
+      body: JSON.stringify({
+        question,
+        articles,
+        question_embedding: questionEmbedding,
+      }),
       signal: AbortSignal.timeout(12000),
     });
     if ([402, 429].includes(response.status)) {
@@ -151,7 +168,12 @@ export async function generateDraft(
     ).rows;
     const sources = suggestion.source_ids.map((id: number) => {
       const source = articles.find((article) => article.id === id)!;
-      return { ...source, kind: sourceKind(source, current) };
+      return {
+        id: source.id,
+        title: source.title,
+        body: source.body,
+        kind: sourceKind(source, current),
+      };
     });
     const draft: Generation = {
       ...suggestion,

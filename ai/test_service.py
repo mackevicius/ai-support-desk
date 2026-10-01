@@ -1,4 +1,5 @@
 import json
+import io
 import subprocess
 import sys
 import tempfile
@@ -11,10 +12,20 @@ from urllib.request import Request, urlopen
 from unittest.mock import patch
 
 from evaluation import ARTICLES, CASES, evaluate
-from server import Handler
+from server import Handler, generate_request
 
 
 class EvaluationTests(unittest.TestCase):
+    def test_report_compares_retrieval_on_saved_embeddings_without_a_provider(self):
+        with patch.dict('os.environ', {}, clear=True):
+            report = evaluate()
+        retrieval = report['retrieval']
+        self.assertGreater(retrieval['embeddings']['hit_rate'], retrieval['word_matching']['hit_rate'])
+        self.assertEqual(retrieval['selected_method'], 'embeddings')
+        paraphrase = next(case for case in retrieval['cases'] if case['id'] == 'semantic-paraphrase')
+        self.assertFalse(paraphrase['word_matching_hit'])
+        self.assertTrue(paraphrase['embeddings_hit'])
+
     def test_evaluation_uses_the_demo_tunely_knowledge_base(self):
         starter = json.loads((Path(__file__).parent.parent / 'api' / 'starter-data.json').read_text())
         self.assertEqual(ARTICLES, starter['articles'])
@@ -161,6 +172,28 @@ class FakeProvider(BaseHTTPRequestHandler):
 
 
 class ServiceTests(unittest.TestCase):
+    def test_semantic_request_finds_a_document_without_shared_words_and_excludes_retired_documents(self):
+        saved = json.loads((Path(__file__).parent.parent / 'api' / 'saved-embeddings.json').read_text())
+        article = next(article.copy() for article in ARTICLES if article['id'] == 11)
+        article['embedding'] = saved['vectors'][f"{article['title']}\n{article['body']}"]
+        payload = {'question': 'Terminate subscription', 'articles': [article],
+                   'question_embedding': saved['vectors']['Terminate subscription']}
+        def request():
+            body = json.dumps(payload).encode()
+            return generate_request('Bearer test-secret', str(len(body)), io.BytesIO(body))
+        answer = {'reply': 'You may terminate your subscription using the cancellation screen.', 'source_ids': [11], 'suggested_priority': 'normal',
+                  'clearly_covered': True, 'requires_team': False}
+        with patch.dict('os.environ', {'AI_SERVICE_SECRET': 'test-secret', 'OPENAI_API_KEY': 'fake-key'}), patch('server.urlopen', return_value=FakeResponse({'choices': [{'message': {'content': json.dumps(answer)}}]})) as provider:
+            status, actual = request()
+            self.assertEqual(status, 200)
+            self.assertEqual(actual['source_ids'], [11])
+            self.assertEqual(actual['reply'], article['body'])
+            article['retired'] = True
+            status, actual = request()
+            self.assertEqual(status, 200)
+            self.assertEqual(actual['source_ids'], [])
+            self.assertEqual(provider.call_count, 1)
+
     def test_http_generation_uses_relevant_evidence_and_clarifies_without_it(self):
         FakeProvider.calls = []
         provider = ThreadingHTTPServer(('127.0.0.1', 0), FakeProvider)

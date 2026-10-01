@@ -11,6 +11,56 @@ import {
 
 const { pool, baseUrl } = await startInbox();
 
+test('saved and edited documents expose current sentence embeddings to the owner', async () => {
+  await withEnv(ownerEnv, async () => {
+    const cookie = (await fetch(`${baseUrl}/tickets`)).headers
+      .get('set-cookie')!
+      .split(';')[0];
+    const login = await fetch(`${baseUrl}/owner/login`, {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ password: 'test-password' }),
+    });
+    const headers = {
+      cookie: `${cookie}; ${login.headers.get('set-cookie')!.split(';')[0]}`,
+      'content-type': 'application/json',
+    };
+    const created = await fetch(`${baseUrl}/help-articles`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        title: 'Ending membership',
+        body: 'You can stop your subscription in account settings.',
+      }),
+    });
+    assert.equal(created.status, 201);
+    const { id } = await created.json();
+    try {
+      const list = async () =>
+        (
+          await (await fetch(`${baseUrl}/help-articles`, { headers })).json()
+        ).find((article: { id: number }) => article.id === id);
+      const original = await list();
+      assert.equal(original.embedding.length, 384);
+      assert.ok(original.embedding.every(Number.isFinite));
+      assert.equal(original.embedding_model, 'Xenova/all-MiniLM-L6-v2');
+      const updated = await fetch(`${baseUrl}/help-articles/${id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          title: 'Ending membership',
+          body: 'Contact support to close your account.',
+          retired: false,
+        }),
+      });
+      assert.equal(updated.status, 200);
+      assert.notDeepEqual((await list()).embedding, original.embedding);
+    } finally {
+      await pool.query('DELETE FROM help_articles WHERE id = $1', [id]);
+    }
+  });
+});
+
 test('only the signed-in owner can create, edit and retire typed internal notes', async () => {
   let id: number | undefined;
   try {

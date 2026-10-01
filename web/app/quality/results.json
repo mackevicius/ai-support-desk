@@ -1372,5 +1372,144 @@
         }
       ]
     }
-  ]
+  ],
+  "retrieval": {
+    "word_matching": {
+      "hits": 7,
+      "total": 8,
+      "hit_rate": 0.875
+    },
+    "embeddings": {
+      "hits": 8,
+      "total": 8,
+      "hit_rate": 1.0
+    },
+    "model": "Xenova/all-MiniLM-L6-v2",
+    "metric": "hit@3",
+    "cases": [
+      {
+        "id": "family",
+        "question": "How can I invite family members?",
+        "expected_id": 1,
+        "word_matching_hit": true,
+        "word_matching_ids": [
+          1,
+          17,
+          7
+        ],
+        "embeddings_hit": true,
+        "embeddings_ids": [
+          1,
+          19,
+          17
+        ]
+      },
+      {
+        "id": "invoices",
+        "question": "Where can I download invoices?",
+        "expected_id": 2,
+        "word_matching_hit": true,
+        "word_matching_ids": [
+          2,
+          5,
+          6
+        ],
+        "embeddings_hit": true,
+        "embeddings_ids": [
+          2
+        ]
+      },
+      {
+        "id": "playback",
+        "question": "Music stops playing. What should I try?",
+        "expected_id": 3,
+        "word_matching_hit": true,
+        "word_matching_ids": [
+          3,
+          7,
+          10
+        ],
+        "embeddings_hit": true,
+        "embeddings_ids": [
+          3,
+          13,
+          10
+        ]
+      },
+      {
+        "id": "profile",
+        "question": "How do I change my display name?",
+        "expected_id": 4,
+        "word_matching_hit": true,
+        "word_matching_ids": [
+          4
+        ],
+        "embeddings_hit": true,
+        "embeddings_ids": [
+          4
+        ]
+      },
+      {
+        "id": "offline",
+        "question": "How can I download albums for offline listening?",
+        "expected_id": 5,
+        "word_matching_hit": true,
+        "word_matching_ids": [
+          5,
+          7,
+          10
+        ],
+        "embeddings_hit": true,
+        "embeddings_ids": [
+          5,
+          10,
+          14
+        ]
+      },
+      {
+        "id": "security",
+        "question": "How do I enable two-factor authentication?",
+        "expected_id": 9,
+        "word_matching_hit": true,
+        "word_matching_ids": [
+          9
+        ],
+        "embeddings_hit": true,
+        "embeddings_ids": [
+          9
+        ]
+      },
+      {
+        "id": "cancel",
+        "question": "How can I cancel my paid plan?",
+        "expected_id": 11,
+        "word_matching_hit": true,
+        "word_matching_ids": [
+          11,
+          5,
+          1
+        ],
+        "embeddings_hit": true,
+        "embeddings_ids": [
+          11,
+          8,
+          5
+        ]
+      },
+      {
+        "id": "semantic-paraphrase",
+        "question": "Terminate subscription",
+        "expected_id": 11,
+        "word_matching_hit": false,
+        "word_matching_ids": [],
+        "embeddings_hit": true,
+        "embeddings_ids": [
+          11,
+          10,
+          5
+        ]
+      }
+    ],
+    "selected_method": "embeddings"
+  }
 }
