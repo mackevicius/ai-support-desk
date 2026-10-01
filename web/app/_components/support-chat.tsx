@@ -7,7 +7,11 @@ import { AgentSeatButton } from './agent-seat-button';
 
 const examples = [
   ['Offline downloads', 'How do I download music for offline listening?'],
+  ['Playback', 'Why does music stop after my Bluetooth headphones reconnect?'],
   ['Family invitations', 'How do I invite someone to my family plan?'],
+  ['Billing', 'I was charged twice for my Tunely plan. Can you help?'],
+  ['Playlist imports', 'Can I import playlists from another music service?'],
+  ['Devices', 'How do I remove a listening device?'],
   ['Audio quality', 'How do I change audio quality?'],
 ] as const;
 
@@ -20,9 +24,7 @@ export function SupportChat({
   ticket?: Ticket;
   allowance: { remaining: number; paused: boolean };
 }) {
-  const conversations = tickets.filter(
-    (item) => item.customer_name === 'Visitor',
-  );
+  const conversations = tickets;
   return (
     <div className="customer-panel">
       <aside className="conversations" aria-label="Your conversations">

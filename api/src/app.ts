@@ -97,7 +97,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
   }
   async function detail(id: string, session: string, owner = false) {
     const ticket = await pool.query(
-      `SELECT id, customer_name, subject, question, status, priority, created_at, decision
+      `SELECT id, session_id, customer_name, subject, question, status, priority, created_at, decision
        FROM support_tickets WHERE id = $1 AND (session_id IS NULL OR (session_id = $2 AND created_at > NOW() - INTERVAL '1 day'))`,
       [id, session],
     );
@@ -107,8 +107,8 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       [id, session],
     );
     const draft = await pool.query(
-      `SELECT d.reply, d.suggested_priority, a.id, a.kind, d.article_title AS title, d.article_body AS body
-       FROM saved_drafts d JOIN help_articles a ON a.id = d.article_id WHERE d.ticket_id = $1`,
+      `SELECT d.reply, d.suggested_priority, d.source_articles, a.id, a.kind, d.article_title AS title, d.article_body AS body
+       FROM saved_drafts d LEFT JOIN help_articles a ON a.id = d.article_id WHERE d.ticket_id = $1`,
       [id],
     );
     const decision = ticket.rows[0].decision
@@ -136,6 +136,18 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     const savedCopies = live.rows[0]?.internal_copies
       ? JSON.parse(live.rows[0].internal_copies)
       : [];
+    const savedSources = draft.rows[0]?.source_articles
+      ? JSON.parse(draft.rows[0].source_articles)
+      : draft.rows[0]?.id
+        ? [
+            {
+              id: draft.rows[0].id,
+              title: draft.rows[0].title,
+              body: draft.rows[0].body,
+              kind: draft.rows[0].kind,
+            },
+          ]
+        : [];
     if (decision) {
       decision.documents = (decision.documents ?? []).map(
         (source: { id: number; kind?: string }) => ({
@@ -154,9 +166,14 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       [id, session],
     );
     const current = review.rows[0];
-    const { decision: storedDecision, ...ticketFields } = ticket.rows[0];
+    const {
+      decision: storedDecision,
+      session_id: ticketSession,
+      ...ticketFields
+    } = ticket.rows[0];
     return {
       ...ticketFields,
+      is_sample: ticketSession === null,
       ...(decision
         ? { decision, live_ai: await liveAllowance(pool, session) }
         : {}),
@@ -164,7 +181,9 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       priority: current?.priority ?? ticket.rows[0].priority,
       approved_reply:
         current?.approved_reply ??
-        (decision?.kind === 'automatic_reply' ? live.rows[0]?.reply : null) ??
+        (decision?.kind === 'automatic_reply'
+          ? (live.rows[0]?.reply ?? draft.rows[0]?.reply)
+          : null) ??
         null,
       review_state: current?.state ?? null,
       draft: live.rows.length
@@ -186,17 +205,10 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
               state: current?.state ?? 'saved',
               reply: draft.rows[0].reply,
               suggested_priority: draft.rows[0].suggested_priority,
-              sources: [
-                {
-                  id: draft.rows[0].id,
-                  title: draft.rows[0].title,
-                  body: draft.rows[0].body,
-                  kind: draft.rows[0].kind,
-                },
-              ],
+              sources: savedSources,
               internal_copies: await checkedCopies(
                 draft.rows[0].reply,
-                draft.rows,
+                savedSources,
               ),
             }
           : null,
@@ -344,7 +356,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         response.sendStatus(404);
         return;
       }
-      if (!owner && !ticket.decision) {
+      if (!owner && (ticket.is_sample || !ticket.decision)) {
         response.sendStatus(403);
         return;
       }

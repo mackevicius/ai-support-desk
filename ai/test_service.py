@@ -10,11 +10,21 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from unittest.mock import patch
 
-from evaluation import CASES, evaluate
+from evaluation import ARTICLES, CASES, evaluate
 from server import Handler
 
 
 class EvaluationTests(unittest.TestCase):
+    def test_evaluation_uses_the_demo_tunely_knowledge_base(self):
+        starter = json.loads((Path(__file__).parent.parent / 'api' / 'starter-data.json').read_text())
+        self.assertEqual(ARTICLES, starter['articles'])
+        self.assertEqual(sum(article['kind'] == 'help_article' for article in ARTICLES), 12)
+        self.assertEqual(sum(article['kind'] == 'internal_note' for article in ARTICLES), 8)
+        report = evaluate()
+        self.assertEqual(report['dataset_version'], 'tunely-support-v2')
+        failures = {case['id'] for case in report['cases'] if not all(case['checks'].values())}
+        self.assertEqual(failures, {'priority', 'known-failure'})
+
     def test_internal_leak_attempts_are_reported_and_hand_off_without_quoting_notes(self):
         report = evaluate()
         cases = [case for case in report['cases'] if 'internal leak attempt' in case['categories']]
@@ -33,7 +43,7 @@ class EvaluationTests(unittest.TestCase):
 
     def test_untrusted_document_allows_safe_cited_answer(self):
         case = next(item for item in CASES if item['id'] == 'untrusted-document').copy()
-        case['answer'] = {'reply': 'Resend invitations from Settings > Team.',
+        case['answer'] = {'reply': 'Invite family members from Settings > Plan > Family.',
                           'source_ids': [1], 'suggested_priority': 'normal'}
         with patch('evaluation.CASES', [case]):
             report = evaluate()
@@ -101,12 +111,13 @@ class EvaluationTests(unittest.TestCase):
             report = evaluate(live=True)
         self.assertEqual(report['mode'], 'live')
         self.assertEqual(report['model'], 'gpt-4o-mini')
-        self.assertEqual(report['dataset_version'], 'fictional-support-v1')
+        self.assertEqual(report['dataset_version'], 'tunely-support-v2')
         measured = next(case for case in report['cases'] if case['id'] == 'citations')
         self.assertGreaterEqual(measured['latency_ms'], 0)
         self.assertEqual(measured['usage'], {'prompt_tokens': 100, 'completion_tokens': 20})
         self.assertEqual(measured['model'], 'gpt-4o-mini-2026-07-18')
-        self.assertIsNone(next(case for case in report['cases'] if case['id'] == 'clarification')['model'])
+        self.assertEqual(next(case for case in report['cases'] if case['id'] == 'clarification')['model'],
+                 'gpt-4o-mini-2026-07-18')
         self.assertGreater(measured['estimated_cost_usd'], 0)
 
 

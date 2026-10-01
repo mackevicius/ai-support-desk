@@ -65,6 +65,7 @@ export async function saveHelpArticle(
 }
 
 export type Ticket = TicketSummary & {
+  is_sample: boolean;
   decision?: {
     kind: 'automatic_reply' | 'hand_off';
     reason: string;

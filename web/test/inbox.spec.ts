@@ -1,5 +1,65 @@
 import { expect, test } from '@playwright/test';
 
+test('a visitor explores saved cases and starts chats from every topic tile', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const steps = page.getByRole('region', { name: 'How Tunely Support works' });
+  await expect(steps).toContainText('Tell us');
+  await expect(steps).toContainText('Get an answer in seconds');
+  await expect(steps).toContainText('A person steps in when it matters');
+  const conversations = page.getByRole('navigation', {
+    name: 'Conversations',
+    exact: true,
+  });
+  await expect(conversations.getByRole('link')).toHaveCount(5);
+  await expect(page.getByText('5 live drafts left')).toBeVisible();
+  for (const viewport of [
+    { width: 1440, height: 1000 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: `test-results/explore-${viewport.width}.png`,
+      fullPage: true,
+    });
+  }
+  await conversations
+    .getByRole('link', { name: /Listen to music offline/ })
+    .click();
+  await expect(
+    page.getByRole('article', { name: 'Tunely reply' }),
+  ).toContainText('tap Download');
+  await expect(page.getByText('5 live drafts left')).toBeVisible();
+  const topics = [
+    ['Offline downloads', 'How do I download music for offline listening?'],
+    [
+      'Playback',
+      'Why does music stop after my Bluetooth headphones reconnect?',
+    ],
+    ['Family invitations', 'How do I invite someone to my family plan?'],
+    ['Billing', 'I was charged twice for my Tunely plan. Can you help?'],
+    ['Playlist imports', 'Can I import playlists from another music service?'],
+    ['Devices', 'How do I remove a listening device?'],
+    ['Audio quality', 'How do I change audio quality?'],
+  ];
+  for (const [label, question] of topics) {
+    await page
+      .getByRole('link', { name: 'New conversation', exact: true })
+      .click();
+    await page.getByRole('button', { name: label, exact: true }).click();
+    await expect(page).toHaveURL(/\/tickets\/\d+$/);
+    await expect(
+      page.getByRole('region', { name: 'Support chat' }),
+    ).toContainText(question);
+  }
+});
+
 test('agent home opens the shared inbox workspace and seat switches keep the selected conversation', async ({
   page,
 }) => {
@@ -23,7 +83,10 @@ test('agent home opens the shared inbox workspace and seat switches keep the sel
   ).toBeVisible();
 
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/tickets\/1$/);
+  await page
+    .getByRole('link', { name: 'New conversation', exact: true })
+    .click();
   await page
     .getByRole('textbox', { name: 'New support request' })
     .fill('How do I download music for offline listening?');
@@ -121,7 +184,7 @@ test('an agent edits a risky draft, asks for details and delivers a team reply',
     }),
   ).toContainText('resolved');
   await expect(
-    page.getByRole('link', { name: /Team invitations are not arriving/ }),
+    page.getByRole('link', { name: /Family invitation keeps failing/ }),
   ).toHaveCount(0);
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
   await expect(
@@ -311,7 +374,7 @@ test('owner inspects quality failures and guests cannot open the quality view', 
   await expect(
     page.getByRole('heading', { name: 'Answer quality' }),
   ).toBeVisible();
-  await expect(page.getByText('fictional-support-v1')).toBeVisible();
+  await expect(page.getByText('tunely-support-v2')).toBeVisible();
   for (const name of [
     'internal-direct-leak',
     'internal-uncited-leak',
@@ -541,14 +604,21 @@ test('a visitor submits a request that another session cannot see', async ({
   await page.goto('/');
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await expect(
-    page.getByRole('link', { name: /Team invitations are not arriving/ }),
+    page.getByRole('link', { name: /Family invitation keeps failing/ }),
   ).toBeVisible();
   await page
-    .getByRole('link', { name: /Team invitations are not arriving/ })
+    .getByRole('link', { name: /Family invitation keeps failing/ })
     .click();
-  await expect(page.getByText('Assigned to the support inbox')).toBeVisible();
+  await expect(
+    page.getByText(
+      'Hand-off: There is not enough clear help article coverage to answer automatically.',
+    ),
+  ).toBeVisible();
 
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
+  await page
+    .getByRole('link', { name: 'New conversation', exact: true })
+    .click();
   await page
     .getByRole('textbox', { name: 'New support request' })
     .fill('How do I invite my team?');
@@ -594,11 +664,11 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
   await page.goto('/');
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await page
-    .getByRole('link', { name: /Team invitations are not arriving/ })
+    .getByRole('link', { name: /Family invitation keeps failing/ })
     .click();
   await expect(page.getByText('Saved AI draft', { exact: true })).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Inviting teammates' }),
+    page.getByRole('heading', { name: 'Family plan invitations' }),
   ).toBeVisible();
   await expect(
     page
@@ -622,14 +692,16 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
   ).toBeVisible();
   await expect(page.getByText(/Human approved in-app reply/)).toBeVisible();
   await expect(
-    page.getByRole('link', { name: /Team invitations are not arriving/ }),
+    page.getByRole('link', { name: /Family invitation keeps failing/ }),
   ).toContainText('resolved');
   await page
-    .getByRole('link', { name: /Team invitations are not arriving/ })
+    .getByRole('link', { name: /Family invitation keeps failing/ })
     .click();
   await page.getByRole('link', { name: 'Next request' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Where can I download invoices?' }),
+    page.getByRole('heading', {
+      name: 'Music stops after Bluetooth reconnects',
+    }),
   ).toBeVisible();
   await page.getByRole('textbox', { name: 'Reply' }).fill('');
   await page.getByRole('button', { name: 'Reject suggestion' }).click();
@@ -664,16 +736,18 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
   await expect(
     page.getByText('Please check the addresses again.', { exact: true }),
   ).toBeVisible();
-  await page.goto('/tickets/4');
+  await page.goto('/tickets/5');
   await page.getByRole('button', { name: 'Reopen request' }).click();
   await page
     .getByRole('textbox', { name: 'Reply' })
-    .fill('Existing workspace links still work.');
+    .fill('Downloaded music stays available offline.');
   await page.getByRole('button', { name: 'Approve in-app reply' }).click();
   await expect(page).toHaveURL(/\/tickets\/3$/);
-  await page.goto('/tickets/4');
+  await page.goto('/tickets/5');
   await expect(
-    page.getByText('Existing workspace links still work.', { exact: true }),
+    page.getByText('Downloaded music stays available offline.', {
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     page
@@ -742,7 +816,7 @@ test('review actions stay disabled while approval is in flight', async ({
     releaseRequest();
   }
   await expect(
-    page.getByRole('link', { name: /Team invitations are not arriving/ }),
+    page.getByRole('link', { name: /Family invitation keeps failing/ }),
   ).toContainText('resolved');
   expect(requests).toBe(1);
 });
@@ -811,13 +885,16 @@ test('a visitor resets only their own demo workspace', async ({
   await page.goto('/');
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await page
-    .getByRole('link', { name: /Team invitations are not arriving/ })
+    .getByRole('link', { name: /Family invitation keeps failing/ })
     .click();
   await page.getByRole('button', { name: 'Approve in-app reply' }).click();
   await expect(
-    page.getByRole('link', { name: /Team invitations are not arriving/ }),
+    page.getByRole('link', { name: /Family invitation keeps failing/ }),
   ).toContainText('resolved');
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
+  await page
+    .getByRole('link', { name: 'New conversation', exact: true })
+    .click();
   await page
     .getByRole('textbox', { name: 'New support request' })
     .fill('Reset my request');
@@ -833,14 +910,14 @@ test('a visitor resets only their own demo workspace', async ({
     await otherPage.goto('/');
     await otherPage.getByRole('button', { name: 'Agent', exact: true }).click();
     await otherPage
-      .getByRole('link', { name: /Team invitations are not arriving/ })
+      .getByRole('link', { name: /Family invitation keeps failing/ })
       .click();
     await otherPage
       .getByRole('button', { name: 'Approve in-app reply' })
       .click();
     await expect(
       otherPage.getByRole('link', {
-        name: /Team invitations are not arriving/,
+        name: /Family invitation keeps failing/,
       }),
     ).toContainText('resolved');
 
@@ -849,14 +926,14 @@ test('a visitor resets only their own demo workspace', async ({
       page.getByRole('link', { name: /Reset my request/ }),
     ).toHaveCount(0);
     await expect(
-      page.getByRole('link', { name: /Team invitations are not arriving/ }),
+      page.getByRole('link', { name: /Family invitation keeps failing/ }),
     ).toContainText('open');
     const removed = await page.goto(submittedUrl);
     expect(removed?.status()).toBe(404);
     await otherPage.reload();
     await expect(
       otherPage.getByRole('link', {
-        name: /Team invitations are not arriving/,
+        name: /Family invitation keeps failing/,
       }),
     ).toContainText('resolved');
   } finally {
