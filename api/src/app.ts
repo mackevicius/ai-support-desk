@@ -1,7 +1,8 @@
 import express from 'express';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { Pool } from 'pg';
-import { generateDraft, liveAllowance } from './generation.js';
+import { draftAnswer, redraftAnswer } from './answer-drafting.js';
+import { liveAllowance } from './generation.js';
 import {
   internalCopies,
   internalDocuments,
@@ -72,82 +73,6 @@ function isOwner(cookie: string | undefined, session: string) {
     Buffer.from(signature, 'hex'),
     Buffer.from(expected, 'hex'),
   );
-}
-
-function decide(
-  question: string,
-  generated: Awaited<ReturnType<typeof generateDraft>>,
-  agentReview = false,
-) {
-  const draft = generated.draft;
-  const risky =
-    /\b(refunds?|charg(?:e|ed|es|ing)|bill(?:ed|s|ing)?|pay(?:ment|ments|ing)?|paid|price|pricing|cost|card|money|purchase|subscription|cancel|passwords?|credentials?|hack(?:ed|ing)?|compromis(?:e|ed)|breach(?:ed)?|security|stolen|unauthori[sz]ed|accounts?|log(?:ged|ging)?[ -]?in(?:to)?|sign.?in|two.factor|2fa|verification code|locked|identity|fraud)\b/i.test(
-      question,
-    );
-  const internal = draft?.sources.some(
-    (source) => source.kind !== 'help_article',
-  );
-  const copied = !!draft?.internal_copies.length;
-  const covered = draft?.clearly_covered === true && draft.sources.length > 0;
-  const automatic =
-    covered &&
-    draft?.requires_team === false &&
-    !internal &&
-    !copied &&
-    !risky &&
-    !agentReview;
-  const outcome =
-    generated.error === 'paused'
-      ? {
-          rule: 'Live allowance exhausted',
-          reason: 'Live AI is paused for today',
-        }
-      : risky
-        ? {
-            rule: 'Money or account security',
-            reason:
-              'A team member needs to check questions about money or account security.',
-          }
-        : internal || copied
-          ? {
-              rule: 'Staff-only information',
-              reason:
-                'The answer relies on information meant for Tunely staff.',
-            }
-          : !covered
-            ? {
-                rule: 'Weak help article coverage',
-                reason:
-                  'There is not enough clear help article coverage to answer automatically.',
-              }
-            : draft?.requires_team !== false
-              ? {
-                  rule: 'Provider requested team review',
-                  reason:
-                    'A team member needs to check this question before we can answer.',
-                }
-              : agentReview
-                ? {
-                    rule: 'Agent review required',
-                    reason:
-                      'An agent requested a new draft; it needs approval before delivery.',
-                  }
-                : {
-                    rule: 'Clearly covered by public help articles',
-                    reason:
-                      'A help article clearly covers your question, and it does not need a team member to check it.',
-                  };
-  return {
-    kind: automatic ? 'automatic_reply' : 'hand_off',
-    ...outcome,
-    topic: draft?.topic ?? 'Unclassified',
-    suggested_priority: draft?.suggested_priority ?? 'normal',
-    documents:
-      draft?.sources.map(({ id, title, kind }) => ({ id, title, kind })) ?? [],
-    sources:
-      draft?.sources.filter((source) => source.kind === 'help_article') ?? [],
-    paused: generated.error === 'paused',
-  };
 }
 
 export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
@@ -431,118 +356,31 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
           .json({ error: 'Generation is not available for this request' });
         return;
       }
-      const generated = await generateDraft(
+      const outcome = await redraftAnswer(
         pool,
+        { ...ticket, id: request.params.id },
         response.locals.session,
-        ticket.question,
         owner,
       );
-      if (!generated.draft) {
-        response.status(generated.error === 'paused' ? 429 : 502).json({
-          error:
-            generated.error === 'paused'
-              ? 'Live AI is paused for today'
-              : 'Live generation is unavailable',
-        });
+      if (outcome !== 'drafted') {
+        response
+          .status(
+            outcome === 'paused' ? 429 : outcome === 'conflict' ? 409 : 502,
+          )
+          .json({
+            error:
+              outcome === 'paused'
+                ? 'Live AI is paused for today'
+                : outcome === 'conflict'
+                  ? 'Generation is no longer available'
+                  : 'Live generation is unavailable',
+          });
         return;
-      }
-      const suggestion = generated.draft;
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        const state =
-          !ticket.decision && ticket.review_state === 'reopened'
-            ? 'reopened'
-            : 'saved';
-        const changed =
-          ticket.review_state === null
-            ? await client.query(
-                `INSERT INTO ticket_reviews (session_id, ticket_id, state, priority, approved_reply)
-              VALUES ($1, $2, $3, $4, $5) ON CONFLICT (session_id, ticket_id) DO NOTHING RETURNING state`,
-                [
-                  response.locals.session,
-                  request.params.id,
-                  state,
-                  ticket.priority,
-                  ticket.approved_reply,
-                ],
-              )
-            : await client.query(
-                `UPDATE ticket_reviews SET state = $3
-              WHERE session_id = $1 AND ticket_id = $2 AND state = $4 RETURNING state`,
-                [
-                  response.locals.session,
-                  request.params.id,
-                  state,
-                  ticket.review_state,
-                ],
-              );
-        if (!changed.rows.length) {
-          await client.query('ROLLBACK');
-          response
-            .status(409)
-            .json({ error: 'Generation is no longer available' });
-          return;
-        }
-        await client.query(
-          `INSERT INTO session_drafts (session_id, ticket_id, reply, suggested_priority, source_ids, source_articles, internal_copies)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
-           ON CONFLICT (session_id, ticket_id) DO UPDATE SET reply = EXCLUDED.reply,
-           suggested_priority = EXCLUDED.suggested_priority, source_ids = EXCLUDED.source_ids,
-           source_articles = EXCLUDED.source_articles, internal_copies = EXCLUDED.internal_copies`,
-          [
-            response.locals.session,
-            request.params.id,
-            suggestion.reply.trim(),
-            suggestion.suggested_priority,
-            JSON.stringify(suggestion.source_ids),
-            JSON.stringify(suggestion.sources),
-            JSON.stringify(suggestion.internal_copies),
-          ],
-        );
-        if (ticket.decision) {
-          const decision = decide(ticket.question, generated, true);
-          await client.query(
-            "UPDATE support_tickets SET status = 'open', decision = $1 WHERE id = $2",
-            [JSON.stringify(decision), request.params.id],
-          );
-          await client.query(
-            `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
-            VALUES (nextval('ticket_event_ids'), $1, $2, $3, $4)`,
-            [
-              request.params.id,
-              response.locals.session,
-              `Hand-off: ${decision.reason}`,
-              new Date().toISOString(),
-            ],
-          );
-        }
-        await client.query(
-          `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
-          VALUES (nextval('ticket_event_ids'), $1, $2, 'Agent requested a new answer draft', $3)`,
-          [
-            request.params.id,
-            response.locals.session,
-            new Date().toISOString(),
-          ],
-        );
-        await client.query('COMMIT');
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally {
-        client.release();
       }
       response.json(
         await detail(request.params.id, response.locals.session, true),
       );
     } catch (error) {
-      if ((error as { code?: string }).code === '23505') {
-        response
-          .status(409)
-          .json({ error: 'Generation is no longer available' });
-        return;
-      }
       next(error);
     }
   });
@@ -656,41 +494,11 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       client.release();
     }
     try {
-      const generated = await generateDraft(
+      await draftAnswer(
         pool,
+        { id: ticketId, question: question.trim() },
         response.locals.session,
-        question.trim(),
         isOwner(request.headers.cookie, response.locals.session),
-      );
-      const draft = generated.draft;
-      const decision = decide(question, generated);
-      const automatic = decision.kind === 'automatic_reply';
-      if (draft) {
-        await pool.query(
-          `INSERT INTO session_drafts (session_id, ticket_id, reply, suggested_priority, source_ids, source_articles, internal_copies)
-          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [
-            response.locals.session,
-            ticketId,
-            draft.reply,
-            draft.suggested_priority,
-            JSON.stringify(draft.source_ids),
-            JSON.stringify(draft.sources),
-            JSON.stringify(draft.internal_copies),
-          ],
-        );
-      }
-      await pool.query(
-        'UPDATE support_tickets SET status = $1, decision = $2 WHERE id = $3',
-        [automatic ? 'resolved' : 'open', JSON.stringify(decision), ticketId],
-      );
-      await pool.query(
-        `INSERT INTO ticket_events (id, ticket_id, description, created_at) VALUES (nextval('ticket_event_ids'), $1, $2, $3)`,
-        [
-          ticketId,
-          `${automatic ? 'Automatic reply' : 'Hand-off'}: ${decision.reason}`,
-          new Date().toISOString(),
-        ],
       );
       response
         .status(201)
