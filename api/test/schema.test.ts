@@ -136,6 +136,13 @@ test('a Dayline-era inbox is replaced with saved Tunely cases only once', async 
       (1, 'Maya Chen', 'Team invitations are not arriving', 'Invite teammates', 'open', 'high', '2026-09-20T10:00:00Z');
     CREATE TABLE help_articles (id integer PRIMARY KEY, title text NOT NULL, body text NOT NULL);
     INSERT INTO help_articles VALUES (1, 'Inviting teammates', 'Workspace invitations');
+    INSERT INTO support_tickets VALUES
+      (9, 'Existing customer', 'Custom request', 'Keep this request', 'open', 'normal', '2026-09-20T10:00:00Z');
+    CREATE TABLE saved_drafts (
+      ticket_id integer PRIMARY KEY REFERENCES support_tickets(id), reply text NOT NULL,
+      suggested_priority text NOT NULL, article_id integer NOT NULL REFERENCES help_articles(id)
+    );
+    INSERT INTO saved_drafts VALUES (9, 'Keep this saved reply', 'normal', 1);
   `);
   const { Pool } = database.adapters.createPg();
   const pool = new Pool();
@@ -145,11 +152,14 @@ test('a Dayline-era inbox is replaced with saved Tunely cases only once', async 
     const url = await listening(server);
     const inbox = await fetch(`${url}/tickets`);
     const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
-    assert.equal((await inbox.json()).length, 5);
+    assert.equal((await inbox.json()).length, 6);
     const detail = async () => (await fetch(`${url}/tickets/1`, { headers: { cookie } })).json();
     const before = await detail();
     assert.equal(before.subject, 'Family invitation keeps failing');
     assert.equal(before.draft.sources[0].title, 'Family plan invitations');
+    const custom = await (await fetch(`${url}/tickets/9`, { headers: { cookie } })).json();
+    assert.equal(custom.draft.reply, 'Keep this saved reply');
+    assert.equal(custom.draft.sources[0].body, 'Workspace invitations');
     await prepareDatabase(pool);
     assert.deepEqual(await detail(), before);
     await withEnv(ownerEnv, async () => {

@@ -166,7 +166,19 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
     [3, 'Usage reporting delays'], [4, 'Renaming a workspace']] as const) {
     const legacy = await pool.query('SELECT id FROM help_articles WHERE id = $1 AND title = $2 AND starter_key IS NULL', [id, title]);
     if (!legacy.rows.length) continue;
-    await pool.query('DELETE FROM saved_drafts WHERE article_id = $1 AND ticket_id <= 4', [id]);
+    const drafts = await pool.query(
+      'SELECT ticket_id, article_title, article_body, source_articles FROM saved_drafts WHERE article_id = $1',
+      [id],
+    );
+    for (const draft of drafts.rows) {
+      const sources = draft.source_articles ?? JSON.stringify([
+        { id, title: draft.article_title, body: draft.article_body, kind: 'help_article' },
+      ]);
+      await pool.query(
+        'UPDATE saved_drafts SET article_id = NULL, source_articles = $1 WHERE ticket_id = $2',
+        [sources, draft.ticket_id],
+      );
+    }
     await pool.query('DELETE FROM help_articles WHERE id = $1 AND title = $2 AND starter_key IS NULL', [id, title]);
   }
   for (const article of starter.articles) {
