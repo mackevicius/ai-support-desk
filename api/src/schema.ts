@@ -65,14 +65,30 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
   await pool.query(
     'ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS retired boolean NOT NULL DEFAULT false',
   );
-  await pool.query('ALTER TABLE saved_drafts ADD COLUMN IF NOT EXISTS article_title text');
-  await pool.query('ALTER TABLE saved_drafts ADD COLUMN IF NOT EXISTS article_body text');
-  await pool.query('ALTER TABLE session_drafts ADD COLUMN IF NOT EXISTS source_articles text');
-  await pool.query('ALTER TABLE session_drafts ADD COLUMN IF NOT EXISTS internal_copies text');
-  await pool.query("ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'help_article'");
-  await pool.query('ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS starter_key text UNIQUE');
-  await pool.query('ALTER TABLE generation_usage ADD COLUMN IF NOT EXISTS paused boolean NOT NULL DEFAULT false');
-  await pool.query('ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS decision text');
+  await pool.query(
+    'ALTER TABLE saved_drafts ADD COLUMN IF NOT EXISTS article_title text',
+  );
+  await pool.query(
+    'ALTER TABLE saved_drafts ADD COLUMN IF NOT EXISTS article_body text',
+  );
+  await pool.query(
+    'ALTER TABLE session_drafts ADD COLUMN IF NOT EXISTS source_articles text',
+  );
+  await pool.query(
+    'ALTER TABLE session_drafts ADD COLUMN IF NOT EXISTS internal_copies text',
+  );
+  await pool.query(
+    "ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'help_article'",
+  );
+  await pool.query(
+    'ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS starter_key text UNIQUE',
+  );
+  await pool.query(
+    'ALTER TABLE generation_usage ADD COLUMN IF NOT EXISTS paused boolean NOT NULL DEFAULT false',
+  );
+  await pool.query(
+    'ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS decision text',
+  );
   const unsnapshotted = await pool.query(
     `SELECT d.ticket_id, a.title, a.body FROM saved_drafts d
      JOIN help_articles a ON a.id = d.article_id WHERE d.article_title IS NULL`,
@@ -87,11 +103,21 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
     'SELECT session_id, ticket_id, source_ids, source_articles FROM session_drafts',
   );
   if (unsnapshottedLive.rows.length) {
-    const articles = (await pool.query('SELECT id, title, body, kind FROM help_articles')).rows;
+    const articles = (
+      await pool.query('SELECT id, title, body, kind FROM help_articles')
+    ).rows;
     for (const draft of unsnapshottedLive.rows) {
-      const existingSources = draft.source_articles ? JSON.parse(draft.source_articles) :
-        (JSON.parse(draft.source_ids) as number[]).map((id) => articles.find((article) => article.id === id)).filter(Boolean);
-      const sources = existingSources.map((source: { id: number; kind?: string }) => ({ ...source, kind: sourceKind(source, articles) }));
+      const existingSources = draft.source_articles
+        ? JSON.parse(draft.source_articles)
+        : (JSON.parse(draft.source_ids) as number[])
+            .map((id) => articles.find((article) => article.id === id))
+            .filter(Boolean);
+      const sources = existingSources.map(
+        (source: { id: number; kind?: string }) => ({
+          ...source,
+          kind: sourceKind(source, articles),
+        }),
+      );
       if (JSON.stringify(sources) === draft.source_articles) continue;
       await pool.query(
         'UPDATE session_drafts SET source_articles = $1 WHERE session_id = $2 AND ticket_id = $3',
@@ -151,11 +177,21 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
       [ticketId],
     );
     if (seeded.rows.length) {
-      const article = await pool.query('SELECT title, body FROM help_articles WHERE id = $1', [articleId]);
+      const article = await pool.query(
+        'SELECT title, body FROM help_articles WHERE id = $1',
+        [articleId],
+      );
       await pool.query(
         `INSERT INTO saved_drafts (ticket_id, reply, suggested_priority, article_id, article_title, article_body)
         VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (ticket_id) DO NOTHING`,
-        [ticketId, reply, priority, articleId, article.rows[0].title, article.rows[0].body],
+        [
+          ticketId,
+          reply,
+          priority,
+          articleId,
+          article.rows[0].title,
+          article.rows[0].body,
+        ],
       );
     }
   }
@@ -186,10 +222,25 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
     }
   }
   for (const [key, title, body] of [
-    ['offline-downloads', 'Offline downloads', 'Tunely paid plans include offline listening. Open a playlist or album and tap Download. Keep Tunely online at least once every 30 days to keep downloads available.'],
-    ['family-invitations', 'Family plan invitations', 'The family plan owner can invite members from Settings > Plan > Family. Members must live at the same address. Open the invitation link and sign in to join.'],
-    ['audio-quality', 'Changing audio quality', 'Open Settings > Audio quality in Tunely and choose the streaming or download quality. Higher quality uses more data and storage.'],
+    [
+      'offline-downloads',
+      'Offline downloads',
+      'Tunely paid plans include offline listening. Open a playlist or album and tap Download. Keep Tunely online at least once every 30 days to keep downloads available.',
+    ],
+    [
+      'family-invitations',
+      'Family plan invitations',
+      'The family plan owner can invite members from Settings > Plan > Family. Members must live at the same address. Open the invitation link and sign in to join.',
+    ],
+    [
+      'audio-quality',
+      'Changing audio quality',
+      'Open Settings > Audio quality in Tunely and choose the streaming or download quality. Higher quality uses more data and storage.',
+    ],
   ] as const) {
-    await pool.query("INSERT INTO help_articles (id, starter_key, title, body) VALUES (nextval('help_article_ids'), $1, $2, $3) ON CONFLICT (starter_key) DO NOTHING", [key, title, body]);
+    await pool.query(
+      "INSERT INTO help_articles (id, starter_key, title, body) VALUES (nextval('help_article_ids'), $1, $2, $3) ON CONFLICT (starter_key) DO NOTHING",
+      [key, title, body],
+    );
   }
 }

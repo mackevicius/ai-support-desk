@@ -2,7 +2,12 @@ import express from 'express';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { Pool } from 'pg';
 import { generateDraft, liveAllowance } from './generation.js';
-import { internalCopies, internalDocuments, sourceKind, type InternalCopy } from './internal-copy.js';
+import {
+  internalCopies,
+  internalDocuments,
+  sourceKind,
+  type InternalCopy,
+} from './internal-copy.js';
 
 const ownerSessionAge = 8 * 60 * 60 * 1000;
 const statusOrder: Record<string, number> = {
@@ -13,9 +18,18 @@ const statusOrder: Record<string, number> = {
 
 function validArticle(
   input: unknown,
-): input is { title: string; body: string; retired?: boolean; kind?: 'help_article' | 'internal_note' } {
+): input is {
+  title: string;
+  body: string;
+  retired?: boolean;
+  kind?: 'help_article' | 'internal_note';
+} {
   if (!input || typeof input !== 'object') return false;
-  const { title, body, kind } = input as { title?: unknown; body?: unknown; kind?: unknown };
+  const { title, body, kind } = input as {
+    title?: unknown;
+    body?: unknown;
+    kind?: unknown;
+  };
   return (
     typeof title === 'string' &&
     !!title.trim() &&
@@ -139,8 +153,15 @@ function decide(
 export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
   const app = express();
   app.use(express.json());
-  async function checkedCopies(reply: string, sources: { id: number; body: string; title?: string; kind?: string }[], database: Pick<Pool, 'query'> = pool, savedCopies: InternalCopy[] = []) {
-    const documents = (await database.query('SELECT id, title, body, kind FROM help_articles')).rows;
+  async function checkedCopies(
+    reply: string,
+    sources: { id: number; body: string; title?: string; kind?: string }[],
+    database: Pick<Pool, 'query'> = pool,
+    savedCopies: InternalCopy[] = [],
+  ) {
+    const documents = (
+      await database.query('SELECT id, title, body, kind FROM help_articles')
+    ).rows;
     return internalCopies(reply, [
       ...internalDocuments(documents, sources),
       ...savedCopies.map((copy) => ({ body: copy.text })),
@@ -177,7 +198,9 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
             [id, session],
           )
         : { rows: [] };
-    const articles = await pool.query('SELECT id, title, body, kind FROM help_articles');
+    const articles = await pool.query(
+      'SELECT id, title, body, kind FROM help_articles',
+    );
     const liveSources = live.rows.length
       ? live.rows[0].source_articles
         ? JSON.parse(live.rows[0].source_articles)
@@ -185,11 +208,22 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
             articles.rows.find((article) => article.id === sourceId),
           )
       : [];
-    for (const source of liveSources) source.kind = sourceKind(source, articles.rows);
-    const savedCopies = live.rows[0]?.internal_copies ? JSON.parse(live.rows[0].internal_copies) : [];
+    for (const source of liveSources)
+      source.kind = sourceKind(source, articles.rows);
+    const savedCopies = live.rows[0]?.internal_copies
+      ? JSON.parse(live.rows[0].internal_copies)
+      : [];
     if (decision) {
-      decision.documents = (decision.documents ?? []).map((source: { id: number; kind?: string }) => ({ ...source, kind: sourceKind(source, articles.rows) }));
-      decision.sources = (decision.sources ?? []).filter((source: { id: number; kind?: string }) => sourceKind(source, articles.rows) === 'help_article');
+      decision.documents = (decision.documents ?? []).map(
+        (source: { id: number; kind?: string }) => ({
+          ...source,
+          kind: sourceKind(source, articles.rows),
+        }),
+      );
+      decision.sources = (decision.sources ?? []).filter(
+        (source: { id: number; kind?: string }) =>
+          sourceKind(source, articles.rows) === 'help_article',
+      );
     }
     const events = await pool.query(
       `SELECT id, description, created_at FROM ticket_events
@@ -217,7 +251,12 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
             reply: live.rows[0].reply,
             suggested_priority: live.rows[0].suggested_priority,
             sources: liveSources,
-            internal_copies: await checkedCopies(live.rows[0].reply, liveSources, pool, savedCopies),
+            internal_copies: await checkedCopies(
+              live.rows[0].reply,
+              liveSources,
+              pool,
+              savedCopies,
+            ),
           }
         : draft.rows.length
           ? {
@@ -232,7 +271,10 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
                   kind: draft.rows[0].kind,
                 },
               ],
-              internal_copies: await checkedCopies(draft.rows[0].reply, draft.rows),
+              internal_copies: await checkedCopies(
+                draft.rows[0].reply,
+                draft.rows,
+              ),
             }
           : null,
       history: events.rows,
@@ -396,14 +438,12 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         owner,
       );
       if (!generated.draft) {
-        response
-          .status(generated.error === 'paused' ? 429 : 502)
-          .json({
-            error:
-              generated.error === 'paused'
-                ? 'Live AI is paused for today'
-                : 'Live generation is unavailable',
-          });
+        response.status(generated.error === 'paused' ? 429 : 502).json({
+          error:
+            generated.error === 'paused'
+              ? 'Live AI is paused for today'
+              : 'Live generation is unavailable',
+        });
         return;
       }
       const suggestion = generated.draft;
@@ -709,14 +749,24 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         response.json({
           ...ticket,
           draft: null,
-          approved_reply: ticket.decision?.kind === 'automatic_reply' && documents.some((source: { kind: string }) => source.kind === 'internal_note') ? null : ticket.approved_reply,
-          decision: ticket.decision ? {
-            kind: ticket.decision.kind,
-            reason: ticket.decision.reason,
-            sources: ticket.decision.sources,
-            paused: ticket.decision.paused,
-            internal_count: documents.filter((source: { kind: string }) => source.kind !== 'help_article').length,
-          } : undefined,
+          approved_reply:
+            ticket.decision?.kind === 'automatic_reply' &&
+            documents.some(
+              (source: { kind: string }) => source.kind === 'internal_note',
+            )
+              ? null
+              : ticket.approved_reply,
+          decision: ticket.decision
+            ? {
+                kind: ticket.decision.kind,
+                reason: ticket.decision.reason,
+                sources: ticket.decision.sources,
+                paused: ticket.decision.paused,
+                internal_count: documents.filter(
+                  (source: { kind: string }) => source.kind !== 'help_article',
+                ).length,
+              }
+            : undefined,
         });
         return;
       }
@@ -728,7 +778,9 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
 
   app.post('/tickets/:id/check', async (request, response, next) => {
     try {
-      const ticket = /^\d+$/.test(request.params.id) ? await detail(request.params.id, response.locals.session, true) : null;
+      const ticket = /^\d+$/.test(request.params.id)
+        ? await detail(request.params.id, response.locals.session, true)
+        : null;
       if (!ticket) {
         response.sendStatus(404);
         return;
@@ -738,7 +790,14 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         response.sendStatus(400);
         return;
       }
-      response.json(await checkedCopies(reply, ticket.draft?.sources ?? [], pool, ticket.draft?.internal_copies ?? []));
+      response.json(
+        await checkedCopies(
+          reply,
+          ticket.draft?.sources ?? [],
+          pool,
+          ticket.draft?.internal_copies ?? [],
+        ),
+      );
     } catch (error) {
       next(error);
     }
@@ -840,10 +899,24 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       try {
         await client.query('BEGIN');
         if (action === 'approve' || action === 'ask') {
-          const copies = await checkedCopies(reply.trim(), ticket.draft?.sources ?? [], client, ticket.draft?.internal_copies ?? []);
-          if (copies.length && request.body.internal_confirmed !== reply.trim()) {
+          const copies = await checkedCopies(
+            reply.trim(),
+            ticket.draft?.sources ?? [],
+            client,
+            ticket.draft?.internal_copies ?? [],
+          );
+          if (
+            copies.length &&
+            request.body.internal_confirmed !== reply.trim()
+          ) {
             await client.query('ROLLBACK');
-            response.status(409).json({ error: 'Internal text copied. Review the highlighted text before delivery.', internal_copies: copies });
+            response
+              .status(409)
+              .json({
+                error:
+                  'Internal text copied. Review the highlighted text before delivery.',
+                internal_copies: copies,
+              });
             return;
           }
         }

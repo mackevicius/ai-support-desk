@@ -312,12 +312,24 @@ test('owner inspects quality failures and guests cannot open the quality view', 
     page.getByRole('heading', { name: 'Answer quality' }),
   ).toBeVisible();
   await expect(page.getByText('fictional-support-v1')).toBeVisible();
-  for (const name of ['internal-direct-leak', 'internal-uncited-leak', 'internal-prompt-leak'])
-    await expect(page.getByRole('link', { name: new RegExp(name) })).toContainText('Pass');
+  for (const name of [
+    'internal-direct-leak',
+    'internal-uncited-leak',
+    'internal-prompt-leak',
+  ])
+    await expect(
+      page.getByRole('link', { name: new RegExp(name) }),
+    ).toContainText('Pass');
   await page.getByRole('link', { name: /internal-direct-leak/ }).click();
-  await expect(page.getByText('internal handoff: pass', { exact: true })).toBeVisible();
-  await expect(page.getByText('no internal phrase copied: pass', { exact: true })).toBeVisible();
-  await page.getByRole('link', { name: 'Back to quality', exact: true }).click();
+  await expect(
+    page.getByText('internal handoff: pass', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('no internal phrase copied: pass', { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole('link', { name: 'Back to quality', exact: true })
+    .click();
   await expect(page.getByRole('link', { name: /known-failure/ })).toBeVisible();
   await page.getByRole('link', { name: /known-failure/ }).click();
   await expect(
@@ -400,9 +412,12 @@ test('owner manages help articles while visitors cannot open the editor', async 
   ).toBeVisible();
 });
 
-test('internal notes stay private while an agent checks, edits and approves a draft', async ({ page }) => {
+test('internal notes stay private while an agent checks, edits and approves a draft', async ({
+  page,
+}) => {
   const title = 'Staff playback incident';
-  const phrase = 'The confidential playback workaround requires clearing the device entitlement cache';
+  const phrase =
+    'The confidential playback workaround requires clearing the device entitlement cache';
   await page.goto('/owner');
   await page.getByLabel('Password').fill('test-password');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
@@ -412,17 +427,25 @@ test('internal notes stay private while an agent checks, edits and approves a dr
   await add.getByLabel('Title').fill(title);
   await add.getByLabel('Content').fill(phrase);
   await add.getByRole('button', { name: 'Add article', exact: true }).click();
-  const editor = page.locator('.article-editor').filter({ has: page.locator(`input[value="${title}"]`) });
+  const editor = page
+    .locator('.article-editor')
+    .filter({ has: page.locator(`input[value="${title}"]`) });
   await expect(editor.getByLabel('Document type')).toHaveValue('internal_note');
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await page.getByRole('textbox', { name: 'New support request' }).fill('What is the staff playback workaround?');
-  await page.getByRole('button', { name: 'Submit request', exact: true }).click();
+  await page
+    .getByRole('textbox', { name: 'New support request' })
+    .fill('What is the staff playback workaround?');
+  await page
+    .getByRole('button', { name: 'Submit request', exact: true })
+    .click();
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
   const ticketPath = new URL(page.url()).pathname;
   const chat = page.getByRole('region', { name: 'Support chat' });
   await expect(chat.getByText('With our team', { exact: true })).toBeVisible();
   await chat.getByText('How was this answered?', { exact: true }).click();
-  await expect(chat.getByText('1 internal document used.', { exact: true })).toBeVisible();
+  await expect(
+    chat.getByText('1 internal document used.', { exact: true }),
+  ).toBeVisible();
   expect(await page.content()).not.toContain(title);
   expect(await page.content()).not.toContain(phrase);
   const customerResponse = await page.request.get(ticketPath);
@@ -435,24 +458,46 @@ test('internal notes stay private while an agent checks, edits and approves a dr
   await expect(trail.getByRole('heading', { name: title })).toBeVisible();
   await expect(trail.getByText('Internal', { exact: true })).toBeVisible();
   await page.getByRole('textbox', { name: 'Reply', exact: true }).fill(phrase);
-  await expect(page.getByRole('alert').filter({ hasText: 'Internal text copied' })).toBeVisible();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Internal text copied' }),
+  ).toBeVisible();
   await expect(page.locator('.internal-copy-warning mark')).toHaveText(phrase);
-  await page.getByRole('button', { name: 'Approve in-app reply', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Approve in-app reply', exact: true })
+    .click();
   await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
   await expect(page.locator('.internal-copy-warning mark')).toHaveText(phrase);
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.screenshot({ path: 'test-results/internal-note-desktop.png', fullPage: true });
+  await page.screenshot({
+    path: 'test-results/internal-note-desktop.png',
+    fullPage: true,
+  });
   await page.setViewportSize({ width: 390, height: 844 });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/internal-note-phone.png', fullPage: true });
-  await page.getByRole('textbox', { name: 'Reply', exact: true }).fill('Please restart Tunely and try playback again.');
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: 'test-results/internal-note-phone.png',
+    fullPage: true,
+  });
+  await page
+    .getByRole('textbox', { name: 'Reply', exact: true })
+    .fill('Please restart Tunely and try playback again.');
   await expect(page.locator('.internal-copy-warning')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Approve in-app reply', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Approve in-app reply', exact: true })
+    .click();
   await expect(page).not.toHaveURL(new RegExp(`${ticketPath}$`));
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Support chat' })).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Support chat' }),
+  ).toBeVisible();
   await page.goto(ticketPath);
-  await expect(chat.getByRole('article', { name: 'Tunely reply' })).toContainText('Please restart Tunely');
+  await expect(
+    chat.getByRole('article', { name: 'Tunely reply' }),
+  ).toContainText('Please restart Tunely');
   expect(await page.content()).not.toContain(title);
   expect(await page.content()).not.toContain(phrase);
 });
@@ -555,7 +600,11 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
   await expect(
     page.getByRole('heading', { name: 'Inviting teammates' }),
   ).toBeVisible();
-  await expect(page.getByRole('complementary', { name: 'How the AI decided' }).getByText('Help', { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole('complementary', { name: 'How the AI decided' })
+      .getByText('Help', { exact: true }),
+  ).toBeVisible();
   await page
     .getByRole('textbox', { name: 'Reply' })
     .fill('Please resend the invitations.');

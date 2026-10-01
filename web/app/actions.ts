@@ -104,14 +104,26 @@ export async function saveArticle(formData: FormData) {
 
 export async function checkDraft(id: string, reply: string) {
   const sessionId = (await cookies()).get('demo_session')?.value;
-  if (!sessionId || !/^\d+$/.test(id) || typeof reply !== 'string' || reply.length > 5000)
+  if (
+    !sessionId ||
+    !/^\d+$/.test(id) ||
+    typeof reply !== 'string' ||
+    reply.length > 5000
+  )
     throw new Error('Invalid draft check');
   return checkReply(id, sessionId, reply);
 }
 
-export type DraftReviewState = { reply: string; copies: InternalCopy[]; error?: string } | null;
+export type DraftReviewState = {
+  reply: string;
+  copies: InternalCopy[];
+  error?: string;
+} | null;
 
-export async function reviewCheckedRequest(_previous: DraftReviewState, formData: FormData): Promise<DraftReviewState> {
+export async function reviewCheckedRequest(
+  _previous: DraftReviewState,
+  formData: FormData,
+): Promise<DraftReviewState> {
   return performReview(formData);
 }
 

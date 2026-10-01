@@ -117,7 +117,10 @@ export function SupportChat({
                 <summary>How was this answered?</summary>
                 <p>{ticket.decision.reason}</p>
                 {!!ticket.decision.internal_count && (
-                  <p>{ticket.decision.internal_count} internal document{ticket.decision.internal_count === 1 ? '' : 's'} used.</p>
+                  <p>
+                    {ticket.decision.internal_count} internal document
+                    {ticket.decision.internal_count === 1 ? '' : 's'} used.
+                  </p>
                 )}
                 {ticket.decision.sources.map((source) => (
                   <article key={source.id}>

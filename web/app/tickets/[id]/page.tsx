@@ -163,16 +163,16 @@ export default async function TicketPage({
                     )}
                   <ReplyForm
                     key={`${ticket.draft.reply}-${ticket.history.length}`}
-                      ticketId={String(ticket.id)}
-                      initialCopies={ticket.draft.internal_copies ?? []}
-                      defaultValue={
-                        ticket.draft.state === 'saved' ||
-                        (ticket.draft.live && ticket.draft.state === 'reopened')
-                          ? ticket.draft.reply
-                          : ticket.draft.state === 'reopened'
-                            ? (ticket.approved_reply ?? '')
-                            : ''
-                      }
+                    ticketId={String(ticket.id)}
+                    initialCopies={ticket.draft.internal_copies ?? []}
+                    defaultValue={
+                      ticket.draft.state === 'saved' ||
+                      (ticket.draft.live && ticket.draft.state === 'reopened')
+                        ? ticket.draft.reply
+                        : ticket.draft.state === 'reopened'
+                          ? (ticket.approved_reply ?? '')
+                          : ''
+                    }
                   >
                     <label htmlFor="priority">Priority</label>
                     <select
@@ -235,21 +235,25 @@ export default async function TicketPage({
         {!ticket.draft && ticket.status !== 'resolved' && (
           <section className="draft">
             <h2>Write a replacement reply</h2>
-            <ReplyForm ticketId={String(ticket.id)} defaultValue="" initialCopies={[]}>
-            <label htmlFor="priority">Priority</label>
-            <select
-              id="priority"
-              name="priority"
-              defaultValue={ticket.priority}
+            <ReplyForm
+              ticketId={String(ticket.id)}
+              defaultValue=""
+              initialCopies={[]}
             >
-              <option value="low">Low</option>
-              <option value="normal">Normal</option>
-              <option value="high">High</option>
-            </select>
-            <ReviewButtons
-              showReject={false}
-              showAsk={ticket.status === 'open'}
-            />
+              <label htmlFor="priority">Priority</label>
+              <select
+                id="priority"
+                name="priority"
+                defaultValue={ticket.priority}
+              >
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+              </select>
+              <ReviewButtons
+                showReject={false}
+                showAsk={ticket.status === 'open'}
+              />
             </ReplyForm>
           </section>
         )}
@@ -302,7 +306,9 @@ export default async function TicketPage({
               (source) => (
                 <article key={source.id} id={`source-${source.id}`}>
                   <h4>{source.title}</h4>
-                  <span className="source-kind">{source.kind === 'internal_note' ? 'Internal' : 'Help'}</span>
+                  <span className="source-kind">
+                    {source.kind === 'internal_note' ? 'Internal' : 'Help'}
+                  </span>
                   <p>
                     {
                       (

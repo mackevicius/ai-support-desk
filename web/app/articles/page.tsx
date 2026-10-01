@@ -18,7 +18,9 @@ export default async function ArticlesPage() {
   return (
     <main className="workspace focus-view">
       <div className="detail articles-page">
-        <Link href="/" className="back">Back to inbox</Link>
+        <Link href="/" className="back">
+          Back to inbox
+        </Link>
         <h1>Help articles</h1>
         <section className="article-section" aria-labelledby="add-article">
           <h2 id="add-article">Add article</h2>
@@ -31,26 +33,64 @@ export default async function ArticlesPage() {
             <label htmlFor="new-title">Title</label>
             <Input id="new-title" name="title" required maxLength={200} />
             <label htmlFor="new-body">Content</label>
-            <Textarea id="new-body" name="body" required maxLength={5000} rows={4} />
+            <Textarea
+              id="new-body"
+              name="body"
+              required
+              maxLength={5000}
+              rows={4}
+            />
             <SubmitButton label="Add article" pendingLabel="Adding..." />
           </form>
         </section>
-        <section className="article-section" aria-labelledby="existing-articles">
+        <section
+          className="article-section"
+          aria-labelledby="existing-articles"
+        >
           <h2 id="existing-articles">Existing articles</h2>
           {articles.map((article) => (
-            <form key={`${article.id}-${article.title}-${article.body}-${article.retired}`} action={saveArticle} className="review-form article-editor">
+            <form
+              key={`${article.id}-${article.title}-${article.body}-${article.retired}`}
+              action={saveArticle}
+              className="review-form article-editor"
+            >
               <input type="hidden" name="id" value={article.id} />
               <label htmlFor={`kind-${article.id}`}>Document type</label>
-              <select id={`kind-${article.id}`} name="kind" defaultValue={article.kind}>
+              <select
+                id={`kind-${article.id}`}
+                name="kind"
+                defaultValue={article.kind}
+              >
                 <option value="help_article">Help article</option>
                 <option value="internal_note">Internal note</option>
               </select>
               <label htmlFor={`title-${article.id}`}>Title</label>
-              <Input id={`title-${article.id}`} name="title" defaultValue={article.title} required maxLength={200} />
+              <Input
+                id={`title-${article.id}`}
+                name="title"
+                defaultValue={article.title}
+                required
+                maxLength={200}
+              />
               <label htmlFor={`body-${article.id}`}>Content</label>
-              <Textarea id={`body-${article.id}`} name="body" defaultValue={article.body} required maxLength={5000} rows={4} />
-              <label className="article-status" htmlFor={`retired-${article.id}`}>
-                <input id={`retired-${article.id}`} type="checkbox" name="retired" defaultChecked={article.retired} />
+              <Textarea
+                id={`body-${article.id}`}
+                name="body"
+                defaultValue={article.body}
+                required
+                maxLength={5000}
+                rows={4}
+              />
+              <label
+                className="article-status"
+                htmlFor={`retired-${article.id}`}
+              >
+                <input
+                  id={`retired-${article.id}`}
+                  type="checkbox"
+                  name="retired"
+                  defaultChecked={article.retired}
+                />
                 Retired (excluded from new drafts)
               </label>
               <SubmitButton label="Save article" pendingLabel="Saving..." />

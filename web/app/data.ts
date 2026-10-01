@@ -41,7 +41,13 @@ export async function getHelpArticles(
 export async function saveHelpArticle(
   sessionId: string,
   ownerSession: string,
-  article: { id?: number; title: string; body: string; retired?: boolean; kind: 'help_article' | 'internal_note' },
+  article: {
+    id?: number;
+    title: string;
+    body: string;
+    retired?: boolean;
+    kind: 'help_article' | 'internal_note';
+  },
 ) {
   const response = await fetch(
     `${process.env.API_URL ?? 'http://localhost:3001'}/help-articles${article.id ? `/${article.id}` : ''}`,
@@ -87,13 +93,23 @@ export type Ticket = TicketSummary & {
 
 export type InternalCopy = { start: number; end: number; text: string };
 
-export async function checkReply(id: string, sessionId: string, reply: string): Promise<InternalCopy[]> {
-  const response = await fetch(`${process.env.API_URL ?? 'http://localhost:3001'}/tickets/${encodeURIComponent(id)}/check`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', cookie: `demo_session=${sessionId}` },
-    body: JSON.stringify({ reply }),
-    cache: 'no-store',
-  });
+export async function checkReply(
+  id: string,
+  sessionId: string,
+  reply: string,
+): Promise<InternalCopy[]> {
+  const response = await fetch(
+    `${process.env.API_URL ?? 'http://localhost:3001'}/tickets/${encodeURIComponent(id)}/check`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: `demo_session=${sessionId}`,
+      },
+      body: JSON.stringify({ reply }),
+      cache: 'no-store',
+    },
+  );
   if (!response.ok) throw new Error('Could not check internal text');
   return response.json();
 }
@@ -196,13 +212,19 @@ export async function reviewTicket(
         'content-type': 'application/json',
         cookie: `demo_session=${sessionId}${ownerSession ? `; owner_session=${ownerSession}` : ''}`,
       },
-      body: JSON.stringify({ action, reply, priority, internal_confirmed: internalConfirmed?.trim() }),
+      body: JSON.stringify({
+        action,
+        reply,
+        priority,
+        internal_confirmed: internalConfirmed?.trim(),
+      }),
       cache: 'no-store',
     },
   );
   if (response.status === 409) {
     const result = await response.json();
-    if (Array.isArray(result.internal_copies)) return result.internal_copies as InternalCopy[];
+    if (Array.isArray(result.internal_copies))
+      return result.internal_copies as InternalCopy[];
   }
   if (!response.ok) throw new Error('Could not review the support request');
   return null;
