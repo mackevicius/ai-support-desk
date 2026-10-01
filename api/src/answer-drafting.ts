@@ -29,40 +29,49 @@ export function decide(
   const outcome =
     generated.error === 'paused'
       ? {
+          reason_code: 'paused',
           rule: 'Live allowance exhausted',
           reason: 'Live AI is paused for today',
         }
       : risky
         ? {
+            reason_code: 'risky',
             rule: 'Money or account security',
             reason:
               'A team member needs to check questions about money or account security.',
           }
         : internal || copied
           ? {
+              reason_code: 'internal_note',
               rule: 'Staff-only information',
               reason:
                 'The answer relies on information meant for Tunely staff.',
             }
           : !covered
             ? {
+                reason_code:
+                  generated.error ??
+                  (!draft?.sources.length ? 'knowledge_gap' : 'uncertain'),
                 rule: 'Weak help article coverage',
                 reason:
                   'There is not enough clear help article coverage to answer automatically.',
               }
             : draft?.requires_team !== false
               ? {
+                  reason_code: 'uncertain',
                   rule: 'Provider requested team review',
                   reason:
                     'A team member needs to check this question before we can answer.',
                 }
               : agentReview
                 ? {
+                    reason_code: 'agent_review',
                     rule: 'Agent review required',
                     reason:
                       'An agent requested a new draft; it needs approval before delivery.',
                   }
                 : {
+                    reason_code: 'well_supported',
                     rule: 'Clearly covered by public help articles',
                     reason:
                       'A help article clearly covers your question, and it does not need a team member to check it.',
@@ -109,12 +118,19 @@ async function recordDecision(
   ticketId: string,
   session: string,
   decision: ReturnType<typeof decide>,
+  sample = false,
 ) {
   const automatic = decision.kind === 'automatic_reply';
-  await database.query(
-    'UPDATE support_tickets SET status = $1, decision = $2 WHERE id = $3',
-    [automatic ? 'resolved' : 'open', JSON.stringify(decision), ticketId],
-  );
+  if (sample)
+    await database.query(
+      'UPDATE session_drafts SET decision = $1 WHERE ticket_id = $2 AND session_id = $3',
+      [JSON.stringify(decision), ticketId, session],
+    );
+  else
+    await database.query(
+      'UPDATE support_tickets SET status = $1, decision = $2 WHERE id = $3',
+      [automatic ? 'resolved' : 'open', JSON.stringify(decision), ticketId],
+    );
   await database.query(
     `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
      VALUES (nextval('ticket_event_ids'), $1, $2, $3, $4)`,
@@ -155,6 +171,7 @@ export async function redraftAnswer(
     review_state: string | null;
     priority: string;
     approved_reply: string | null;
+    is_sample?: boolean;
   },
   session: string,
   owner: boolean,
@@ -192,6 +209,7 @@ export async function redraftAnswer(
         ticket.id,
         session,
         decide(ticket.question, generated, true),
+        ticket.is_sample,
       );
     await client.query(
       `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)

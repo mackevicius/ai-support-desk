@@ -111,16 +111,22 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
        FROM saved_drafts d LEFT JOIN help_articles a ON a.id = d.article_id WHERE d.ticket_id = $1`,
       [id],
     );
-    const decision = ticket.rows[0].decision
+    let decision = ticket.rows[0].decision
       ? JSON.parse(ticket.rows[0].decision)
       : null;
     const live =
       owner || decision
         ? await pool.query(
-            'SELECT reply, suggested_priority, source_ids, source_articles, internal_copies FROM session_drafts WHERE ticket_id = $1 AND session_id = $2',
+            'SELECT reply, suggested_priority, source_ids, source_articles, internal_copies, decision FROM session_drafts WHERE ticket_id = $1 AND session_id = $2',
             [id, session],
           )
         : { rows: [] };
+    const originalDecision = decision;
+    if (live.rows[0]?.decision) decision = JSON.parse(live.rows[0].decision);
+    const privateArticles = await pool.query(
+      `SELECT id FROM visitor_help_articles WHERE session_id = $1 AND created_at > NOW() - INTERVAL '1 day'`,
+      [session],
+    );
     const articles = await pool.query(
       'SELECT id, title, body, kind FROM help_articles',
     );
@@ -174,6 +180,12 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     return {
       ...ticketFields,
       is_sample: ticketSession === null,
+      can_redraft:
+        owner ||
+        (ticketSession === null
+          ? originalDecision?.reason_code === 'knowledge_gap' &&
+            privateArticles.rows.length > 0
+          : Boolean(decision)),
       ...(decision
         ? { decision, live_ai: await liveAllowance(pool, session) }
         : {}),
@@ -309,6 +321,74 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     }
   });
 
+  app.get('/visitor/help-articles', async (request, response, next) => {
+    if (!/(?:^|;\s*)demo_seat=agent(?:;|$)/.test(request.headers.cookie ?? '')) {
+      response.sendStatus(403);
+      return;
+    }
+    try {
+      const articles = await pool.query(
+        `SELECT id, title, body, 'help_article' AS kind FROM visitor_help_articles
+         WHERE session_id = $1 AND created_at > NOW() - INTERVAL '1 day' ORDER BY id`,
+        [response.locals.session],
+      );
+      response.json(articles.rows);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/visitor/help-articles', async (request, response, next) => {
+    if (!/(?:^|;\s*)demo_seat=agent(?:;|$)/.test(request.headers.cookie ?? '')) {
+      response.sendStatus(403);
+      return;
+    }
+    if (
+      !validArticle(request.body) ||
+      (request.body.kind !== undefined && request.body.kind !== 'help_article')
+    ) {
+      response.status(400).json({
+        error: 'Enter a help article with a title up to 200 characters and content up to 5000 characters.',
+      });
+      return;
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        'INSERT INTO visitor_article_usage (session_id, articles) VALUES ($1, 0) ON CONFLICT (session_id) DO NOTHING',
+        [response.locals.session],
+      );
+      const allowance = await client.query(
+        'UPDATE visitor_article_usage SET articles = articles + 1 WHERE session_id = $1 AND articles < 5 RETURNING articles',
+        [response.locals.session],
+      );
+      if (!allowance.rows.length) {
+        await client.query('ROLLBACK');
+        response.status(429).json({
+          error: 'Your private copy has reached its five help article limit.',
+        });
+        return;
+      }
+      const article = await client.query(
+        `INSERT INTO visitor_help_articles (id, session_id, title, body)
+         VALUES (nextval('help_article_ids'), $1, $2, $3) RETURNING id, title, body, 'help_article' AS kind`,
+        [
+          response.locals.session,
+          request.body.title.trim(),
+          request.body.body.trim(),
+        ],
+      );
+      await client.query('COMMIT');
+      response.status(201).json(article.rows[0]);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      next(error);
+    } finally {
+      client.release();
+    }
+  });
+
   app.patch('/help-articles/:id', async (request, response, next) => {
     if (!isOwner(request.headers.cookie, response.locals.session)) {
       response.sendStatus(403);
@@ -350,13 +430,13 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       const ticket = await detail(
         request.params.id,
         response.locals.session,
-        true,
+        owner,
       );
       if (!ticket) {
         response.sendStatus(404);
         return;
       }
-      if (!owner && (ticket.is_sample || !ticket.decision)) {
+      if (!ticket.can_redraft) {
         response.sendStatus(403);
         return;
       }
@@ -397,6 +477,9 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
 
   app.get('/tickets', async (request, response, next) => {
     try {
+      await pool.query(
+        "DELETE FROM visitor_help_articles WHERE created_at <= NOW() - INTERVAL '1 day'",
+      );
       await pool.query(
         "DELETE FROM session_drafts WHERE created_at <= NOW() - INTERVAL '1 day'",
       );
@@ -537,6 +620,10 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       await client.query('DELETE FROM support_tickets WHERE session_id = $1', [
         response.locals.session,
       ]);
+      await client.query(
+        'DELETE FROM visitor_help_articles WHERE session_id = $1',
+        [response.locals.session],
+      );
       await client.query('COMMIT');
       response.sendStatus(204);
     } catch (error) {

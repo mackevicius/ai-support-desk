@@ -12,6 +12,7 @@ import {
   resetDemo,
   reviewTicket,
   saveHelpArticle,
+  saveVisitorHelpArticle,
   submitQuestion,
 } from './data';
 
@@ -100,6 +101,34 @@ export async function saveArticle(formData: FormData) {
     kind,
   });
   redirect('/articles');
+}
+
+export async function writeVisitorArticle(
+  _previous: string | null,
+  formData: FormData,
+): Promise<string | null> {
+  const jar = await cookies();
+  const sessionId = jar.get('demo_session')?.value;
+  const id = formData.get('id');
+  const title = formData.get('title');
+  const body = formData.get('body');
+  if (!sessionId || jar.get('demo_seat')?.value !== 'agent')
+    return 'Only the Agent seat can write help articles.';
+  if (
+    typeof id !== 'string' ||
+    !/^\d+$/.test(id) ||
+    typeof title !== 'string' ||
+    !title.trim() ||
+    title.length > 200 ||
+    typeof body !== 'string' ||
+    !body.trim() ||
+    body.length > 5000
+  ) {
+    return 'Enter a title up to 200 characters and content up to 5000 characters.';
+  }
+  const error = await saveVisitorHelpArticle(sessionId, { title, body });
+  if (error) return error;
+  redirect(`/tickets/${id}?article=saved`);
 }
 
 export async function checkDraft(id: string, reply: string) {

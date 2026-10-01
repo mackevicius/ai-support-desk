@@ -63,6 +63,14 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
       'visitor_generation_usage',
       'session_id text PRIMARY KEY, requests integer NOT NULL, created_at timestamptz NOT NULL DEFAULT NOW()',
     ],
+    [
+      'visitor_help_articles',
+      'id integer PRIMARY KEY, session_id text NOT NULL, title text NOT NULL, body text NOT NULL, created_at timestamptz NOT NULL DEFAULT NOW()',
+    ],
+    [
+      'visitor_article_usage',
+      'session_id text PRIMARY KEY, articles integer NOT NULL, created_at timestamptz NOT NULL DEFAULT NOW()',
+    ],
   ]) {
     try {
       await pool.query(`CREATE TABLE ${table} (${columns})`);
@@ -106,6 +114,9 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
   );
   await pool.query(
     'ALTER TABLE session_drafts ADD COLUMN IF NOT EXISTS internal_copies text',
+  );
+  await pool.query(
+    'ALTER TABLE session_drafts ADD COLUMN IF NOT EXISTS decision text',
   );
   await pool.query(
     "ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'help_article'",

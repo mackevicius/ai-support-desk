@@ -66,8 +66,10 @@ export async function saveHelpArticle(
 
 export type Ticket = TicketSummary & {
   is_sample: boolean;
+  can_redraft: boolean;
   decision?: {
     kind: 'automatic_reply' | 'hand_off';
+    reason_code?: string;
     reason: string;
     rule?: string;
     topic?: string;
@@ -93,6 +95,28 @@ export type Ticket = TicketSummary & {
 };
 
 export type InternalCopy = { start: number; end: number; text: string };
+
+export async function saveVisitorHelpArticle(
+  sessionId: string,
+  article: { title: string; body: string },
+) {
+  const response = await fetch(
+    `${process.env.API_URL ?? 'http://localhost:3001'}/visitor/help-articles`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: `demo_session=${sessionId}; demo_seat=agent`,
+      },
+      body: JSON.stringify(article),
+      cache: 'no-store',
+    },
+  );
+  if (response.ok) return null;
+  if (response.status === 400 || response.status === 429)
+    return (await response.json()).error as string;
+  return 'Could not save help article. Please try again.';
+}
 
 export async function checkReply(
   id: string,
