@@ -3,7 +3,12 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { Pool } from 'pg';
 import { draftAnswer, redraftAnswer } from './answer-drafting.js';
 import { liveAllowance } from './generation.js';
-import { embedDocument, embeddingModel, logEmbeddingUsage, type EmbeddingUsage } from './embeddings.js';
+import {
+  embedDocument,
+  embeddingModel,
+  logEmbeddingUsage,
+  type EmbeddingUsage,
+} from './embeddings.js';
 import {
   internalCopies,
   internalDocuments,
@@ -389,7 +394,13 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         });
         return;
       }
-      const vector = await embedDocument(client, request.body.title, request.body.body, response.locals.session, embeddingUsage);
+      const vector = await embedDocument(
+        client,
+        request.body.title,
+        request.body.body,
+        response.locals.session,
+        embeddingUsage,
+      );
       const article = await client.query(
         `INSERT INTO visitor_help_articles (id, session_id, title, body, embedding, embedding_model)
          VALUES (nextval('help_article_ids'), $1, $2, $3, $4, $5) RETURNING id, title, body, 'help_article' AS kind`,

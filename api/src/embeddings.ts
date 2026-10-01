@@ -25,22 +25,34 @@ export type EmbeddingUsage = {
   latency_ms: number;
 };
 
-export async function logEmbeddingUsage(pool: Pick<Pool, 'query'>, records: EmbeddingUsage[]) {
+export async function logEmbeddingUsage(
+  pool: Pick<Pool, 'query'>,
+  records: EmbeddingUsage[],
+) {
   for (const record of records) {
     try {
       await pool.query(
         'INSERT INTO embedding_usage (model, operation, session_id, cached, succeeded, latency_ms) VALUES ($1, $2, $3, $4, $5, $6)',
-        [record.model, record.operation, record.session, record.cached, record.succeeded, record.latency_ms],
+        [
+          record.model,
+          record.operation,
+          record.session,
+          record.cached,
+          record.succeeded,
+          record.latency_ms,
+        ],
       );
     } catch {
-      console.error(JSON.stringify({
-        event: 'embedding_usage_write_failed',
-        model: record.model,
-        operation: record.operation,
-        cached: record.cached,
-        succeeded: record.succeeded,
-        latency_ms: record.latency_ms,
-      }));
+      console.error(
+        JSON.stringify({
+          event: 'embedding_usage_write_failed',
+          model: record.model,
+          operation: record.operation,
+          cached: record.cached,
+          succeeded: record.succeeded,
+          latency_ms: record.latency_ms,
+        }),
+      );
     }
   }
 }
@@ -60,7 +72,9 @@ export async function embedText(
     if (!vector) {
       encoder ??= import('@huggingface/transformers')
         .then(({ pipeline, env }) => {
-          env.cacheDir = process.env.EMBEDDING_CACHE_DIR ?? join(tmpdir(), 'support-embeddings');
+          env.cacheDir =
+            process.env.EMBEDDING_CACHE_DIR ??
+            join(tmpdir(), 'support-embeddings');
           return pipeline('feature-extraction', embeddingModel, {
             dtype: 'q8',
             revision: saved.revision,
@@ -83,7 +97,14 @@ export async function embedText(
     succeeded = true;
     return vector;
   } finally {
-    const usage: EmbeddingUsage = { model: embeddingModel, operation, session, cached, succeeded, latency_ms: Math.round(performance.now() - started) };
+    const usage: EmbeddingUsage = {
+      model: embeddingModel,
+      operation,
+      session,
+      cached,
+      succeeded,
+      latency_ms: Math.round(performance.now() - started),
+    };
     if (deferredUsage) deferredUsage.push(usage);
     else await logEmbeddingUsage(pool, [usage]);
   }

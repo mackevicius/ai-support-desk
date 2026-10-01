@@ -10,51 +10,93 @@ import { close, listening, readJson, sendJson } from './helpers.js';
 
 const { pool, baseUrl } = await startInbox();
 
-test('private article embedding usage survives rollback and logging failures do not disrupt saves', { skip: !process.env.TEST_DATABASE_URL }, async (context) => {
-  const database = `support_usage_${randomUUID().replaceAll('-', '')}`;
-  const admin = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
-  await admin.query(`CREATE DATABASE ${database}`);
-  const url = new URL(process.env.TEST_DATABASE_URL!);
-  url.pathname = `/${database}`;
-  const isolated = new pg.Pool({ connectionString: url.toString(), max: 1 });
-  let server: Server | undefined;
-  try {
-    await prepareDatabase(isolated);
-    await isolated.query("CREATE FUNCTION fail_article_save() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected article write failure'; END $$");
-    await isolated.query('CREATE TRIGGER failed_save BEFORE INSERT ON visitor_help_articles FOR EACH ROW EXECUTE FUNCTION fail_article_save()');
-    server = createApp(isolated).listen(0);
-    const url = await listening(server);
-    const response = await fetch(`${url}/visitor/help-articles`, {
-      method: 'POST',
-      headers: { cookie: 'demo_seat=agent', 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Playlist transfer help', body: 'Use Settings > Music > Import to transfer song collections.' }),
+test(
+  'private article embedding usage survives rollback and logging failures do not disrupt saves',
+  { skip: !process.env.TEST_DATABASE_URL },
+  async (context) => {
+    const database = `support_usage_${randomUUID().replaceAll('-', '')}`;
+    const admin = new pg.Pool({
+      connectionString: process.env.TEST_DATABASE_URL,
     });
-    assert.equal(response.status, 500);
-    const usage = await isolated.query("SELECT succeeded FROM embedding_usage WHERE operation = 'document' AND session_id IS NOT NULL");
-    assert.deepEqual(usage.rows, [{ succeeded: true }]);
-    assert.equal((await isolated.query('SELECT id FROM visitor_help_articles')).rows.length, 0);
-    await isolated.query('DROP TRIGGER failed_save ON visitor_help_articles');
-    await isolated.query('CREATE TRIGGER failed_usage BEFORE INSERT ON embedding_usage FOR EACH ROW EXECUTE FUNCTION fail_article_save()');
-    const errors: string[] = [];
-    context.mock.method(console, 'error', (...messages: unknown[]) => errors.push(messages.join(' ')));
-    const saved = await fetch(`${url}/visitor/help-articles`, {
-      method: 'POST',
-      headers: { cookie: 'demo_seat=agent', 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Playlist transfer help', body: 'Use Settings > Music > Import to transfer song collections.' }),
-    });
-    assert.equal(saved.status, 201);
-    await saved.json();
-    assert.equal((await isolated.query('SELECT id FROM visitor_help_articles')).rows.length, 1);
-    assert.ok(errors.some((entry) => JSON.parse(entry).event === 'embedding_usage_write_failed'));
-    assert.ok(errors.every((entry) => JSON.parse(entry).event !== 'api_error'));
-    assert.ok(!errors.join(' ').includes('Playlist transfer help'));
-  } finally {
-    if (server) await close(server);
-    await isolated.end();
-    await admin.query(`DROP DATABASE ${database}`);
-    await admin.end();
-  }
-});
+    await admin.query(`CREATE DATABASE ${database}`);
+    const url = new URL(process.env.TEST_DATABASE_URL!);
+    url.pathname = `/${database}`;
+    const isolated = new pg.Pool({ connectionString: url.toString(), max: 1 });
+    let server: Server | undefined;
+    try {
+      await prepareDatabase(isolated);
+      await isolated.query(
+        "CREATE FUNCTION fail_article_save() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected article write failure'; END $$",
+      );
+      await isolated.query(
+        'CREATE TRIGGER failed_save BEFORE INSERT ON visitor_help_articles FOR EACH ROW EXECUTE FUNCTION fail_article_save()',
+      );
+      server = createApp(isolated).listen(0);
+      const url = await listening(server);
+      const response = await fetch(`${url}/visitor/help-articles`, {
+        method: 'POST',
+        headers: {
+          cookie: 'demo_seat=agent',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: 'Playlist transfer help',
+          body: 'Use Settings > Music > Import to transfer song collections.',
+        }),
+      });
+      assert.equal(response.status, 500);
+      const usage = await isolated.query(
+        "SELECT succeeded FROM embedding_usage WHERE operation = 'document' AND session_id IS NOT NULL",
+      );
+      assert.deepEqual(usage.rows, [{ succeeded: true }]);
+      assert.equal(
+        (await isolated.query('SELECT id FROM visitor_help_articles')).rows
+          .length,
+        0,
+      );
+      await isolated.query('DROP TRIGGER failed_save ON visitor_help_articles');
+      await isolated.query(
+        'CREATE TRIGGER failed_usage BEFORE INSERT ON embedding_usage FOR EACH ROW EXECUTE FUNCTION fail_article_save()',
+      );
+      const errors: string[] = [];
+      context.mock.method(console, 'error', (...messages: unknown[]) =>
+        errors.push(messages.join(' ')),
+      );
+      const saved = await fetch(`${url}/visitor/help-articles`, {
+        method: 'POST',
+        headers: {
+          cookie: 'demo_seat=agent',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: 'Playlist transfer help',
+          body: 'Use Settings > Music > Import to transfer song collections.',
+        }),
+      });
+      assert.equal(saved.status, 201);
+      await saved.json();
+      assert.equal(
+        (await isolated.query('SELECT id FROM visitor_help_articles')).rows
+          .length,
+        1,
+      );
+      assert.ok(
+        errors.some(
+          (entry) => JSON.parse(entry).event === 'embedding_usage_write_failed',
+        ),
+      );
+      assert.ok(
+        errors.every((entry) => JSON.parse(entry).event !== 'api_error'),
+      );
+      assert.ok(!errors.join(' ').includes('Playlist transfer help'));
+    } finally {
+      if (server) await close(server);
+      await isolated.end();
+      await admin.query(`DROP DATABASE ${database}`);
+      await admin.end();
+    }
+  },
+);
 
 test('private article embeddings and question embeddings reach drafting only in their own session', async () => {
   const cookie = (await fetch(`${baseUrl}/tickets`)).headers
