@@ -7,15 +7,16 @@ import { getQualityReport } from './report';
 export default async function QualityPage({
   searchParams,
 }: {
-  searchParams: Promise<{ run?: string }>;
+  searchParams: Promise<{ run?: string; view?: string }>;
 }) {
   const jar = await cookies();
   const session = jar.get('demo_session')?.value;
   const owner = jar.get('owner_session')?.value;
   if (!session || !owner || !(await getHelpArticles(session, owner)))
     redirect('/owner');
-  const { run } = await searchParams;
-  const report = await getQualityReport(run);
+  const { run, view } = await searchParams;
+  const retrievalView = view === 'retrieval';
+  const report = await getQualityReport(retrievalView ? undefined : run);
 
   return (
     <main className="workspace focus-view">
@@ -24,34 +25,86 @@ export default async function QualityPage({
           Back to inbox
         </Link>
         <h1>Answer quality</h1>
-        <nav className="quality-tabs" aria-label="Evaluation runs">
+        <nav className="quality-tabs" aria-label="Quality checks">
           <Link
-            href="/quality"
-            aria-current={run === 'live' ? undefined : 'page'}
+            href="/quality?view=retrieval"
+            aria-current={retrievalView ? 'page' : undefined}
           >
-            Deterministic
+            Document retrieval
           </Link>
           <Link
-            href="/quality?run=live"
-            aria-current={run === 'live' ? 'page' : undefined}
+            href={`/quality${run === 'live' ? '?run=live' : ''}`}
+            aria-current={retrievalView ? undefined : 'page'}
           >
-            Live
+            Answer checks
           </Link>
         </nav>
+        {!retrievalView && (
+          <nav className="quality-tabs" aria-label="Evaluation runs">
+            <Link
+              href="/quality"
+              aria-current={run === 'live' ? undefined : 'page'}
+            >
+              Deterministic
+            </Link>
+            <Link
+              href="/quality?run=live"
+              aria-current={run === 'live' ? 'page' : undefined}
+            >
+              Live
+            </Link>
+          </nav>
+        )}
         {report ? (
           <>
-            <p className="quality-meta">
-              {report.dataset_version} · {report.model} · {report.mode}
-            </p>
-            <p className="quality-summary">
-              {
-                report.cases.filter((item) =>
-                  Object.values(item.checks).every(Boolean),
-                ).length
-              }{' '}
-              of {report.cases.length} cases pass
-            </p>
-            {report.retrieval && (
+            {!retrievalView && (
+              <section aria-labelledby="answer-checks-heading">
+                <h2 id="answer-checks-heading">Answer checks</h2>
+                <p className="quality-meta">
+                  {report.dataset_version} · {report.model} · {report.mode}
+                </p>
+                <p className="quality-summary">
+                  {
+                    report.cases.filter((item) =>
+                      Object.values(item.checks).every(Boolean),
+                    ).length
+                  }{' '}
+                  of {report.cases.length} cases pass
+                </p>
+                <div className="quality-list">
+                  {report.cases.map((item) => {
+                    const passed = Object.values(item.checks).every(Boolean);
+                    return (
+                      <Link
+                        className="quality-case"
+                        href={`/quality/${item.id}${run === 'live' ? '?run=live' : ''}`}
+                        key={item.id}
+                      >
+                        <span className="quality-case-top">
+                          <strong>{item.id}</strong>
+                          <span
+                            className={passed ? 'quality-pass' : 'quality-fail'}
+                          >
+                            {passed ? 'Pass' : 'Fail'}
+                          </span>
+                        </span>
+                        <span>{item.question}</span>
+                        <small>{item.categories.join(' · ')}</small>
+                        <span className="quality-checks">
+                          {Object.entries(item.checks)
+                            .map(
+                              ([name, ok]) =>
+                                `${name}: ${ok ? 'pass' : 'fail'}`,
+                            )
+                            .join(' · ')}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+            {retrievalView && report.retrieval && (
               <section aria-labelledby="retrieval-heading">
                 <h2 id="retrieval-heading">Document retrieval</h2>
                 <p className="quality-meta">
@@ -89,34 +142,6 @@ export default async function QualityPage({
                 </div>
               </section>
             )}
-            <div className="quality-list">
-              {report.cases.map((item) => {
-                const passed = Object.values(item.checks).every(Boolean);
-                return (
-                  <Link
-                    className="quality-case"
-                    href={`/quality/${item.id}${run === 'live' ? '?run=live' : ''}`}
-                    key={item.id}
-                  >
-                    <span className="quality-case-top">
-                      <strong>{item.id}</strong>
-                      <span
-                        className={passed ? 'quality-pass' : 'quality-fail'}
-                      >
-                        {passed ? 'Pass' : 'Fail'}
-                      </span>
-                    </span>
-                    <span>{item.question}</span>
-                    <small>{item.categories.join(' · ')}</small>
-                    <span className="quality-checks">
-                      {Object.entries(item.checks)
-                        .map(([name, ok]) => `${name}: ${ok ? 'pass' : 'fail'}`)
-                        .join(' · ')}
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
           </>
         ) : (
           <p>
