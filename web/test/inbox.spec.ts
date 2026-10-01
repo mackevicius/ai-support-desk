@@ -693,9 +693,25 @@ test('review actions stay disabled while approval is in flight', async ({
   });
   let requests = 0;
   await page.route('**/tickets/1', async (route) => {
-    if (route.request().method() === 'POST') {
-      requests += 1;
-      await heldRequest;
+    const request = route.request();
+    const contentType = request.headers()['content-type'] ?? '';
+    if (
+      request.method() === 'POST' &&
+      contentType.startsWith('multipart/form-data')
+    ) {
+      const formData = await new Response(
+        new Uint8Array(request.postDataBuffer() ?? []),
+        { headers: { 'content-type': contentType } },
+      ).formData();
+      const isReview = Array.from(formData.entries()).some(
+        ([name, value]) =>
+          (name === 'action' || name.endsWith('_action')) &&
+          ['approve', 'reject', 'ask'].includes(String(value)),
+      );
+      if (isReview) {
+        requests += 1;
+        await heldRequest;
+      }
     }
     await route.continue();
   });
