@@ -1,0 +1,42 @@
+[
+  {
+    "id": "family",
+    "question": "How can I invite family members?",
+    "expected_id": 1
+  },
+  {
+    "id": "invoices",
+    "question": "Where can I download invoices?",
+    "expected_id": 2
+  },
+  {
+    "id": "playback",
+    "question": "Music stops playing. What should I try?",
+    "expected_id": 3
+  },
+  {
+    "id": "profile",
+    "question": "How do I change my display name?",
+    "expected_id": 4
+  },
+  {
+    "id": "offline",
+    "question": "How can I download albums for offline listening?",
+    "expected_id": 5
+  },
+  {
+    "id": "security",
+    "question": "How do I enable two-factor authentication?",
+    "expected_id": 9
+  },
+  {
+    "id": "cancel",
+    "question": "How can I cancel my paid plan?",
+    "expected_id": 11
+  },
+  {
+    "id": "semantic-paraphrase",
+    "question": "Terminate subscription",
+    "expected_id": 11
+  }
+]

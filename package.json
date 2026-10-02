@@ -5,6 +5,9 @@
     "api",
     "web"
   ],
+  "overrides": {
+    "sharp": "0.35.4"
+  },
   "scripts": {
     "typecheck": "npm run typecheck --workspace api && npm run typecheck --workspace web",
     "test": "npm test --workspace api && npm test --workspace web && python3 -m unittest discover -s ai -p 'test_*.py'"

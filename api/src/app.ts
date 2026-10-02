@@ -4,6 +4,12 @@ import type { Pool } from 'pg';
 import { draftAnswer, redraftAnswer } from './answer-drafting.js';
 import { liveAllowance } from './generation.js';
 import {
+  embedDocument,
+  embeddingModel,
+  logEmbeddingUsage,
+  type EmbeddingUsage,
+} from './embeddings.js';
+import {
   internalCopies,
   internalDocuments,
   sourceKind,
@@ -290,7 +296,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     }
     try {
       const articles = await pool.query(
-        'SELECT id, title, body, retired, kind FROM help_articles ORDER BY id',
+        'SELECT id, title, body, retired, kind, embedding, embedding_model FROM help_articles ORDER BY id',
       );
       response.json(articles.rows);
     } catch (error) {
@@ -311,9 +317,21 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     }
     const { title, body, kind = 'help_article' } = request.body;
     try {
+      const vector = await embedDocument(
+        pool,
+        title,
+        body,
+        response.locals.session,
+      );
       const article = await pool.query(
-        "INSERT INTO help_articles (id, title, body, kind) VALUES (nextval('help_article_ids'), $1, $2, $3) RETURNING id, title, body, retired, kind",
-        [title.trim(), body.trim(), kind],
+        "INSERT INTO help_articles (id, title, body, kind, embedding, embedding_model) VALUES (nextval('help_article_ids'), $1, $2, $3, $4, $5) RETURNING id, title, body, retired, kind",
+        [
+          title.trim(),
+          body.trim(),
+          kind,
+          JSON.stringify(vector),
+          embeddingModel,
+        ],
       );
       response.status(201).json(article.rows[0]);
     } catch (error) {
@@ -357,6 +375,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       });
       return;
     }
+    const embeddingUsage: EmbeddingUsage[] = [];
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -375,13 +394,22 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         });
         return;
       }
+      const vector = await embedDocument(
+        client,
+        request.body.title,
+        request.body.body,
+        response.locals.session,
+        embeddingUsage,
+      );
       const article = await client.query(
-        `INSERT INTO visitor_help_articles (id, session_id, title, body)
-         VALUES (nextval('help_article_ids'), $1, $2, $3) RETURNING id, title, body, 'help_article' AS kind`,
+        `INSERT INTO visitor_help_articles (id, session_id, title, body, embedding, embedding_model)
+         VALUES (nextval('help_article_ids'), $1, $2, $3, $4, $5) RETURNING id, title, body, 'help_article' AS kind`,
         [
           response.locals.session,
           request.body.title.trim(),
           request.body.body.trim(),
+          JSON.stringify(vector),
+          embeddingModel,
         ],
       );
       await client.query('COMMIT');
@@ -391,6 +419,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       next(error);
     } finally {
       client.release();
+      await logEmbeddingUsage(pool, embeddingUsage);
     }
   });
 
@@ -411,9 +440,23 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     }
     const { title, body, retired, kind } = request.body;
     try {
+      const vector = await embedDocument(
+        pool,
+        title,
+        body,
+        response.locals.session,
+      );
       const article = await pool.query(
-        'UPDATE help_articles SET title = $1, body = $2, retired = $3, kind = COALESCE($5, kind) WHERE id = $4 RETURNING id, title, body, retired, kind',
-        [title.trim(), body.trim(), retired, request.params.id, kind ?? null],
+        'UPDATE help_articles SET title = $1, body = $2, retired = $3, kind = COALESCE($5, kind), embedding = $6, embedding_model = $7 WHERE id = $4 RETURNING id, title, body, retired, kind',
+        [
+          title.trim(),
+          body.trim(),
+          retired,
+          request.params.id,
+          kind ?? null,
+          JSON.stringify(vector),
+          embeddingModel,
+        ],
       );
       if (!article.rows.length) {
         response.sendStatus(404);

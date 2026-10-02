@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import { readFileSync } from 'node:fs';
 import { sourceKind } from './internal-copy.js';
+import { embedDocument, embeddingModel } from './embeddings.js';
 
 const starter = JSON.parse(
   readFileSync(new URL('../starter-data.json', import.meta.url), 'utf8'),
@@ -70,6 +71,10 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
     [
       'visitor_article_usage',
       'session_id text PRIMARY KEY, articles integer NOT NULL, created_at timestamptz NOT NULL DEFAULT NOW()',
+    ],
+    [
+      'embedding_usage',
+      'model text NOT NULL, operation text NOT NULL, session_id text, cached boolean NOT NULL, succeeded boolean NOT NULL, latency_ms integer NOT NULL, created_at timestamptz NOT NULL DEFAULT NOW()',
     ],
   ]) {
     try {
@@ -344,4 +349,23 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
     await pool.query('SELECT MAX(id) AS id FROM support_tickets')
   ).rows[0].id;
   await pool.query("SELECT setval('support_ticket_ids', $1)", [maximum]);
+  for (const table of ['help_articles', 'visitor_help_articles']) {
+    await pool.query(
+      `ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS embedding jsonb`,
+    );
+    await pool.query(
+      `ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS embedding_model text`,
+    );
+    const missing = await pool.query(
+      `SELECT id, title, body FROM ${table} WHERE embedding IS NULL OR embedding_model IS NULL OR embedding_model <> $1`,
+      [embeddingModel],
+    );
+    for (const article of missing.rows) {
+      const vector = await embedDocument(pool, article.title, article.body);
+      await pool.query(
+        `UPDATE ${table} SET embedding = $1, embedding_model = $2 WHERE id = $3`,
+        [JSON.stringify(vector), embeddingModel, article.id],
+      );
+    }
+  }
 }
