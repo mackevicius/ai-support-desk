@@ -6,7 +6,9 @@ from pathlib import Path
 
 
 STOP_WORDS = {'a', 'an', 'and', 'are', 'can', 'do', 'find', 'for', 'from', 'how', 'i', 'in', 'is', 'my', 'of', 'please', 'the', 'to', 'under', 'what', 'where', 'you', 'your'}
-ROOT = Path(__file__).parent.parent / 'api'
+ROOT = Path(__file__).with_name('evaluation-data')
+if not ROOT.is_dir():
+    ROOT = Path(__file__).parent.parent / 'api'
 
 
 @lru_cache(maxsize=1)

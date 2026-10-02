@@ -1,5 +1,42 @@
 import { expect, test } from '@playwright/test';
 
+test('visitors inspect saved quality results and known failures without signing in', async ({ page }) => {
+  await page.goto('/quality');
+  await expect(page.getByRole('heading', { name: 'Answer quality', exact: true })).toBeVisible();
+  await expect(page.getByText(/tunely-support-v3/)).toBeVisible();
+  await expect(page.getByText(/2026-10-02/)).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Hand-off accuracy' })).toContainText('6 of 6');
+  await expect(page.getByRole('region', { name: 'Internal-note leak attempts' })).toContainText('3 of 3');
+  await expect(page.getByRole('button', { name: 'Run live evaluation' })).toHaveCount(0);
+  for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/quality-${viewport.width}.png`, fullPage: true });
+  }
+  await page.getByRole('link', { name: /known-failure/ }).click();
+  await expect(page.getByRole('heading', { name: 'Known Failure', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Actual answer', exact: true })).toBeVisible();
+  await page.goto('/quality?view=retrieval');
+  await expect(page.getByText(/Word matching: 7\/8/)).toBeVisible();
+  await expect(page.getByText(/Embeddings: 8\/8/)).toBeVisible();
+  for (const path of ['/', '/tickets/1', '/owner', '/quality', '/quality/known-failure', '/how-it-works']) {
+    await page.goto(path);
+    const strip = page.getByRole('navigation', { name: 'Portfolio' });
+    await expect(strip.getByRole('link', { name: 'How it works' })).toBeVisible();
+    await expect(strip.getByRole('link', { name: 'Answer quality' })).toBeVisible();
+  }
+  await expect(page.getByRole('heading', { name: 'Architecture', exact: true })).toBeVisible();
+  await expect(page.getByText(/^Vercel runs/)).toBeVisible();
+  await expect(page.getByText(/^Docker Compose/)).toBeVisible();
+  await expect(page.getByRole('link', { name: /Automatic replies and hand-off/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Vercel and Kubernetes/ })).toBeVisible();
+  for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/how-it-works-${viewport.width}.png`, fullPage: true });
+  }
+});
+
 test('an agent fills the saved knowledge gap with a private help article and redrafts with its citation', async ({
   page,
   browser,
@@ -455,20 +492,26 @@ test('uncovered questions hand off and exhausted visitors still start conversati
   ).toBeVisible();
 });
 
-test('owner inspects quality failures and guests cannot open the quality view', async ({
+test('only the owner starts a live evaluation while saved results stay public', async ({
   page,
 }) => {
-  await page.goto('/quality');
+  await page.goto('/owner');
   await expect(
     page.getByRole('heading', { name: 'Owner sign in' }),
   ).toBeVisible();
   await page.getByLabel('Password').fill('test-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
   await page.getByRole('link', { name: 'Answer quality' }).click();
   await expect(
     page.getByRole('heading', { name: 'Answer quality' }),
   ).toBeVisible();
-  await expect(page.getByText('tunely-support-v2')).toBeVisible();
+  await expect(page.getByText(/tunely-support-v3/)).toBeVisible();
+  await page.getByRole('button', { name: 'Run live evaluation', exact: true }).click();
+  await expect(page).toHaveURL(/\/quality\?run=live$/);
+  await expect(page.getByText(/^Saved live provider results/)).toBeVisible();
+  await expect(page.getByText(/tunely-support-v3 · gpt-4o-mini · live/)).toBeVisible();
+  await page.getByRole('link', { name: 'Deterministic', exact: true }).click();
   for (const name of [
     'internal-direct-leak',
     'internal-uncited-leak',
@@ -510,8 +553,11 @@ test('owner inspects quality failures and guests cannot open the quality view', 
   await expect(page.getByRole('link', { name: 'Owner sign in' })).toBeVisible();
   await page.goto('/quality/known-failure');
   await expect(
-    page.getByRole('heading', { name: 'Owner sign in' }),
+    page.getByRole('heading', { name: 'Known Failure', exact: true }),
   ).toBeVisible();
+  await page.goto('/quality?run=live');
+  await expect(page.getByText(/^Saved live provider results/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Run live evaluation' })).toHaveCount(0);
 });
 
 test('owner manages help articles while visitors cannot open the editor', async ({

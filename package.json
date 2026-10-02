@@ -9,6 +9,7 @@
     "sharp": "0.35.4"
   },
   "scripts": {
+    "quality:snapshot": "python3 ai/evaluation.py --deterministic --output web/app/quality/results.json && node --import tsx api/scripts/score-quality.ts web/app/quality/results.json",
     "typecheck": "npm run typecheck --workspace api && npm run typecheck --workspace web",
     "test": "npm test --workspace api && npm test --workspace web && python3 -m unittest discover -s ai -p 'test_*.py'"
   }

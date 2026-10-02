@@ -28,7 +28,7 @@ export default async function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
       </head>
       <body data-seat={seat} className={seat}>
-        <div className="demo-strip">Portfolio demo · <Link href="/how-it-works">How it works</Link></div>
+        <nav className="demo-strip" aria-label="Portfolio">Portfolio demo · <Link href="/how-it-works">How it works</Link> · <Link href="/quality">Answer quality</Link></nav>
         <header className="topbar">
           <Link href="/" className="brand">
             <span className="brandmark">T</span>
@@ -40,7 +40,6 @@ export default async function RootLayout({
           {owner ? (
             <>
               <Link href="/articles" className="owner-link">Help articles</Link>
-              <Link href="/quality" className="owner-link">Answer quality</Link>
               <form action={signOutOwner}><Button variant="secondary" className="owner-link">Sign out</Button></form>
             </>
           ) : (

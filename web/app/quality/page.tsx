@@ -1,22 +1,24 @@
 import Link from 'next/link';
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
 import { getHelpArticles } from '../data';
+import { runQualityEvaluation } from '../actions';
+import { SubmitButton } from '../_components/submit-button';
 import { getQualityReport } from './report';
 
 export default async function QualityPage({
   searchParams,
 }: {
-  searchParams: Promise<{ run?: string; view?: string }>;
+  searchParams: Promise<{ run?: string; view?: string; evaluation?: string }>;
 }) {
+  const { run, view, evaluation } = await searchParams;
+  const retrievalView = view === 'retrieval';
+  const report = await getQualityReport(retrievalView ? undefined : run);
   const jar = await cookies();
   const session = jar.get('demo_session')?.value;
   const owner = jar.get('owner_session')?.value;
-  if (!session || !owner || !(await getHelpArticles(session, owner)))
-    redirect('/owner');
-  const { run, view } = await searchParams;
-  const retrievalView = view === 'retrieval';
-  const report = await getQualityReport(retrievalView ? undefined : run);
+  const canRun = Boolean(session && owner && await getHelpArticles(session, owner));
+  const leaks = report?.cases.filter((item) => item.categories.includes('internal leak attempt')) ?? [];
+  const failures = report?.cases.filter((item) => !Object.values(item.checks).every(Boolean)) ?? [];
 
   return (
     <main className="workspace focus-view">
@@ -25,6 +27,12 @@ export default async function QualityPage({
           Back to inbox
         </Link>
         <h1>Answer quality</h1>
+        <p>Measured checks on a small fictional dataset, not evidence of real users or production scale.</p>
+        {canRun && <form action={runQualityEvaluation} className="quality-run">
+          <SubmitButton label="Run live evaluation" pendingLabel="Running evaluation..." />
+          <small>Paid provider calls. Reserves 20 requests from the shared daily allowance.</small>
+        </form>}
+        {evaluation && <p role="alert">{evaluation === 'limit' ? 'Live AI is paused for today.' : 'Live evaluation is unavailable. Previously saved results are unchanged.'}</p>}
         <nav className="quality-tabs" aria-label="Quality checks">
           <Link
             href="/quality?view=retrieval"
@@ -61,8 +69,26 @@ export default async function QualityPage({
               <section aria-labelledby="answer-checks-heading">
                 <h2 id="answer-checks-heading">Answer checks</h2>
                 <p className="quality-meta">
-                  {report.dataset_version} · {report.model} · {report.mode}
+                  {report.dataset_version} · {report.model} · {report.mode} · <time dateTime={report.evaluated_at}>{report.evaluated_at?.slice(0, 10) ?? 'Date not recorded'}</time>
                 </p>
+                <p>{report.mode === 'deterministic' ? 'Fixture checks, not a live model run. Fixed provider replies exercise the generator and application hand-off rules.' : 'Saved live provider results, checked by the generator and application hand-off rules.'} Answer checks use word matching; the embedding comparison is measured separately.</p>
+                <div className="quality-metrics">
+                  <section aria-labelledby="hand-off-heading">
+                    <h2 id="hand-off-heading">Hand-off accuracy</h2>
+                    <p className="quality-summary">{report.hand_off ? `${report.hand_off.correct} of ${report.hand_off.total} decisions correct` : 'Not scored in this older report'}</p>
+                    <p>Safe automatic replies, money, account security, and internal notes.</p>
+                  </section>
+                  <section aria-labelledby="leak-heading">
+                    <h2 id="leak-heading">Internal-note leak attempts</h2>
+                    <p className="quality-summary">{leaks.filter((item) => item.checks['no internal phrase copied'] === true && item.checks['internal handoff'] === true && !item.error).length} of {leaks.length} attempts blocked</p>
+                    <p>Direct quotation, an omitted citation, and a prompt asking for staff-only text.</p>
+                  </section>
+                </div>
+                <section className="quality-section" aria-labelledby="failures-heading">
+                  <h2 id="failures-heading">Known failures</h2>
+                  {failures.length ? <p>{failures.map((item) => item.id).join(' · ')}</p> : <p>No failures recorded in these checks.</p>}
+                  <p>Exact example matching and word overlap cannot prove semantic correctness. The copy guard detects eight-word phrases, not every confidential paraphrase.</p>
+                </section>
                 <p className="quality-summary">
                   {
                     report.cases.filter((item) =>
@@ -108,11 +134,12 @@ export default async function QualityPage({
               <section aria-labelledby="retrieval-heading">
                 <h2 id="retrieval-heading">Document retrieval</h2>
                 <p className="quality-meta">
-                  {report.retrieval.model} · {report.retrieval.metric} · Using{' '}
+                  {report.dataset_version} · <time dateTime={report.evaluated_at}>{report.evaluated_at?.slice(0, 10) ?? 'Date not recorded'}</time> · {report.retrieval.model} · {report.retrieval.metric} · Using{' '}
                   {report.retrieval.selected_method === 'embeddings'
                     ? 'embeddings'
                     : 'word matching'}
                 </p>
+                <p>Eight saved questions against 20 fictional documents. A hit means the expected document appears in the first three matches, not that an answer is safe or correct.</p>
                 <p>
                   Word matching: {report.retrieval.word_matching.hits}/
                   {report.retrieval.word_matching.total} (
@@ -145,8 +172,7 @@ export default async function QualityPage({
           </>
         ) : (
           <p>
-            No live evaluation recorded. Run the live evaluation locally with a
-            provider key to inspect measured results.
+            No saved live evaluation is available. Fixture results remain available in the Deterministic view.
           </p>
         )}
       </div>
