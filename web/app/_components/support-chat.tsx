@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { resetWorkspace, submitRequest } from '../actions';
 import type { Ticket, TicketSummary } from '../data';
 import { Textarea } from '../../components/ui/textarea';
+import { Input } from '../../components/ui/input';
 import { SubmitButton } from './submit-button';
 import { AgentSeatButton } from './agent-seat-button';
 import { ChatBubble } from './chat-bubble';
@@ -40,11 +41,40 @@ export function SupportChat({
   tickets,
   ticket,
   allowance,
+  home = false,
 }: {
   tickets: TicketSummary[];
   ticket?: Ticket;
   allowance: { remaining: number; paused: boolean };
+  home?: boolean;
 }) {
+  if (home) {
+    return (
+      <section className="home-chat" aria-label="Support chat">
+        <header>
+          <h2>Tunely Support</h2>
+          <p>AI assistant · a person steps in when it matters · Live AI: {allowance.remaining} answers left today</p>
+        </header>
+        <div className="home-chat-messages">
+          <ChatBubble from="tunely">Hi! I'm Tunely Support. What's going wrong?</ChatBubble>
+          <div className="home-chat-examples">
+            {examples.map(([label, question]) => (
+              <form action={submitRequest} key={label}>
+                <input type="hidden" name="question" value={question} />
+                <SubmitButton label={label} pendingLabel="Asking..." variant="secondary" />
+              </form>
+            ))}
+          </div>
+          {allowance.paused && <p role="status" className="paused-notice">Live AI is paused for today</p>}
+        </div>
+        <form className="home-chat-composer" action={submitRequest}>
+          <label htmlFor="question" className="sr-only">New support request</label>
+          <Input id="question" name="question" required maxLength={5000} placeholder="Describe what's going wrong..." />
+          <SubmitButton label="Send" pendingLabel="Sending..." />
+        </form>
+      </section>
+    );
+  }
   const conversations = tickets;
   return (
     <div className="customer-panel">

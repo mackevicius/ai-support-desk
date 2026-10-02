@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import { signOutOwner } from './actions';
 import { getLiveAllowance } from './data';
 import { SeatSwitch } from './_components/seat-switch';
+import { SiteNavigation } from './_components/site-navigation';
 import { Button } from '../components/ui/button';
 import './globals.css';
 
@@ -52,7 +53,7 @@ export default async function RootLayout({
               </span>
             )}
           </div>
-          <nav aria-label="Site">
+          <SiteNavigation seat={seat} owner={owner}>
             <Link href="/how-it-works">How it works</Link>
             <Link href="/quality">Quality</Link>
             {owner && <Link href="/articles">Articles</Link>}
@@ -65,7 +66,7 @@ export default async function RootLayout({
             ) : (
               <Link href="/owner" className="owner-link">Owner sign in</Link>
             )}
-          </nav>
+          </SiteNavigation>
           <SeatSwitch seat={seat} />
         </header>
         {children}
