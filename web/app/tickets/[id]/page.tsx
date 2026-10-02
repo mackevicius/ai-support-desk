@@ -9,6 +9,12 @@ import { ReplyForm } from '../../_components/reply-editor';
 import { SupportChat } from '../../_components/support-chat';
 import { Queue } from '../../queue';
 import { HelpArticleForm } from '../../_components/help-article-form';
+import { ChatBubble } from '../../_components/chat-bubble';
+import {
+  StatusPill,
+  priorityTone,
+  ticketTone,
+} from '../../_components/status-pill';
 
 export default async function TicketPage({
   params,
@@ -59,34 +65,32 @@ export default async function TicketPage({
             <h1>{ticket.subject}</h1>
           </div>
           <div className="badges">
-            <span className={`priority ${ticket.priority}`}>
+            <StatusPill tone={priorityTone(ticket.priority)}>
               {ticket.priority} priority
-            </span>
-            <span className="status">{ticket.status}</span>
+            </StatusPill>
+            <StatusPill tone={ticketTone(ticket.status)}>
+              {ticket.status}
+            </StatusPill>
           </div>
         </div>
-        <section
-          className="question chat-message customer-message"
-          aria-labelledby="question-title"
-        >
+        <section className="question" aria-labelledby="question-title">
           <h2 id="question-title">Customer question</h2>
-          <p>{ticket.question}</p>
+          <ChatBubble from="customer">{ticket.question}</ChatBubble>
         </section>
         {ticket.history
           .filter((event) =>
             event.description.startsWith('Team asked for details: '),
           )
           .map((event) => (
-            <article
+            <ChatBubble
               key={event.id}
-              className="chat-message tunely-message"
+              from="agent"
+              own
+              label="Tunely team"
               aria-label="Team question"
             >
-              <span>Tunely team</span>
-              <p>
-                {event.description.slice('Team asked for details: '.length)}
-              </p>
-            </article>
+              {event.description.slice('Team asked for details: '.length)}
+            </ChatBubble>
           ))}
         {generation && (
           <p role="alert" className="draft-notice">
@@ -222,10 +226,14 @@ export default async function TicketPage({
               </p>
             )}
             {ticket.approved_reply && (
-              <div className="approved-reply">
-                <h3>Approved in-app reply</h3>
-                <p>{ticket.approved_reply}</p>
-              </div>
+              <ChatBubble
+                from="agent"
+                own
+                label="Approved in-app reply"
+                className="my-5"
+              >
+                {ticket.approved_reply}
+              </ChatBubble>
             )}
             {ticket.status === 'resolved' && (
               <form action={reviewRequest}>
@@ -277,10 +285,14 @@ export default async function TicketPage({
           </section>
         )}
         {!ticket.draft && ticket.approved_reply && (
-          <section className="approved-reply">
-            <h2>Approved in-app reply</h2>
-            <p>{ticket.approved_reply}</p>
-          </section>
+          <ChatBubble
+            from="agent"
+            own
+            label="Approved in-app reply"
+            className="my-5"
+          >
+            {ticket.approved_reply}
+          </ChatBubble>
         )}
         <section className="history" aria-labelledby="history-title">
           <h2 id="history-title">History</h2>

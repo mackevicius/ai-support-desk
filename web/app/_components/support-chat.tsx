@@ -4,6 +4,27 @@ import type { Ticket, TicketSummary } from '../data';
 import { Textarea } from '../../components/ui/textarea';
 import { SubmitButton } from './submit-button';
 import { AgentSeatButton } from './agent-seat-button';
+import { ChatBubble } from './chat-bubble';
+import { StatusPill } from './status-pill';
+
+function CustomerStatus({
+  ticket,
+  className,
+}: {
+  ticket: TicketSummary;
+  className?: string;
+}) {
+  const answered = ticket.status === 'resolved';
+  return (
+    <StatusPill tone={answered ? 'ok' : 'team'} className={className}>
+      {answered
+        ? ticket.review_state === 'approved'
+          ? 'Replied by our team'
+          : 'Answered'
+        : 'With our team'}
+    </StatusPill>
+  );
+}
 
 const examples = [
   ['Offline downloads', 'How do I download music for offline listening?'],
@@ -42,13 +63,7 @@ export function SupportChat({
               aria-current={ticket?.id === item.id ? 'page' : undefined}
             >
               <strong>{item.subject}</strong>
-              <span>
-                {item.status === 'resolved'
-                  ? item.review_state === 'approved'
-                    ? 'Replied by our team'
-                    : 'Answered'
-                  : 'With our team'}
-              </span>
+              <CustomerStatus ticket={item} className="mt-1" />
             </Link>
           ))}
           {!conversations.length && <p>No conversations yet</p>}
@@ -65,55 +80,51 @@ export function SupportChat({
         <header className="chat-heading">
           <div>
             <h2>Tunely support</h2>
-            <span>
-              {ticket
-                ? ticket.status === 'resolved'
-                  ? ticket.review_state === 'approved'
-                    ? 'Replied by our team'
-                    : 'Answered'
-                  : 'With our team'
-                : 'New conversation'}
-            </span>
+            {ticket ? (
+              <CustomerStatus ticket={ticket} />
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                New conversation
+              </span>
+            )}
           </div>
-          <p>{allowance.remaining} live drafts left</p>
         </header>
         {ticket ? (
           <>
             <h1 className="chat-subject">{ticket.subject}</h1>
-            <div className="chat-message customer-message">
-              <span>You</span>
-              <p>{ticket.question}</p>
-            </div>
+            <ChatBubble from="customer" own aria-label="Your message">
+              {ticket.question}
+            </ChatBubble>
             {ticket.history
               .filter((event) =>
                 event.description.startsWith('Team asked for details: '),
               )
               .map((event) => (
-                <article
+                <ChatBubble
                   key={event.id}
-                  className="chat-message tunely-message"
+                  from="agent"
+                  label="Tunely team"
                   aria-label="Team question"
                 >
-                  <span>Tunely team</span>
-                  <p>
-                    {event.description.slice('Team asked for details: '.length)}
-                  </p>
-                </article>
+                  {event.description.slice('Team asked for details: '.length)}
+                </ChatBubble>
               ))}
-            <article
-              className="chat-message tunely-message"
-              aria-label="Tunely reply"
-            >
-              <span>Tunely</span>
+            <ChatBubble from="tunely" label="Tunely" aria-label="Tunely reply">
               <p>
                 {ticket.approved_reply ??
                   'A Tunely team member will reply soon'}
               </p>
-              {(ticket.decision?.paused || allowance.paused) && (
-                <p role="status">Live AI is paused for today</p>
+              {ticket.status !== 'resolved' && (
+                <div className="mt-2">
+                  <AgentSeatButton />
+                </div>
               )}
-              {ticket.status !== 'resolved' && <AgentSeatButton />}
-            </article>
+            </ChatBubble>
+            {(ticket.decision?.paused || allowance.paused) && (
+              <ChatBubble from="system" role="status">
+                Live AI is paused for today
+              </ChatBubble>
+            )}
             {ticket.decision && (
               <details className="answer-explanation">
                 <summary>How was this answered?</summary>

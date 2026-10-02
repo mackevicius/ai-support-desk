@@ -1,4 +1,73 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+async function expectShell(page: Page, drafts: number) {
+  await expect(page.getByText('Tunely is a fictional company')).toBeVisible();
+  const header = page.getByRole('banner');
+  await expect(
+    header.getByRole('link', { name: 'Tunely · music streaming' }),
+  ).toBeVisible();
+  await expect(
+    header.getByText(`${drafts} live drafts left`, { exact: true }),
+  ).toBeVisible();
+  await expect(header.getByRole('group', { name: 'Viewing as' })).toBeVisible();
+  await expect(
+    header.getByRole('link', { name: 'How it works', exact: true }),
+  ).toBeVisible();
+  await expect(
+    header.getByRole('link', { name: 'Quality', exact: true }),
+  ).toBeVisible();
+  const navigation = await header.getByRole('navigation', { name: 'Site' }).boundingBox();
+  expect(navigation).not.toBeNull();
+  expect(
+    Math.abs(navigation!.x + navigation!.width / 2 - page.viewportSize()!.width / 2),
+  ).toBeLessThan(2);
+}
+
+test('every page shares the prototype header and only the owner sees Articles', async ({
+  page,
+}) => {
+  for (const path of ['/', '/how-it-works', '/owner']) {
+    await page.goto(path);
+    await expectShell(page, 5);
+    await expect(
+      page.getByRole('banner').getByRole('link', { name: 'Articles' }),
+    ).toHaveCount(0);
+  }
+  await page.goto('/');
+  await page
+    .getByRole('textbox', { name: 'New support request' })
+    .fill('How do I download music for offline listening?');
+  await page
+    .getByRole('button', { name: 'Submit request', exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/tickets\/\d+$/);
+  await expectShell(page, 4);
+  await page.getByRole('button', { name: 'Agent', exact: true }).click();
+  await expect(
+    page.getByRole('article', { name: 'Request detail' }),
+  ).toBeVisible();
+  await expectShell(page, 4);
+  await page.getByRole('link', { name: 'Owner sign in' }).click();
+  await page.getByLabel('Password').fill('test-password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+  for (const path of ['/', '/articles', '/quality', '/how-it-works']) {
+    await page.goto(path);
+    await expectShell(page, 4);
+    await expect(
+      page
+        .getByRole('banner')
+        .getByRole('link', { name: 'Articles', exact: true }),
+    ).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+  }
+});
 
 test('an agent fills the saved knowledge gap with a private help article and redrafts with its citation', async ({
   page,
@@ -208,7 +277,9 @@ test('agent home opens the shared inbox workspace and seat switches keep the sel
   await expect(
     page.getByRole('article', { name: 'Request detail' }),
   ).toBeVisible();
-  await page.getByRole('link', { name: /^T Tunely/ }).click();
+  await page
+    .getByRole('link', { name: 'Tunely · music streaming', exact: true })
+    .click();
   await expect(page).toHaveURL(/\/tickets\/1$/);
 });
 
@@ -243,7 +314,7 @@ test('an agent edits a risky draft, asks for details and delivers a team reply',
   ).toContainText('Which dates were the two charges taken?');
   await page.getByRole('button', { name: 'Redraft', exact: true }).click();
   await expect(
-    page.getByText('3 live drafts left', { exact: true }),
+    page.getByRole('banner').getByText('3 live drafts left', { exact: true }),
   ).toBeVisible();
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.screenshot({
@@ -374,7 +445,9 @@ test('a customer gets a covered answer by keyboard and an example answer on a ph
       .getByRole('article', { name: 'Tunely reply' })
       .getByText(/Tunely paid plans include offline listening/),
   ).toBeVisible();
-  await expect(chat.getByText('4 live drafts left')).toBeVisible();
+  await expect(
+    page.getByRole('banner').getByText('4 live drafts left'),
+  ).toBeVisible();
   await chat.getByText('How was this answered?', { exact: true }).focus();
   await page.keyboard.press('Enter');
   await expect(
@@ -464,7 +537,7 @@ test('owner inspects quality failures and guests cannot open the quality view', 
   ).toBeVisible();
   await page.getByLabel('Password').fill('test-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await page.getByRole('link', { name: 'Answer quality' }).click();
+  await page.getByRole('link', { name: 'Quality', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'Answer quality' }),
   ).toBeVisible();
@@ -523,7 +596,7 @@ test('owner manages help articles while visitors cannot open the editor', async 
   ).toBeVisible();
   await page.getByLabel('Password').fill('test-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await page.getByRole('link', { name: 'Help articles' }).click();
+  await page.getByRole('link', { name: 'Articles', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'Help articles' }),
   ).toBeVisible();
@@ -578,7 +651,7 @@ test('internal notes stay private while an agent checks, edits and approves a dr
   await page.goto('/owner');
   await page.getByLabel('Password').fill('test-password');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await page.getByRole('link', { name: 'Help articles', exact: true }).click();
+  await page.getByRole('link', { name: 'Articles', exact: true }).click();
   const add = page.getByRole('region', { name: 'Add article' });
   await add.getByLabel('Document type').selectOption('internal_note');
   await add.getByLabel('Title').fill(title);

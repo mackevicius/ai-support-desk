@@ -1,6 +1,7 @@
 'use server';
 
 import { cookies } from 'next/headers';
+import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import {
   agentHomeTicket,
@@ -63,6 +64,7 @@ export async function generateRequest(formData: FormData) {
   if (typeof id !== 'string' || !/^\d+$/.test(id) || !sessionId)
     throw new Error('Invalid generation request');
   const status = await generateTicket(id, sessionId, ownerSession);
+  revalidatePath('/', 'layout');
   if (status !== 200)
     redirect(
       `/tickets/${id}?generation=${status === 429 ? 'limit' : 'unavailable'}`,
@@ -160,6 +162,7 @@ export async function resetWorkspace() {
   const sessionId = (await cookies()).get('demo_session')?.value;
   if (!sessionId) throw new Error('No visitor session');
   await resetDemo(sessionId);
+  revalidatePath('/', 'layout');
   redirect('/');
 }
 
@@ -175,6 +178,7 @@ export async function submitRequest(formData: FormData) {
   const sessionId = (await cookies()).get('demo_session')?.value;
   if (!sessionId) throw new Error('No visitor session');
   const id = await submitQuestion(question, sessionId);
+  revalidatePath('/', 'layout');
   redirect(`/tickets/${id}`);
 }
 

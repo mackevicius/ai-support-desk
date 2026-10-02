@@ -10,13 +10,19 @@ export function SeatSwitch({ seat }: { seat: 'customer' | 'agent' }) {
   const [pending, startTransition] = useTransition();
 
   return (
-    <div className="seat-switch" role="group" aria-label="Viewing as">
-      <span>Viewing as:</span>
+    <div
+      className="inline-flex items-center gap-0.5 rounded-full border border-input/60 p-0.75 text-[13px]"
+      role="group"
+      aria-label="Viewing as"
+    >
+      <span className="px-2 text-muted-foreground">Viewing as:</span>
       {(['customer', 'agent'] as const).map((option) => (
         <Button
           key={option}
           type="button"
-          variant="secondary"
+          variant="ghost"
+          size="sm"
+          className="h-auto rounded-full px-3 py-1.25 text-[13px] font-semibold aria-pressed:bg-primary aria-pressed:font-bold aria-pressed:text-primary-foreground"
           aria-pressed={seat === option}
           disabled={pending}
           onClick={() => {

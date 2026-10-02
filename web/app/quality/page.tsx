@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getHelpArticles } from '../data';
 import { getQualityReport } from './report';
+import { StatusPill } from '../_components/status-pill';
 
 export default async function QualityPage({
   searchParams,
@@ -82,11 +83,9 @@ export default async function QualityPage({
                       >
                         <span className="quality-case-top">
                           <strong>{item.id}</strong>
-                          <span
-                            className={passed ? 'quality-pass' : 'quality-fail'}
-                          >
+                          <StatusPill tone={passed ? 'ok' : 'alert'}>
                             {passed ? 'Pass' : 'Fail'}
-                          </span>
+                          </StatusPill>
                         </span>
                         <span>{item.question}</span>
                         <small>{item.categories.join(' · ')}</small>

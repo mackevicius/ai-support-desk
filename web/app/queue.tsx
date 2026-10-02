@@ -6,6 +6,7 @@ import Link from 'next/link';
 import type { TicketSummary } from './data';
 import { resetWorkspace } from './actions';
 import { SubmitButton } from './_components/submit-button';
+import { StatusPill, priorityTone, ticketTone } from './_components/status-pill';
 
 export function Queue({
   tickets,
@@ -57,10 +58,12 @@ export function Queue({
             </span>
             <span className="subject">{ticket.subject}</span>
             <span className="request-meta">
-              <span className={`priority ${ticket.priority}`}>
+              <StatusPill tone={priorityTone(ticket.priority)}>
                 {ticket.priority} priority
-              </span>
-              <span>{ticket.status}</span>
+              </StatusPill>
+              <StatusPill tone={ticketTone(ticket.status)}>
+                {ticket.status}
+              </StatusPill>
             </span>
           </Link>
         ))}
