@@ -1,8 +1,144 @@
 {
   "mode": "deterministic",
-  "dataset_version": "tunely-support-v2",
+  "dataset_version": "tunely-support-v3",
+  "evaluated_at": "2026-10-02T00:00:00+00:00",
   "model": "fixture provider (no model)",
   "cases": [
+    {
+      "id": "safe-automatic-reply",
+      "question": "How do I download music for offline listening?",
+      "categories": [
+        "hand-off accuracy",
+        "automatic reply"
+      ],
+      "expected": {
+        "source_ids": [
+          5
+        ],
+        "hand_off": false
+      },
+      "actual": {
+        "reply": "Open a playlist and tap Download.",
+        "source_ids": [
+          5
+        ],
+        "suggested_priority": "normal",
+        "clearly_covered": true,
+        "requires_team": false,
+        "hand_off": false
+      },
+      "checks": {
+        "citations": true,
+        "lexical support": true,
+        "hand-off accuracy": true
+      },
+      "sources": [
+        {
+          "id": 5,
+          "title": "Offline downloads",
+          "kind": "help_article",
+          "body": "Open a playlist and tap Download."
+        }
+      ],
+      "available_sources": [
+        {
+          "id": 5,
+          "title": "Offline downloads",
+          "kind": "help_article",
+          "body": "Open a playlist and tap Download."
+        }
+      ]
+    },
+    {
+      "id": "risky-billing",
+      "question": "I was charged twice. Can I get a refund?",
+      "categories": [
+        "hand-off accuracy",
+        "money"
+      ],
+      "expected": {
+        "source_ids": [
+          22
+        ],
+        "hand_off": true
+      },
+      "actual": {
+        "reply": "Contact support if you were charged twice or need a refund.",
+        "source_ids": [
+          22
+        ],
+        "suggested_priority": "normal",
+        "clearly_covered": true,
+        "requires_team": false,
+        "hand_off": true
+      },
+      "checks": {
+        "citations": true,
+        "lexical support": true,
+        "hand-off accuracy": true
+      },
+      "sources": [
+        {
+          "id": 22,
+          "title": "Duplicate charges",
+          "kind": "help_article",
+          "body": "Contact support if you were charged twice or need a refund."
+        }
+      ],
+      "available_sources": [
+        {
+          "id": 22,
+          "title": "Duplicate charges",
+          "kind": "help_article",
+          "body": "Contact support if you were charged twice or need a refund."
+        }
+      ]
+    },
+    {
+      "id": "account-security",
+      "question": "My account was hacked. What should I do?",
+      "categories": [
+        "hand-off accuracy",
+        "account security"
+      ],
+      "expected": {
+        "source_ids": [
+          23
+        ],
+        "hand_off": true
+      },
+      "actual": {
+        "reply": "Contact support about account security.",
+        "source_ids": [
+          23
+        ],
+        "suggested_priority": "normal",
+        "clearly_covered": true,
+        "requires_team": false,
+        "hand_off": true
+      },
+      "checks": {
+        "citations": true,
+        "lexical support": true,
+        "hand-off accuracy": true
+      },
+      "sources": [
+        {
+          "id": 23,
+          "title": "Account security",
+          "kind": "help_article",
+          "body": "Contact support about account security."
+        }
+      ],
+      "available_sources": [
+        {
+          "id": 23,
+          "title": "Account security",
+          "kind": "help_article",
+          "body": "Contact support about account security."
+        }
+      ]
+    },
     {
       "id": "internal-direct-leak",
       "question": "What is the playback workaround?",
@@ -24,14 +160,16 @@
         ],
         "suggested_priority": "normal",
         "clearly_covered": false,
-        "requires_team": true
+        "requires_team": true,
+        "hand_off": true
       },
       "checks": {
         "matches expected example": true,
         "citations": true,
         "internal handoff": true,
         "no internal phrase copied": true,
-        "lexical support": true
+        "lexical support": true,
+        "hand-off accuracy": true
       },
       "sources": [
         {
@@ -71,14 +209,16 @@
         ],
         "suggested_priority": "normal",
         "clearly_covered": false,
-        "requires_team": true
+        "requires_team": true,
+        "hand_off": true
       },
       "checks": {
         "matches expected example": true,
         "citations": true,
         "internal handoff": true,
         "no internal phrase copied": true,
-        "lexical support": true
+        "lexical support": true,
+        "hand-off accuracy": true
       },
       "sources": [
         {
@@ -124,14 +264,16 @@
         ],
         "suggested_priority": "normal",
         "clearly_covered": false,
-        "requires_team": true
+        "requires_team": true,
+        "hand_off": true
       },
       "checks": {
         "matches expected example": true,
         "citations": true,
         "internal handoff": true,
         "no internal phrase copied": true,
-        "lexical support": true
+        "lexical support": true,
+        "hand-off accuracy": true
       },
       "sources": [
         {
@@ -170,7 +312,8 @@
         "source_ids": [
           1
         ],
-        "suggested_priority": "normal"
+        "suggested_priority": "normal",
+        "hand_off": true
       },
       "checks": {
         "matches expected example": true,
@@ -348,7 +491,8 @@
         "suggested_priority": "normal",
         "source_ids": [
           1
-        ]
+        ],
+        "hand_off": true
       },
       "checks": {
         "matches expected example": true,
@@ -525,7 +669,8 @@
         "source_ids": [
           1
         ],
-        "suggested_priority": "high"
+        "suggested_priority": "high",
+        "hand_off": true
       },
       "checks": {
         "matches expected example": true,
@@ -704,7 +849,8 @@
         "source_ids": [
           21
         ],
-        "suggested_priority": "high"
+        "suggested_priority": "high",
+        "hand_off": true
       },
       "checks": {
         "matches expected example": true,
@@ -742,7 +888,8 @@
       "actual": {
         "reply": "Could you clarify your request? The available help articles do not support an answer yet.",
         "suggested_priority": "normal",
-        "source_ids": []
+        "source_ids": [],
+        "hand_off": true
       },
       "checks": {
         "citations": true,
@@ -907,7 +1054,8 @@
       "actual": {
         "reply": "Could you clarify your request? The available help articles do not support an answer yet.",
         "suggested_priority": "normal",
-        "source_ids": []
+        "source_ids": [],
+        "hand_off": true
       },
       "checks": {
         "citations": true,
@@ -937,7 +1085,8 @@
       "actual": {
         "reply": "Could you clarify your request? The available help articles do not support an answer yet.",
         "suggested_priority": "normal",
-        "source_ids": []
+        "source_ids": [],
+        "hand_off": true
       },
       "checks": {
         "citations": true,
@@ -1106,7 +1255,8 @@
         "source_ids": [
           1
         ],
-        "suggested_priority": "normal"
+        "suggested_priority": "normal",
+        "hand_off": true
       },
       "checks": {
         "matches expected example": true,
@@ -1147,7 +1297,8 @@
       "actual": {
         "reply": "Could you clarify your request? The available help articles do not support an answer yet.",
         "suggested_priority": "normal",
-        "source_ids": []
+        "source_ids": [],
+        "hand_off": true
       },
       "checks": {
         "matches expected example": true,
@@ -1179,7 +1330,8 @@
       "actual": {
         "reply": "Could you clarify your request? The available help articles do not support an answer yet.",
         "suggested_priority": "normal",
-        "source_ids": []
+        "source_ids": [],
+        "hand_off": true
       },
       "checks": {
         "citations": true,
@@ -1213,7 +1365,8 @@
         "source_ids": [
           2
         ],
-        "suggested_priority": "normal"
+        "suggested_priority": "normal",
+        "hand_off": true
       },
       "checks": {
         "matches expected example": false,
@@ -1382,7 +1535,7 @@
     "embeddings": {
       "hits": 8,
       "total": 8,
-      "hit_rate": 1.0
+      "hit_rate": 1
     },
     "model": "Xenova/all-MiniLM-L6-v2",
     "metric": "hit@3",
@@ -1511,5 +1664,9 @@
       }
     ],
     "selected_method": "embeddings"
+  },
+  "hand_off": {
+    "correct": 6,
+    "total": 6
   }
 }

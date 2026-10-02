@@ -21,7 +21,7 @@ jobs:
       - run: npm run prepare:embeddings --workspace api
       - run: npx playwright install --with-deps chromium
       - run: npm run typecheck
-      - run: python3 ai/evaluation.py --deterministic --output web/app/quality/results.json && git diff --exit-code -- web/app/quality/results.json ai/retrieval-results.json
+      - run: npm run quality:snapshot && git diff --exit-code -- web/app/quality/results.json ai/retrieval-results.json
       - run: npm test
       - run: npm run build --workspace web
 

@@ -1,10 +1,12 @@
 import json
 import io
+import shutil
 import subprocess
 import sys
 import tempfile
 import threading
 import unittest
+from datetime import datetime
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError
@@ -16,6 +18,32 @@ from server import Handler, generate_request
 
 
 class EvaluationTests(unittest.TestCase):
+    def test_vercel_python_bundle_evaluates_without_sibling_api_files(self):
+        root = Path(__file__).parent.parent
+        build = json.loads((root / 'vercel.json').read_text())['services']['ai']['buildCommand']
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory)
+            shutil.copytree(root / 'ai', bundle / 'ai', ignore=shutil.ignore_patterns('__pycache__', 'evaluation-data'))
+            (bundle / 'api').mkdir()
+            for filename in ('starter-data.json', 'retrieval-cases.json', 'saved-embeddings.json'):
+                shutil.copyfile(root / 'api' / filename, bundle / 'api' / filename)
+            subprocess.run(build, shell=True, cwd=bundle / 'ai', check=True, capture_output=True)
+            shutil.rmtree(bundle / 'api')
+            output = bundle / 'report.json'
+            subprocess.run([sys.executable, 'evaluation.py', '--deterministic', '--output', str(output)],
+                           cwd=bundle / 'ai', check=True, capture_output=True, env={'PATH': '/usr/bin:/bin'})
+            report = json.loads(output.read_text())
+            self.assertEqual(len(report['cases']), 17)
+            self.assertEqual(report['retrieval']['embeddings']['hits'], 8)
+
+    def test_saved_report_has_a_date_and_balanced_hand_off_examples(self):
+        report = evaluate()
+        datetime.fromisoformat(report['evaluated_at'])
+        expected = {case['id']: case['expected'].get('hand_off') for case in report['cases']}
+        self.assertIs(expected['safe-automatic-reply'], False)
+        self.assertIs(expected['risky-billing'], True)
+        self.assertIs(expected['account-security'], True)
+
     def test_report_compares_retrieval_on_saved_embeddings_without_a_provider(self):
         with patch.dict('os.environ', {}, clear=True):
             report = evaluate()
@@ -32,7 +60,7 @@ class EvaluationTests(unittest.TestCase):
         self.assertEqual(sum(article['kind'] == 'help_article' for article in ARTICLES), 12)
         self.assertEqual(sum(article['kind'] == 'internal_note' for article in ARTICLES), 8)
         report = evaluate()
-        self.assertEqual(report['dataset_version'], 'tunely-support-v2')
+        self.assertEqual(report['dataset_version'], 'tunely-support-v3')
         failures = {case['id'] for case in report['cases'] if not all(case['checks'].values())}
         self.assertEqual(failures, {'priority', 'known-failure'})
 
@@ -93,9 +121,10 @@ class EvaluationTests(unittest.TestCase):
         with patch.dict('os.environ', {'OPENAI_API_KEY': 'fake-key'}), patch('server.urlopen', provider):
             report = evaluate(live=True)
         self.assertEqual(len(report['cases']), len(CASES))
-        self.assertEqual(report['cases'][0]['error'], 'TimeoutError')
-        self.assertIsNone(report['cases'][0]['model'])
-        self.assertFalse(all(report['cases'][0]['checks'].values()))
+        failed = next(case for case in report['cases'] if case['id'] == 'safe-automatic-reply')
+        self.assertEqual(failed['error'], 'TimeoutError')
+        self.assertIsNone(failed['model'])
+        self.assertFalse(all(failed['checks'].values()))
         self.assertNotIn('test secret', json.dumps(report))
         self.assertIn('actual', report['cases'][1])
 
@@ -129,7 +158,7 @@ class EvaluationTests(unittest.TestCase):
             report = evaluate(live=True)
         self.assertEqual(report['mode'], 'live')
         self.assertEqual(report['model'], 'gpt-4o-mini')
-        self.assertEqual(report['dataset_version'], 'tunely-support-v2')
+        self.assertEqual(report['dataset_version'], 'tunely-support-v3')
         measured = next(case for case in report['cases'] if case['id'] == 'citations')
         self.assertGreaterEqual(measured['latency_ms'], 0)
         self.assertEqual(measured['usage'], {'prompt_tokens': 100, 'completion_tokens': 20})
@@ -172,6 +201,41 @@ class FakeProvider(BaseHTTPRequestHandler):
 
 
 class ServiceTests(unittest.TestCase):
+    def test_live_evaluation_http_route_requires_service_secret_and_returns_dated_results(self):
+        from app import app
+
+        service = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        thread = threading.Thread(target=service.serve_forever)
+        thread.start()
+        try:
+            with patch.dict('os.environ', {'AI_SERVICE_SECRET': 'test-secret', 'OPENAI_API_KEY': 'fake-key'}), patch(
+                'server.urlopen', return_value=FakeResponse({'model': 'test-model', 'choices': [{'message': {'content': json.dumps({
+                    'reply': 'Could you clarify?', 'source_ids': [], 'suggested_priority': 'normal',
+                })}}]}),
+            ) as provider:
+                request = Request(f'http://127.0.0.1:{service.server_port}/evaluate', data=b'',
+                                  headers={'Authorization': 'Bearer wrong'})
+                with self.assertRaises(HTTPError) as denied:
+                    urlopen(request)
+                self.assertEqual(denied.exception.code, 403)
+                provider.assert_not_called()
+                request.add_header('Authorization', 'Bearer test-secret')
+                with urlopen(request) as response:
+                    report = json.load(response)
+                self.assertEqual(report['mode'], 'live')
+                datetime.fromisoformat(report['evaluated_at'])
+                self.assertEqual(len(report['cases']), len(CASES))
+                statuses = []
+                body = b''.join(app({'PATH_INFO': '/evaluate', 'REQUEST_METHOD': 'POST',
+                                     'HTTP_AUTHORIZATION': 'Bearer test-secret'},
+                                    lambda status, headers: statuses.append(status)))
+                self.assertEqual(statuses, ['200 OK'])
+                self.assertEqual(json.loads(body)['mode'], 'live')
+        finally:
+            service.shutdown()
+            service.server_close()
+            thread.join()
+
     def test_semantic_request_finds_a_document_without_shared_words_and_excludes_retired_documents(self):
         saved = json.loads((Path(__file__).parent.parent / 'api' / 'saved-embeddings.json').read_text())
         article = next(article.copy() for article in ARTICLES if article['id'] == 11)

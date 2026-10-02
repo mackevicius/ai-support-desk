@@ -18,6 +18,7 @@
     },
     "ai": {
       "root": "ai/",
+      "buildCommand": "mkdir -p evaluation-data && cp ../api/starter-data.json ../api/retrieval-cases.json ../api/saved-embeddings.json evaluation-data/",
       "entrypoint": "app:app"
     }
   },

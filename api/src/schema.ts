@@ -76,6 +76,10 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
       'embedding_usage',
       'model text NOT NULL, operation text NOT NULL, session_id text, cached boolean NOT NULL, succeeded boolean NOT NULL, latency_ms integer NOT NULL, created_at timestamptz NOT NULL DEFAULT NOW()',
     ],
+    [
+      'quality_reports',
+      'mode text PRIMARY KEY, report text NOT NULL',
+    ],
   ]) {
     try {
       await pool.query(`CREATE TABLE ${table} (${columns})`);

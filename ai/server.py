@@ -208,12 +208,16 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
-        if self.path != '/generate':
+        if self.path == '/evaluate':
+            from evaluation import evaluate_request
+            status, answer = evaluate_request(self.headers.get('Authorization', ''))
+        elif self.path == '/generate':
+            status, answer = generate_request(
+                self.headers.get('Authorization', ''), self.headers.get('Content-Length', '0'), self.rfile,
+            )
+        else:
             self.send_error(404)
             return
-        status, answer = generate_request(
-            self.headers.get('Authorization', ''), self.headers.get('Content-Length', '0'), self.rfile,
-        )
         if status != 200:
             self.send_error(status)
             return

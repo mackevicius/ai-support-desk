@@ -32,10 +32,11 @@ export default async function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
       </head>
       <body data-seat={seat} className={seat}>
-        <div className="demo-strip">
+        <nav className="demo-strip" aria-label="Portfolio">
           Portfolio demo · Tunely is a fictional company ·{' '}
-          <Link href="/how-it-works">How it works →</Link>
-        </div>
+          <Link href="/how-it-works">How it works →</Link> ·{' '}
+          <Link href="/quality">Answer quality</Link>
+        </nav>
         <header className="topbar">
           <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
             <Link href="/" className="brand">
