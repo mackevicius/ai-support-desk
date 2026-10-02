@@ -12,8 +12,9 @@ export type QualityCase = {
     suggested_priority?: string;
     clarification?: boolean;
     clarification_allowed?: boolean;
+    hand_off?: boolean;
   };
-  actual: { reply: string; source_ids: number[]; suggested_priority: string };
+  actual: { reply: string; source_ids: number[]; suggested_priority: string; hand_off?: boolean };
   checks: Record<string, boolean | undefined>;
   sources: { id: number; title: string; body: string }[];
   available_sources: { id: number; title: string; body: string }[];
@@ -28,6 +29,8 @@ export type QualityReport = {
   mode: string;
   model: string;
   dataset_version: string;
+  evaluated_at: string;
+  hand_off?: { correct: number; total: number };
   cases: QualityCase[];
   retrieval?: {
     model: string;
@@ -51,6 +54,12 @@ export async function getQualityReport(
   run?: string,
 ): Promise<QualityReport | null> {
   if (run !== 'live') return deterministic as QualityReport;
+  try {
+    const response = await fetch(`${process.env.API_URL ?? 'http://localhost:3001'}/quality/live`, {
+      cache: 'no-store',
+    });
+    if (response.ok) return await response.json() as QualityReport;
+  } catch {}
   try {
     return JSON.parse(
       await readFile(

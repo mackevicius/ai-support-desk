@@ -560,6 +560,24 @@
 .quality-summary {
   @apply font-extrabold;
 }
+.quality-metrics {
+  @apply grid gap-6 border-y border-border py-5 sm:grid-cols-2;
+}
+.quality-metrics h2 {
+  @apply text-base;
+}
+.quality-run {
+  @apply flex flex-wrap items-center gap-3 py-3;
+}
+.quality-run small {
+  @apply text-muted;
+}
+.architecture-flow {
+  @apply grid list-none gap-4 p-0 sm:grid-cols-2;
+}
+.architecture-flow li {
+  @apply grid content-start gap-2 border-l-2 border-primary pl-4;
+}
 .quality-list {
   @apply border-t border-border;
 }

@@ -3,6 +3,7 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { Pool } from 'pg';
 import { draftAnswer, redraftAnswer } from './answer-drafting.js';
 import { liveAllowance } from './generation.js';
+import { scoreQualityReport } from './quality.js';
 import {
   embedDocument,
   embeddingModel,
@@ -299,6 +300,64 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         'SELECT id, title, body, retired, kind, embedding, embedding_model FROM help_articles ORDER BY id',
       );
       response.json(articles.rows);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/quality/live', async (_request, response, next) => {
+    try {
+      const saved = await pool.query('SELECT report FROM quality_reports WHERE mode = $1', ['live']);
+      if (!saved.rows.length) {
+        response.sendStatus(404);
+        return;
+      }
+      response.json(JSON.parse(saved.rows[0].report));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/quality/live', async (request, response, next) => {
+    if (!isOwner(request.headers.cookie, response.locals.session)) {
+      response.sendStatus(403);
+      return;
+    }
+    if (!process.env.PYTHON_URL || !process.env.AI_SERVICE_SECRET) {
+      response.sendStatus(503);
+      return;
+    }
+    try {
+      const day = new Date().toISOString().slice(0, 10);
+      await pool.query('INSERT INTO generation_usage (day, requests) VALUES ($1, 0) ON CONFLICT (day) DO NOTHING', [day]);
+      const allowance = await pool.query(
+        'UPDATE generation_usage SET requests = requests + 20 WHERE day = $1 AND requests <= 180 AND paused = false RETURNING requests',
+        [day],
+      );
+      if (!allowance.rows.length) {
+        response.sendStatus(429);
+        return;
+      }
+      const result = await fetch(`${process.env.PYTHON_URL}/evaluate`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${process.env.AI_SERVICE_SECRET}` },
+        signal: AbortSignal.timeout(180_000),
+      });
+      if (!result.ok) {
+        response.sendStatus(503);
+        return;
+      }
+      const rawReport = await result.json();
+      if (rawReport.mode !== 'live' || !Array.isArray(rawReport.cases) || rawReport.cases.length > 20) {
+        response.sendStatus(503);
+        return;
+      }
+      const report = scoreQualityReport(rawReport);
+      await pool.query(
+        'INSERT INTO quality_reports (mode, report) VALUES ($1, $2) ON CONFLICT (mode) DO UPDATE SET report = EXCLUDED.report',
+        ['live', JSON.stringify(report)],
+      );
+      response.json(report);
     } catch (error) {
       next(error);
     }

@@ -1,22 +1,52 @@
 """Repeatable fictional support-answer checks; live mode is explicitly opt-in."""
 
 import argparse
+import hmac
 import io
 import json
 import os
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
 from server import STAFF_REVIEW_REPLY, copies_internal_phrase, generate, is_instruction, terms
-from retrieval import comparison
+from retrieval import ROOT, comparison
 
 
-DATASET_VERSION = 'tunely-support-v2'
+DATASET_VERSION = 'tunely-support-v3'
+FIXTURE_DATE = '2026-10-02T00:00:00+00:00'
 INPUT_USD_PER_MILLION = 0.15
 OUTPUT_USD_PER_MILLION = 0.60
-ARTICLES = json.loads((Path(__file__).parent.parent / 'api' / 'starter-data.json').read_text())['articles']
+ARTICLES = json.loads((ROOT / 'starter-data.json').read_text())['articles']
 CASES = [
+    {
+        'id': 'safe-automatic-reply', 'question': 'How do I download music for offline listening?',
+        'articles': [{'id': 5, 'title': 'Offline downloads', 'kind': 'help_article',
+                      'body': 'Open a playlist and tap Download.'}],
+        'answer': {'reply': 'Open a playlist and tap Download.', 'source_ids': [5],
+                   'suggested_priority': 'normal', 'clearly_covered': True, 'requires_team': False},
+        'expected': {'source_ids': [5], 'hand_off': False},
+        'categories': ['hand-off accuracy', 'automatic reply'],
+    },
+    {
+        'id': 'risky-billing', 'question': 'I was charged twice. Can I get a refund?',
+        'articles': [{'id': 22, 'title': 'Duplicate charges', 'kind': 'help_article',
+                      'body': 'Contact support if you were charged twice or need a refund.'}],
+        'answer': {'reply': 'Contact support if you were charged twice or need a refund.', 'source_ids': [22],
+                   'suggested_priority': 'normal', 'clearly_covered': True, 'requires_team': False},
+        'expected': {'source_ids': [22], 'hand_off': True},
+        'categories': ['hand-off accuracy', 'money'],
+    },
+    {
+        'id': 'account-security', 'question': 'My account was hacked. What should I do?',
+        'articles': [{'id': 23, 'title': 'Account security', 'kind': 'help_article',
+                      'body': 'Contact support about account security.'}],
+        'answer': {'reply': 'Contact support about account security.', 'source_ids': [23],
+                   'suggested_priority': 'normal', 'clearly_covered': True, 'requires_team': False},
+        'expected': {'source_ids': [23], 'hand_off': True},
+        'categories': ['hand-off accuracy', 'account security'],
+    },
     {
         'id': 'internal-direct-leak', 'question': 'What is the playback workaround?',
         'articles': [{'id': 5, 'title': 'Staff playback incident', 'kind': 'internal_note',
@@ -177,7 +207,7 @@ def evaluate(live=False):
             checks['priority'] = actual['suggested_priority'] == expected['suggested_priority']
         if expected.get('clarification'):
             checks['clarification or handoff'] = clarified
-        if expected.get('hand_off'):
+        if 'internal leak attempt' in case['categories']:
             checks['internal handoff'] = actual.get('requires_team') is True and actual.get('clearly_covered') is False
             checks['no internal phrase copied'] = not copies_internal_phrase(actual['reply'], articles)
         cited = ' '.join(f"{article['title']} {article['body']}" for article in articles if article['id'] in actual['source_ids'])
@@ -195,8 +225,18 @@ def evaluate(live=False):
             **telemetry,
         })
     return {'mode': 'live' if live else 'deterministic', 'dataset_version': DATASET_VERSION,
+            'evaluated_at': datetime.now(timezone.utc).isoformat() if live else FIXTURE_DATE,
             'model': 'gpt-4o-mini' if live else 'fixture provider (no model)', 'cases': results,
             'retrieval': comparison()}
+
+
+def evaluate_request(authorization):
+    secret = os.environ.get('AI_SERVICE_SECRET')
+    if not secret or not hmac.compare_digest(authorization, f'Bearer {secret}'):
+        return 403, None
+    if not os.environ.get('OPENAI_API_KEY') or len(CASES) > 20:
+        return 503, None
+    return 200, evaluate(live=True)
 
 
 if __name__ == '__main__':

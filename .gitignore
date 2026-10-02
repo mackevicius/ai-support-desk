@@ -8,3 +8,4 @@ web/test-results/
 web/playwright-report/
 web/app/quality/live-results.json
 __pycache__/
+ai/evaluation-data/

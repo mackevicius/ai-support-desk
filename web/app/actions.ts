@@ -55,6 +55,24 @@ export async function signOutOwner() {
   redirect('/');
 }
 
+export async function runQualityEvaluation() {
+  const jar = await cookies();
+  const session = jar.get('demo_session')?.value;
+  const owner = jar.get('owner_session')?.value;
+  if (!session || !owner) redirect('/owner');
+  let status = 503;
+  try {
+    const response = await fetch(`${process.env.API_URL ?? 'http://localhost:3001'}/quality/live`, {
+      method: 'POST',
+      headers: { cookie: `demo_session=${session}; owner_session=${owner}` },
+      cache: 'no-store',
+    });
+    status = response.status;
+  } catch {}
+  if (status === 403) redirect('/owner');
+  redirect(`/quality?run=live${status === 200 ? '' : `&evaluation=${status === 429 ? 'limit' : 'unavailable'}`}`);
+}
+
 export async function generateRequest(formData: FormData) {
   const id = formData.get('id');
   const jar = await cookies();
