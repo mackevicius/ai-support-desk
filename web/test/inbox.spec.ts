@@ -119,7 +119,7 @@ test('an agent fills the saved knowledge gap with a private help article and red
   await expect(
     page.getByRole('heading', { name: 'Knowledge gap', exact: true }),
   ).toBeVisible();
-  await page.getByText('Write help article', { exact: true }).click();
+  await page.getByText('Write a help article for this', { exact: true }).click();
   const editor = page.getByRole('region', {
     name: 'Knowledge gap',
     exact: true,
@@ -198,7 +198,7 @@ test('an agent fills the saved knowledge gap with a private help article and red
     page.getByRole('region', { name: 'Support chat' }),
   ).toBeVisible();
   await expect(
-    page.getByText('Write help article', { exact: true }),
+    page.getByText('Write a help article for this', { exact: true }),
   ).toHaveCount(0);
 });
 
@@ -280,9 +280,30 @@ test('a visitor explores saved cases and starts chats from every topic tile', as
 test('agent home opens the shared inbox workspace and seat switches keep the selected conversation', async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await expect(page).toHaveURL(/\/tickets\/1$/, { timeout: 15000 });
+  const selected = page.locator('.queue a[aria-current="page"]');
+  await expect(selected.locator('[data-slot="avatar"]')).toBeVisible();
+  await expect(selected.locator('[data-slot="avatar-fallback"]')).toHaveText('MC');
+  await expect(page.getByText('AI handed this conversation to you', { exact: true })).toBeVisible();
+  const messages = page.locator('.agent-messages');
+  const composer = page.locator('.agent-composer');
+  await expect(messages).toBeVisible();
+  await expect(composer).toBeVisible();
+  const messageBox = await messages.boundingBox();
+  const composerBox = await composer.boundingBox();
+  expect(composerBox!.y).toBeGreaterThanOrEqual(messageBox!.y + messageBox!.height - 1);
+  const railBox = await page.getByRole('complementary', { name: 'Support inbox' }).boundingBox();
+  const trailBox = await page.getByRole('complementary', { name: 'How the AI decided' }).boundingBox();
+  expect(railBox!.x + railBox!.width).toBeLessThanOrEqual(messageBox!.x);
+  expect(messageBox!.x + messageBox!.width).toBeLessThanOrEqual(trailBox!.x);
+  await page.screenshot({ path: 'test-results/agent-app-1440.png' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/agent-app-390.png', fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await expect(
     page.getByRole('complementary', { name: 'Support inbox' }),
   ).toBeVisible();
@@ -355,7 +376,7 @@ test('an agent edits a risky draft, asks for details and delivers a team reply',
   await expect(
     trail.getByText('Money or account security', { exact: true }),
   ).toBeVisible();
-  await expect(trail.getByText('Hand-off', { exact: true })).toBeVisible();
+  await expect(trail.getByRole('heading', { name: 'Handed off to a person', exact: true })).toBeVisible();
   await page
     .getByRole('textbox', { name: 'Reply', exact: true })
     .fill('Which dates were the two charges taken?');
@@ -471,7 +492,7 @@ test('a reopened conversation shows its new redraft and suggested priority', asy
   ).toHaveValue('high');
   await expect(
     page
-      .getByRole('article', { name: 'Request detail' })
+      .getByRole('complementary', { name: 'How the AI decided' })
       .getByText('open', { exact: true }),
   ).toBeVisible();
   const trail = page.getByRole('complementary', { name: 'How the AI decided' });
@@ -879,7 +900,7 @@ test('a visitor submits a request that another session cannot see', async ({
   ).toBeVisible();
   await expect(
     page
-      .getByRole('article', { name: 'Request detail' })
+      .getByRole('complementary', { name: 'How the AI decided' })
       .getByText('open', { exact: true }),
   ).toBeVisible();
   await expect(page.getByText('Request received')).toBeVisible();
@@ -931,7 +952,7 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
   await page.goto('/tickets/1');
   await expect(
     page
-      .getByRole('article', { name: 'Request detail' })
+      .getByRole('complementary', { name: 'How the AI decided' })
       .getByText('resolved', { exact: true }),
   ).toBeVisible();
   await expect(
@@ -963,14 +984,14 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
   await page.goto('/tickets/2');
   await expect(
     page
-      .getByRole('article', { name: 'Request detail' })
+      .getByRole('complementary', { name: 'How the AI decided' })
       .getByText('resolved', { exact: true }),
   ).toBeVisible();
   await page.goto('/tickets/1');
   await page.getByRole('button', { name: 'Reopen request' }).click();
   await expect(
     page
-      .getByRole('article', { name: 'Request detail' })
+      .getByRole('complementary', { name: 'How the AI decided' })
       .getByText('open', { exact: true }),
   ).toBeVisible();
   await expect(page.getByText('Human reopened request')).toBeVisible();
@@ -998,7 +1019,7 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
   ).toBeVisible();
   await expect(
     page
-      .getByRole('article', { name: 'Request detail' })
+      .getByRole('complementary', { name: 'How the AI decided' })
       .getByText('resolved', { exact: true }),
   ).toBeVisible();
 });
@@ -1174,8 +1195,8 @@ test('a visitor resets only their own demo workspace', async ({
       page.getByRole('link', { name: /Reset my request/ }),
     ).toHaveCount(0);
     await expect(
-      page.getByRole('link', { name: /Family invitation keeps failing/ }),
-    ).toContainText('open');
+      page.getByRole('complementary', { name: 'How the AI decided' }).getByText('open', { exact: true }),
+    ).toHaveText('open');
     const removed = await page.goto(submittedUrl);
     expect(removed?.status()).toBe(404);
     await otherPage.reload();

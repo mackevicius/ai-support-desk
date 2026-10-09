@@ -57,91 +57,277 @@ export default async function TicketPage({
     <main className="workspace focus-view agent-workspace">
       <Queue tickets={queue} selectedId={ticket.id} />
       <article className="detail" aria-label="Request detail">
-        <div className="detail-heading">
-          <div>
-            <span className="eyebrow">
-              Request #{ticket.id} / {ticket.customer_name}
-            </span>
-            <h1>{ticket.subject}</h1>
-          </div>
-          <div className="badges">
-            <StatusPill tone={priorityTone(ticket.priority)}>
-              {ticket.priority} priority
-            </StatusPill>
-            <StatusPill tone={ticketTone(ticket.status)}>
-              {ticket.status}
-            </StatusPill>
-          </div>
-        </div>
-        <section className="question" aria-labelledby="question-title">
-          <h2 id="question-title">Customer question</h2>
+        <h1 className="sr-only">{ticket.subject}</h1>
+        <section className="agent-messages" aria-label="Conversation">
           <ChatBubble from="customer">{ticket.question}</ChatBubble>
-        </section>
-        {ticket.history
-          .filter((event) =>
-            event.description.startsWith('Team asked for details: '),
-          )
-          .map((event) => (
-            <ChatBubble
-              key={event.id}
-              from="agent"
-              own
-              label="Tunely team"
-              aria-label="Team question"
-            >
-              {event.description.slice('Team asked for details: '.length)}
+          <ChatBubble from="system">
+            {ticket.decision?.kind === 'automatic_reply'
+              ? 'AI replied automatically'
+              : 'AI handed this conversation to you'}
+          </ChatBubble>
+          {ticket.history
+            .filter((event) =>
+              event.description.startsWith('Team asked for details: '),
+            )
+            .map((event) => (
+              <ChatBubble
+                key={event.id}
+                from="agent"
+                own
+                label="Tunely team"
+                aria-label="Team question"
+              >
+                {event.description.slice('Team asked for details: '.length)}
+              </ChatBubble>
+            ))}
+          {ticket.approved_reply && (
+            <ChatBubble from="agent" own label="Approved in-app reply">
+              {ticket.approved_reply}
             </ChatBubble>
-          ))}
-        {generation && (
-          <p role="alert" className="draft-notice">
-            {generation === 'limit'
-              ? 'Live AI is paused for today'
-              : 'Live generation is unavailable. Please try again later.'}
-          </p>
-        )}
-        {article === 'saved' && (
-          <p role="status" className="draft-notice">
-            Help article saved.
-          </p>
-        )}
+          )}
+        </section>
+        <div className="agent-composer">
+          {generation && (
+            <p role="alert" className="draft-notice">
+              {generation === 'limit'
+                ? 'Live AI is paused for today'
+                : 'Live generation is unavailable. Please try again later.'}
+            </p>
+          )}
+          {article === 'saved' && (
+            <p role="status" className="draft-notice">
+              Help article saved.
+            </p>
+          )}
+          {ticket.customer_name === 'Visitor' && !ticket.draft && (
+            <section className="draft-notice" aria-label="Answer draft">
+              No answer draft has been generated for this request.
+            </section>
+          )}
+          {ticket.draft && (
+            <section className="draft" aria-label="Answer draft">
+              {ticket.status !== 'resolved' &&
+                ['saved', 'rejected', 'reopened'].includes(
+                  ticket.draft.state,
+                ) && (
+                  <div className="review-controls">
+                    {ticket.draft.state === 'saved' &&
+                      ticket.priority !== ticket.draft.suggested_priority && (
+                        <form
+                          action={reviewRequest}
+                          className="priority-approval"
+                        >
+                          <input type="hidden" name="id" value={ticket.id} />
+                          <input type="hidden" name="action" value="priority" />
+                          <input
+                            type="hidden"
+                            name="priority"
+                            value={ticket.draft.suggested_priority}
+                          />
+                          <SubmitButton
+                            label={`Apply ${ticket.draft.suggested_priority} priority`}
+                            pendingLabel="Applying priority..."
+                          />
+                        </form>
+                      )}
+                    <ReplyForm
+                      key={`${ticket.draft.reply}-${ticket.history.length}`}
+                      ticketId={String(ticket.id)}
+                      initialCopies={ticket.draft.internal_copies ?? []}
+                      defaultValue={
+                        ticket.draft.state === 'saved' ||
+                        (ticket.draft.live && ticket.draft.state === 'reopened')
+                          ? ticket.draft.reply
+                          : ticket.draft.state === 'reopened'
+                            ? (ticket.approved_reply ?? '')
+                            : ''
+                      }
+                    >
+                      <label htmlFor="priority">Priority</label>
+                      <select
+                        id="priority"
+                        name="priority"
+                        defaultValue={
+                          ticket.draft.state === 'saved' ||
+                          (ticket.draft.live &&
+                            ticket.draft.state === 'reopened')
+                            ? ticket.draft.suggested_priority
+                            : ticket.priority
+                        }
+                      >
+                        <option value="low">Low</option>
+                        <option value="normal">Normal</option>
+                        <option value="high">High</option>
+                      </select>
+                      <ReviewButtons
+                        showReject={ticket.draft.state === 'saved'}
+                        showAsk={ticket.status === 'open'}
+                      />
+                    </ReplyForm>
+                  </div>
+                )}
+              {ticket.draft.state === 'rejected' && (
+                <p>
+                  Suggestion rejected. No reply was delivered. Write your own
+                  reply to resolve the request.
+                </p>
+              )}
+              {ticket.status === 'resolved' && (
+                <form action={reviewRequest}>
+                  <input type="hidden" name="id" value={ticket.id} />
+                  <input type="hidden" name="action" value="reopen" />
+                  <SubmitButton
+                    label="Reopen request"
+                    pendingLabel="Reopening request..."
+                    variant="secondary"
+                  />
+                </form>
+              )}
+            </section>
+          )}
+          {!ticket.draft && ticket.status === 'resolved' && (
+            <form action={reviewRequest} className="draft">
+              <input type="hidden" name="id" value={ticket.id} />
+              <input type="hidden" name="action" value="reopen" />
+              <SubmitButton
+                label="Reopen request"
+                pendingLabel="Reopening request..."
+                variant="secondary"
+              />
+            </form>
+          )}
+          {!ticket.draft && ticket.status !== 'resolved' && (
+            <section className="draft">
+              <h2>Write a replacement reply</h2>
+              <ReplyForm
+                ticketId={String(ticket.id)}
+                defaultValue=""
+                initialCopies={[]}
+              >
+                <label htmlFor="priority">Priority</label>
+                <select
+                  id="priority"
+                  name="priority"
+                  defaultValue={ticket.priority}
+                >
+                  <option value="low">Low</option>
+                  <option value="normal">Normal</option>
+                  <option value="high">High</option>
+                </select>
+                <ReviewButtons
+                  showReject={false}
+                  showAsk={ticket.status === 'open'}
+                />
+              </ReplyForm>
+            </section>
+          )}
+          {ticket.can_redraft && ticket.status !== 'resolved' && (
+            <form action={generateRequest} className="agent-redraft">
+              <input type="hidden" name="id" value={ticket.id} />
+              <SubmitButton
+                label={
+                  (!owner || !ticket.is_sample) && ticket.decision
+                    ? 'Redraft'
+                    : ticket.draft?.live
+                      ? 'Regenerate live draft'
+                      : 'Generate live draft'
+                }
+                pendingLabel="Generating draft..."
+                variant="secondary"
+              />
+              {ticket.live_ai && (
+                <p>{ticket.live_ai.remaining} live drafts left</p>
+              )}
+            </form>
+          )}
+          {next && (
+            <Link href={`/tickets/${next.id}`} className="next-request">
+              Next request &rarr;
+            </Link>
+          )}
+        </div>
+      </article>
+      <aside className="decision-trail" aria-label="How the AI decided">
+        <h2>How the AI decided</h2>
+        <ol>
+          <li>
+            <h3>Read the message</h3>
+            <p>
+              {ticket.decision?.topic ?? 'Sample request'} ·{' '}
+              {ticket.decision?.suggested_priority ??
+                ticket.draft?.suggested_priority ??
+                ticket.priority}{' '}
+              priority
+            </p>
+            <div className="badges">
+              <StatusPill tone={priorityTone(ticket.priority)}>
+                {ticket.priority} priority
+              </StatusPill>
+              <StatusPill tone={ticketTone(ticket.status)}>
+                {ticket.status}
+              </StatusPill>
+            </div>
+          </li>
+          <li>
+            <h3>Searched the knowledge base</h3>
+            {(ticket.decision?.documents ?? ticket.draft?.sources ?? []).map(
+              (source) => (
+                <article key={source.id} id={`source-${source.id}`}>
+                  <h4>{source.title}</h4>
+                  <span className="source-kind">
+                    {source.kind === 'internal_note' ? 'Internal' : 'Help'}
+                  </span>
+                  <details>
+                    <summary>Read source</summary>
+                    <p>
+                      {
+                        (
+                          ticket.draft?.sources ??
+                          ticket.decision?.sources ??
+                          []
+                        ).find((article) => article.id === source.id)?.body
+                      }
+                    </p>
+                  </details>
+                </article>
+              ),
+            )}
+            {!(ticket.decision?.documents ?? ticket.draft?.sources ?? [])
+              .length && <p>No supporting documents found.</p>}
+          </li>
+          <li>
+            <h3>Checked the rules</h3>
+            <p>
+              {ticket.decision?.rule ?? 'Agent review required for this sample'}
+            </p>
+          </li>
+          <li>
+            <h3>
+              {ticket.decision?.kind === 'automatic_reply'
+                ? 'Replied automatically'
+                : 'Handed off to a person'}
+            </h3>
+            <p>
+              {ticket.decision?.reason ??
+                'This sample draft is waiting for agent review.'}
+            </p>
+          </li>
+        </ol>
         {ticket.decision?.reason_code === 'knowledge_gap' &&
           ticket.status !== 'resolved' && (
             <section
-              className="draft-notice"
+              className="knowledge-gap"
               aria-labelledby="knowledge-gap-title"
             >
               <h2 id="knowledge-gap-title">Knowledge gap</h2>
               <details>
-                <summary>Write help article</summary>
+                <summary>Write a help article for this</summary>
                 <HelpArticleForm ticketId={ticket.id} />
               </details>
             </section>
           )}
-        {ticket.can_redraft && ticket.status !== 'resolved' && (
-          <form action={generateRequest} className="draft-notice">
-            <input type="hidden" name="id" value={ticket.id} />
-            <SubmitButton
-              label={
-                (!owner || !ticket.is_sample) && ticket.decision
-                  ? 'Redraft'
-                  : ticket.draft?.live
-                    ? 'Regenerate live draft'
-                    : 'Generate live draft'
-              }
-              pendingLabel="Generating draft..."
-            />
-            {ticket.live_ai && (
-              <p>{ticket.live_ai.remaining} live drafts left</p>
-            )}
-          </form>
-        )}
-        {ticket.customer_name === 'Visitor' && !ticket.draft && (
-          <section className="draft-notice" aria-label="Answer draft">
-            No answer draft has been generated for this request.
-          </section>
-        )}
         {ticket.draft && (
-          <section className="draft" aria-label="Answer draft">
+          <div className="agent-draft-meta">
             <h2>{ticket.draft.live ? 'Live AI draft' : 'Saved AI draft'}</h2>
             <p className="draft-label">
               {ticket.draft.live
@@ -160,143 +346,11 @@ export default async function TicketPage({
                 </a>
               ))}
             </p>
-            {ticket.status !== 'resolved' &&
-              ['saved', 'rejected', 'reopened'].includes(
-                ticket.draft.state,
-              ) && (
-                <div className="review-controls">
-                  {ticket.draft.state === 'saved' &&
-                    ticket.priority !== ticket.draft.suggested_priority && (
-                      <form
-                        action={reviewRequest}
-                        className="priority-approval"
-                      >
-                        <input type="hidden" name="id" value={ticket.id} />
-                        <input type="hidden" name="action" value="priority" />
-                        <input
-                          type="hidden"
-                          name="priority"
-                          value={ticket.draft.suggested_priority}
-                        />
-                        <SubmitButton
-                          label={`Apply ${ticket.draft.suggested_priority} priority`}
-                          pendingLabel="Applying priority..."
-                        />
-                      </form>
-                    )}
-                  <ReplyForm
-                    key={`${ticket.draft.reply}-${ticket.history.length}`}
-                    ticketId={String(ticket.id)}
-                    initialCopies={ticket.draft.internal_copies ?? []}
-                    defaultValue={
-                      ticket.draft.state === 'saved' ||
-                      (ticket.draft.live && ticket.draft.state === 'reopened')
-                        ? ticket.draft.reply
-                        : ticket.draft.state === 'reopened'
-                          ? (ticket.approved_reply ?? '')
-                          : ''
-                    }
-                  >
-                    <label htmlFor="priority">Priority</label>
-                    <select
-                      id="priority"
-                      name="priority"
-                      defaultValue={
-                        ticket.draft.state === 'saved' ||
-                        (ticket.draft.live && ticket.draft.state === 'reopened')
-                          ? ticket.draft.suggested_priority
-                          : ticket.priority
-                      }
-                    >
-                      <option value="low">Low</option>
-                      <option value="normal">Normal</option>
-                      <option value="high">High</option>
-                    </select>
-                    <ReviewButtons
-                      showReject={ticket.draft.state === 'saved'}
-                      showAsk={ticket.status === 'open'}
-                    />
-                  </ReplyForm>
-                </div>
-              )}
-            {ticket.draft.state === 'rejected' && (
-              <p>
-                Suggestion rejected. No reply was delivered. Write your own
-                reply to resolve the request.
-              </p>
-            )}
-            {ticket.approved_reply && (
-              <ChatBubble
-                from="agent"
-                own
-                label="Approved in-app reply"
-                className="my-5"
-              >
-                {ticket.approved_reply}
-              </ChatBubble>
-            )}
-            {ticket.status === 'resolved' && (
-              <form action={reviewRequest}>
-                <input type="hidden" name="id" value={ticket.id} />
-                <input type="hidden" name="action" value="reopen" />
-                <SubmitButton
-                  label="Reopen request"
-                  pendingLabel="Reopening request..."
-                  variant="secondary"
-                />
-              </form>
-            )}
-          </section>
-        )}
-        {!ticket.draft && ticket.status === 'resolved' && (
-          <form action={reviewRequest} className="draft">
-            <input type="hidden" name="id" value={ticket.id} />
-            <input type="hidden" name="action" value="reopen" />
-            <SubmitButton
-              label="Reopen request"
-              pendingLabel="Reopening request..."
-              variant="secondary"
-            />
-          </form>
-        )}
-        {!ticket.draft && ticket.status !== 'resolved' && (
-          <section className="draft">
-            <h2>Write a replacement reply</h2>
-            <ReplyForm
-              ticketId={String(ticket.id)}
-              defaultValue=""
-              initialCopies={[]}
-            >
-              <label htmlFor="priority">Priority</label>
-              <select
-                id="priority"
-                name="priority"
-                defaultValue={ticket.priority}
-              >
-                <option value="low">Low</option>
-                <option value="normal">Normal</option>
-                <option value="high">High</option>
-              </select>
-              <ReviewButtons
-                showReject={false}
-                showAsk={ticket.status === 'open'}
-              />
-            </ReplyForm>
-          </section>
-        )}
-        {!ticket.draft && ticket.approved_reply && (
-          <ChatBubble
-            from="agent"
-            own
-            label="Approved in-app reply"
-            className="my-5"
-          >
-            {ticket.approved_reply}
-          </ChatBubble>
+          </div>
         )}
         <section className="history" aria-labelledby="history-title">
           <h2 id="history-title">History</h2>
-          <ol>
+          <ul>
             {ticket.history.map((event) => (
               <li key={event.id}>
                 <time dateTime={event.created_at}>
@@ -310,70 +364,8 @@ export default async function TicketPage({
                 <p>{event.description}</p>
               </li>
             ))}
-          </ol>
+          </ul>
         </section>
-        {next && (
-          <Link href={`/tickets/${next.id}`} className="next-request">
-            Next request &rarr;
-          </Link>
-        )}
-      </article>
-      <aside className="decision-trail" aria-label="How the AI decided">
-        <h2>How the AI decided</h2>
-        <ol>
-          <li>
-            <h3>Topic and priority</h3>
-            <p>
-              {ticket.decision?.topic ?? 'Sample request'} ·{' '}
-              {ticket.decision?.suggested_priority ??
-                ticket.draft?.suggested_priority ??
-                ticket.priority}{' '}
-              priority
-            </p>
-          </li>
-          <li>
-            <h3>Documents found</h3>
-            {(ticket.decision?.documents ?? ticket.draft?.sources ?? []).map(
-              (source) => (
-                <article key={source.id} id={`source-${source.id}`}>
-                  <h4>{source.title}</h4>
-                  <span className="source-kind">
-                    {source.kind === 'internal_note' ? 'Internal' : 'Help'}
-                  </span>
-                  <p>
-                    {
-                      (
-                        ticket.draft?.sources ??
-                        ticket.decision?.sources ??
-                        []
-                      ).find((article) => article.id === source.id)?.body
-                    }
-                  </p>
-                </article>
-              ),
-            )}
-            {!(ticket.decision?.documents ?? ticket.draft?.sources ?? [])
-              .length && <p>No supporting documents found.</p>}
-          </li>
-          <li>
-            <h3>Rule applied</h3>
-            <p>
-              {ticket.decision?.rule ?? 'Agent review required for this sample'}
-            </p>
-          </li>
-          <li>
-            <h3>Decision</h3>
-            <strong>
-              {ticket.decision?.kind === 'automatic_reply'
-                ? 'Automatic reply'
-                : 'Hand-off'}
-            </strong>
-            <p>
-              {ticket.decision?.reason ??
-                'This sample draft is waiting for agent review.'}
-            </p>
-          </li>
-        </ol>
       </aside>
     </main>
   );

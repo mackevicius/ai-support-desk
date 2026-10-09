@@ -41,10 +41,11 @@ export function ReviewButtons({
   const [active, setActive] = useState<'approve' | 'reject' | 'ask'>('approve');
 
   return (
-    <>
+    <div className="review-actions">
       <input type="hidden" name="action" value={active} />
       <Button
         type="submit"
+        className="bg-foreground text-background hover:bg-foreground/90"
         onClick={() => setActive('approve')}
         disabled={pending}
         aria-busy={pending && active === 'approve'}
@@ -80,6 +81,6 @@ export function ReviewButtons({
             : 'Reject suggestion'}
         </Button>
       )}
-    </>
+    </div>
   );
 }

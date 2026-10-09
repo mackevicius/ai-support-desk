@@ -79,19 +79,7 @@ function ReplyEditor({
 
   return (
     <>
-      <label htmlFor="reply">Reply</label>
-      <Textarea
-        id="reply"
-        name="reply"
-        value={reply}
-        onChange={(event) => {
-          setReply(event.target.value);
-          setConfirmed(false);
-        }}
-        required
-        maxLength={5000}
-        rows={5}
-      />
+      <label htmlFor="reply">AI draft · edit before sending</label>
       {!!copies.length && (
         <div role="alert" className="internal-copy-warning">
           <strong>
@@ -115,6 +103,19 @@ function ReplyEditor({
           Internal text check is unavailable. Approval has not been sent.
         </p>
       )}
+      <Textarea
+        id="reply"
+        name="reply"
+        aria-label="Reply"
+        value={reply}
+        onChange={(event) => {
+          setReply(event.target.value);
+          setConfirmed(false);
+        }}
+        required
+        maxLength={5000}
+        rows={5}
+      />
     </>
   );
 }

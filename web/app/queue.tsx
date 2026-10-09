@@ -6,7 +6,7 @@ import Link from 'next/link';
 import type { TicketSummary } from './data';
 import { resetWorkspace } from './actions';
 import { SubmitButton } from './_components/submit-button';
-import { StatusPill, priorityTone, ticketTone } from './_components/status-pill';
+import { Avatar, AvatarFallback } from '../components/ui/avatar';
 
 export function Queue({
   tickets,
@@ -46,24 +46,32 @@ export function Queue({
             className="request"
             aria-current={selectedId === ticket.id ? 'page' : undefined}
           >
-            <span className="request-top">
-              <strong>{ticket.customer_name}</strong>
-              <small>
-                {new Date(ticket.created_at).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  timeZone: 'UTC',
-                })}
-              </small>
-            </span>
-            <span className="subject">{ticket.subject}</span>
-            <span className="request-meta">
-              <StatusPill tone={priorityTone(ticket.priority)}>
-                {ticket.priority} priority
-              </StatusPill>
-              <StatusPill tone={ticketTone(ticket.status)}>
-                {ticket.status}
-              </StatusPill>
+            <Avatar className="size-9" aria-hidden="true">
+              <AvatarFallback className="bg-[#ffd9bd] text-[13px] font-extrabold text-[#8a3500]">
+                {ticket.customer_name
+                  .trim()
+                  .split(/\s+/)
+                  .map((part) => part[0])
+                  .slice(0, 2)
+                  .join('')
+                  .toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <span className="request-copy">
+              <span className="request-top">
+                <strong>{ticket.customer_name}</strong>
+                <small>
+                  {' · '}
+                  {ticket.status === 'resolved'
+                    ? 'resolved'
+                    : new Date(ticket.created_at).toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        timeZone: 'UTC',
+                      })}
+                </small>
+              </span>
+              <span className="subject">{ticket.subject}</span>
             </span>
           </Link>
         ))}
