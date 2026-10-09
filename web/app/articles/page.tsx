@@ -6,6 +6,9 @@ import { getHelpArticles } from '../data';
 import { SubmitButton } from '../_components/submit-button';
 import { Input } from '../../components/ui/input';
 import { Textarea } from '../../components/ui/textarea';
+import { Card } from '../../components/ui/card';
+import { Separator } from '../../components/ui/separator';
+import { StatusPill } from '../_components/status-pill';
 
 export default async function ArticlesPage() {
   const jar = await cookies();
@@ -22,8 +25,10 @@ export default async function ArticlesPage() {
           Back to inbox
         </Link>
         <h1>Help articles</h1>
+        <Separator className="mt-6" />
         <section className="article-section" aria-labelledby="add-article">
           <h2 id="add-article">Add article</h2>
+          <Card className="rounded-lg p-6">
           <form action={saveArticle} className="review-form">
             <label htmlFor="new-kind">Document type</label>
             <select id="new-kind" name="kind" defaultValue="help_article">
@@ -42,15 +47,22 @@ export default async function ArticlesPage() {
             />
             <SubmitButton label="Add article" pendingLabel="Adding..." />
           </form>
+          </Card>
         </section>
+        <Separator />
         <section
           className="article-section"
           aria-labelledby="existing-articles"
         >
           <h2 id="existing-articles">Existing articles</h2>
           {articles.map((article) => (
+            <Card key={`${article.id}-${article.title}-${article.body}-${article.retired}`} className="mb-4 gap-4 rounded-lg p-6">
+              <div className="flex flex-wrap gap-2">
+                <StatusPill tone={article.kind === 'internal_note' ? 'team' : 'neutral'}>{article.kind === 'internal_note' ? 'Internal note' : 'Help article'}</StatusPill>
+                <StatusPill tone={article.retired ? 'neutral' : 'ok'}>{article.retired ? 'Retired' : 'Active'}</StatusPill>
+              </div>
+              <Separator />
             <form
-              key={`${article.id}-${article.title}-${article.body}-${article.retired}`}
               action={saveArticle}
               className="review-form article-editor"
             >
@@ -95,6 +107,7 @@ export default async function ArticlesPage() {
               </label>
               <SubmitButton label="Save article" pendingLabel="Saving..." />
             </form>
+            </Card>
           ))}
         </section>
       </div>

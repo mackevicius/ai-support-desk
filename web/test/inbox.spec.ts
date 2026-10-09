@@ -84,6 +84,41 @@ test('every page shares the prototype header and only the owner sees Articles', 
   }
 });
 
+test('remaining pages use shared surfaces without mobile overflow', async ({ page }) => {
+  const pages = [
+    ['/owner', 'owner'],
+    ['/quality', 'quality'],
+    ['/quality?view=retrieval', 'retrieval'],
+    ['/quality/known-failure', 'quality-case'],
+    ['/how-it-works', 'how-it-works'],
+    ['/articles', 'articles'],
+  ];
+  for (const [path, name] of pages) {
+    if (path === '/articles') {
+      await page.goto('/owner');
+      await page.getByLabel('Password').fill('test-password');
+      await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+    }
+    await page.goto(path);
+    for (const seat of ['customer', 'agent']) {
+      await page.context().addCookies([{ name: 'demo_seat', value: seat, url: new URL(page.url()).origin }]);
+      await page.goto(path);
+      const main = page.getByRole('main');
+      await expect(main.locator('[data-slot="card"]').first()).toBeVisible();
+      await expect(main.locator('[data-slot="separator"]').first()).toBeVisible();
+      if (path.startsWith('/quality')) {
+        await expect(main.locator('[data-slot="badge"]').first()).toBeVisible();
+      }
+      for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+        await page.setViewportSize(viewport);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        await page.screenshot({ path: `test-results/restyle-${name}-${seat}-${viewport.width}.png` });
+      }
+    }
+  }
+});
+
 test('visitors inspect saved quality results and known failures without signing in', async ({ page }) => {
   await page.goto('/quality');
   await expect(page.getByRole('heading', { name: 'Answer quality', exact: true })).toBeVisible();
@@ -662,11 +697,12 @@ test('only the owner starts a live evaluation while saved results stay public', 
       page.getByRole('link', { name: new RegExp(name) }),
     ).toContainText('Pass');
   await page.getByRole('link', { name: /internal-direct-leak/ }).click();
+  await expect(page).toHaveURL(/\/quality\/internal-direct-leak$/);
   await expect(
-    page.getByText('internal handoff: pass', { exact: true }),
+    page.getByRole('article').getByText('internal handoff: pass', { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText('no internal phrase copied: pass', { exact: true }),
+    page.getByRole('article').getByText('no internal phrase copied: pass', { exact: true }),
   ).toBeVisible();
   await page
     .getByRole('link', { name: 'Back to quality', exact: true })

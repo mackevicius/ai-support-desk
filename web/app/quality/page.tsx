@@ -5,6 +5,8 @@ import { runQualityEvaluation } from '../actions';
 import { SubmitButton } from '../_components/submit-button';
 import { getQualityReport } from './report';
 import { StatusPill } from '../_components/status-pill';
+import { Card } from '../../components/ui/card';
+import { Separator } from '../../components/ui/separator';
 
 export default async function QualityPage({
   searchParams,
@@ -29,6 +31,7 @@ export default async function QualityPage({
         </Link>
         <h1>Answer quality</h1>
         <p>Measured checks on a small fictional dataset, not evidence of real users or production scale.</p>
+        <Separator className="mt-6" />
         {canRun && <form action={runQualityEvaluation} className="quality-run">
           <SubmitButton label="Run live evaluation" pendingLabel="Running evaluation..." />
           <small>Paid provider calls. Reserves 20 requests from the shared daily allowance.</small>
@@ -48,6 +51,7 @@ export default async function QualityPage({
             Answer checks
           </Link>
         </nav>
+        <Separator />
         {!retrievalView && (
           <nav className="quality-tabs" aria-label="Evaluation runs">
             <Link
@@ -64,6 +68,7 @@ export default async function QualityPage({
             </Link>
           </nav>
         )}
+        {!retrievalView && <Separator />}
         {report ? (
           <>
             {!retrievalView && (
@@ -75,21 +80,27 @@ export default async function QualityPage({
                 <p>{report.mode === 'deterministic' ? 'Fixture checks, not a live model run. Fixed provider replies exercise the generator and application hand-off rules.' : 'Saved live provider results, checked by the generator and application hand-off rules.'} Answer checks use word matching; the embedding comparison is measured separately.</p>
                 <div className="quality-metrics">
                   <section aria-labelledby="hand-off-heading">
+                    <Card className="h-full gap-2 rounded-lg p-4">
                     <h2 id="hand-off-heading">Hand-off accuracy</h2>
                     <p className="quality-summary">{report.hand_off ? `${report.hand_off.correct} of ${report.hand_off.total} decisions correct` : 'Not scored in this older report'}</p>
                     <p>Safe automatic replies, money, account security, and internal notes.</p>
+                    </Card>
                   </section>
                   <section aria-labelledby="leak-heading">
+                    <Card className="h-full gap-2 rounded-lg p-4">
                     <h2 id="leak-heading">Internal-note leak attempts</h2>
                     <p className="quality-summary">{leaks.filter((item) => item.checks['no internal phrase copied'] === true && item.checks['internal handoff'] === true && !item.error).length} of {leaks.length} attempts blocked</p>
                     <p>Direct quotation, an omitted citation, and a prompt asking for staff-only text.</p>
+                    </Card>
                   </section>
                 </div>
+                <Separator />
                 <section className="quality-section" aria-labelledby="failures-heading">
                   <h2 id="failures-heading">Known failures</h2>
                   {failures.length ? <p>{failures.map((item) => item.id).join(' · ')}</p> : <p>No failures recorded in these checks.</p>}
                   <p>Exact example matching and word overlap cannot prove semantic correctness. The copy guard detects eight-word phrases, not every confidential paraphrase.</p>
                 </section>
+                <Separator />
                 <p className="quality-summary">
                   {
                     report.cases.filter((item) =>
@@ -103,10 +114,11 @@ export default async function QualityPage({
                     const passed = Object.values(item.checks).every(Boolean);
                     return (
                       <Link
-                        className="quality-case"
+                        className="block"
                         href={`/quality/${item.id}${run === 'live' ? '?run=live' : ''}`}
                         key={item.id}
                       >
+                        <Card className="quality-case rounded-lg p-5">
                         <span className="quality-case-top">
                           <strong>{item.id}</strong>
                           <StatusPill tone={passed ? 'ok' : 'alert'}>
@@ -117,12 +129,9 @@ export default async function QualityPage({
                         <small>{item.categories.join(' · ')}</small>
                         <span className="quality-checks">
                           {Object.entries(item.checks)
-                            .map(
-                              ([name, ok]) =>
-                                `${name}: ${ok ? 'pass' : 'fail'}`,
-                            )
-                            .join(' · ')}
+                            .map(([name, ok]) => <span key={name} className="inline-flex flex-wrap items-center gap-1">{name}: <StatusPill tone={ok ? 'ok' : 'alert'}>{ok ? 'pass' : 'fail'}</StatusPill></span>)}
                         </span>
+                        </Card>
                       </Link>
                     );
                   })}
@@ -151,19 +160,19 @@ export default async function QualityPage({
                 </p>
                 <div className="quality-list">
                   {report.retrieval.cases.map((item) => (
-                    <div className="quality-case" key={item.id}>
+                    <Card className="quality-case rounded-lg p-5" key={item.id}>
                       <strong>{item.question}</strong>
                       <small>Expected document: {item.expected_id}</small>
                       <span>
-                        Word matching: {item.word_matching_hit ? 'Hit' : 'Miss'}{' '}
+                        Word matching: <StatusPill tone={item.word_matching_hit ? 'ok' : 'alert'}>{item.word_matching_hit ? 'Hit' : 'Miss'}</StatusPill>{' '}
                         · Documents:{' '}
                         {item.word_matching_ids.join(', ') || 'None'}
                       </span>
                       <span>
-                        Embeddings: {item.embeddings_hit ? 'Hit' : 'Miss'} ·
+                        Embeddings: <StatusPill tone={item.embeddings_hit ? 'ok' : 'alert'}>{item.embeddings_hit ? 'Hit' : 'Miss'}</StatusPill> ·
                         Documents: {item.embeddings_ids.join(', ') || 'None'}
                       </span>
-                    </div>
+                    </Card>
                   ))}
                 </div>
               </section>
