@@ -238,49 +238,85 @@
   @apply rounded-full px-4;
 }
 .customer-ticket {
-  @apply mx-auto max-w-6xl px-5 py-8 sm:px-8;
+  @apply mx-auto max-w-[1140px] px-5 pt-6 pb-30;
 }
 .customer-panel {
-  @apply grid min-w-0 overflow-hidden rounded-2xl border border-border bg-card md:grid-cols-[210px_minmax(0,1fr)];
+  @apply flex min-h-[520px] min-w-0 flex-col overflow-hidden rounded-[24px] bg-[#f6efe8] text-[#241c15] shadow-[0_30px_80px_rgba(0,0,0,.45)] min-[901px]:h-[calc(100vh-210px)];
+  --muted-foreground: #65564c;
+  --link: #a4430a;
+  --border: #e6dccf;
+  --secondary: #f1e8dd;
+  --secondary-foreground: #492910;
+  color-scheme: light;
+}
+.customer-panel-heading {
+  @apply flex flex-wrap items-center justify-between gap-2 bg-primary px-5 py-3.5 text-primary-foreground;
+}
+.customer-panel-heading h2 {
+  @apply m-0 text-[17px] text-inherit normal-case;
+}
+.customer-panel-heading p {
+  @apply m-0 text-[13px] text-inherit/80;
+}
+.customer-panel-body {
+  @apply grid min-h-0 min-w-0 flex-1 min-[901px]:grid-cols-[300px_minmax(0,1fr)];
 }
 .conversations {
-  @apply min-w-0 border-b border-border p-4 md:border-r md:border-b-0;
+  @apply flex min-h-0 min-w-0 flex-col border-b border-[#e2d4c4] bg-[#efe4d7] p-2.5 min-[901px]:border-r min-[901px]:border-b-0;
 }
 .conversation-heading h2 {
-  @apply mb-3;
+  @apply mx-2 mt-3.5 mb-1.5 text-[11px] text-[#8a7866];
 }
 .new-conversation {
-  @apply inline-block text-sm font-bold text-link underline underline-offset-4;
+  @apply block rounded-[10px] bg-primary px-3 py-2.5 text-center text-[15px] font-extrabold text-primary-foreground hover:bg-[#ff8a33];
 }
 .conversations nav {
-  @apply my-4 max-h-40 overflow-y-auto md:max-h-96;
+  @apply min-h-0 max-h-40 flex-1 overflow-y-auto min-[901px]:max-h-none;
 }
 .conversations nav a {
-  @apply mb-1 block rounded-md border-l-3 border-transparent px-2 py-3 text-sm hover:bg-secondary;
+  @apply mb-0.5 block rounded-[10px] border-l-3 border-transparent px-3 py-2.5 text-[15px] hover:bg-[#f6ece1];
 }
 .conversations nav a[aria-current='page'] {
-  @apply border-primary bg-secondary;
+  @apply border-primary bg-white shadow-sm;
 }
 .conversations nav strong {
   @apply block wrap-break-word;
+}
+.conversation-meta {
+  @apply mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground;
+}
+.conversations > form {
+  @apply mt-auto pt-3;
+}
+.conversations > form button {
+  @apply w-full;
 }
 .conversations nav > p {
   @apply mt-1 block text-xs text-muted-foreground;
 }
 .support-chat {
-  @apply min-w-0 p-5 sm:p-6;
+  @apply flex min-h-0 min-w-0 flex-col;
 }
 .chat-heading {
-  @apply mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4;
+  @apply shrink-0 border-b border-border bg-[#fbf6f0] px-5 py-3;
 }
-.chat-heading h2 {
-  @apply mb-1 text-foreground;
+.chat-heading h1 {
+  @apply m-0 text-base leading-normal font-extrabold;
+}
+.conversation-messages {
+  @apply flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-5;
+}
+.conversation-messages > article {
+  @apply my-0;
+}
+.conversation-messages > article > div > p {
+  @apply m-0;
+}
+.conversation-messages [data-from='system'] button {
+  @apply h-auto border-0 bg-transparent p-0 text-[13px] font-extrabold text-link underline shadow-none whitespace-normal hover:bg-transparent;
 }
 .chat-welcome h3 {
   @apply mb-5 text-xl font-bold;
-}
-.chat-subject {
-  @apply mb-5 text-xl;
 }
 .chat-request {
   @apply grid gap-3;
@@ -343,6 +379,9 @@
 .answer-explanation,
 .chat-history {
   @apply mt-5 border-t border-border pt-4 text-sm;
+}
+.conversation-messages .answer-explanation {
+  @apply mt-2 border-0 p-0 text-[13px];
 }
 .answer-explanation summary,
 .chat-history summary,
