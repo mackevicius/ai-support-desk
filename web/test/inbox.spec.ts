@@ -493,17 +493,34 @@ test('a customer gets a covered answer by keyboard and an example answer on a ph
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
   const chat = page.getByRole('region', { name: 'Support chat' });
+  await expect(
+    chat.locator('header').getByRole('heading', {
+      name: 'How do I download music for offline listening?',
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(chat.locator('header time')).toHaveCount(1);
+  const conversations = page.getByRole('navigation', { name: 'Conversations', exact: true });
+  await expect(conversations.locator('a[aria-current="page"] time')).toHaveCount(1);
+  await expect(chat.getByRole('textbox')).toHaveCount(0);
+  const customerBubble = await chat.getByRole('article', { name: 'Your message' }).boundingBox();
+  const tunelyBubble = await chat.getByRole('article', { name: 'Tunely reply' }).boundingBox();
+  expect(customerBubble!.x).toBeGreaterThan(tunelyBubble!.x);
   await expect(chat.getByText('Answered', { exact: true })).toBeVisible();
   await expect(
     chat
       .getByRole('article', { name: 'Tunely reply' })
-      .getByText(/Tunely paid plans include offline listening/),
+      .locator(':scope > div > p')
+      .filter({ hasText: /Tunely paid plans include offline listening/ }),
   ).toBeVisible();
   await expect(
     page.getByRole('banner').getByText('4 live drafts left'),
   ).toBeVisible();
-  await chat.getByText('How was this answered?', { exact: true }).focus();
+  const reply = chat.getByRole('article', { name: 'Tunely reply' });
+  await reply.getByText('How was this answered?', { exact: true }).focus();
   await page.keyboard.press('Enter');
+  await expect(reply.getByText('Automatic reply', { exact: true })).toBeVisible();
+  await expect(reply.getByText('Help article', { exact: true })).toBeVisible();
   await expect(
     chat.getByRole('heading', { name: 'Offline downloads' }),
   ).toBeVisible();
@@ -565,7 +582,7 @@ test('uncovered questions hand off and exhausted visitors still start conversati
       chat.getByText('A Tunely team member will reply soon', { exact: true }),
     ).toBeVisible();
     await expect(
-      chat.getByRole('button', { name: 'Switch to Agent seat' }),
+      chat.locator('[data-from="system"]').getByRole('button', { name: 'Switch to Agent seat' }),
     ).toBeVisible();
     if (draft === 4)
       await expect(chat.getByRole('status')).toHaveText(
