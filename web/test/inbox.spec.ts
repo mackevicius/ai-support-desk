@@ -1,4 +1,17 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Request } from '@playwright/test';
+
+async function submittedReviewAction(request: Request) {
+  const contentType = request.headers()['content-type'] ?? '';
+  if (request.method() !== 'POST' || !contentType.startsWith('multipart/form-data')) return null;
+  const formData = await new Response(
+    new Uint8Array(request.postDataBuffer() ?? []),
+    { headers: { 'content-type': contentType } },
+  ).formData();
+  const action = Array.from(formData.entries()).find(
+    ([name]) => name === 'action' || name.endsWith('_action'),
+  )?.[1];
+  return typeof action === 'string' ? action : null;
+}
 
 async function expectShell(page: Page, drafts: number) {
   await expect(page.getByText('Tunely is a fictional company')).toBeVisible();
@@ -947,8 +960,21 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
     .getByRole('textbox', { name: 'Reply' })
     .fill('Please resend the invitations.');
   await page.getByLabel('Priority').selectOption('normal');
+  await page.route('**/tickets/1', async (route) => {
+    if (await submittedReviewAction(route.request()) === 'approve') {
+      await new Promise((resolve) => setTimeout(resolve, 6000));
+    }
+    await route.continue();
+  });
+  const approvalResponse = page.waitForResponse(async (response) =>
+    await submittedReviewAction(response.request()) === 'approve',
+  );
   await page.getByRole('button', { name: 'Approve in-app reply' }).click();
+  const approved = await approvalResponse;
+  expect(approved.status()).toBeLessThan(400);
+  expect(approved.headers()['x-action-redirect']?.split(';')[0] ?? approved.headers().location).toBe('/tickets/2');
   await expect(page).toHaveURL(/\/tickets\/2$/);
+  await page.unroute('**/tickets/1');
   await page.goto('/tickets/1');
   await expect(
     page
@@ -1035,25 +1061,10 @@ test('review actions stay disabled while approval is in flight', async ({
   });
   let requests = 0;
   await page.route('**/tickets/1', async (route) => {
-    const request = route.request();
-    const contentType = request.headers()['content-type'] ?? '';
-    if (
-      request.method() === 'POST' &&
-      contentType.startsWith('multipart/form-data')
-    ) {
-      const formData = await new Response(
-        new Uint8Array(request.postDataBuffer() ?? []),
-        { headers: { 'content-type': contentType } },
-      ).formData();
-      const isReview = Array.from(formData.entries()).some(
-        ([name, value]) =>
-          (name === 'action' || name.endsWith('_action')) &&
-          ['approve', 'reject', 'ask'].includes(String(value)),
-      );
-      if (isReview) {
-        requests += 1;
-        await heldRequest;
-      }
+    const action = await submittedReviewAction(route.request());
+    if (action && ['approve', 'reject', 'ask'].includes(action)) {
+      requests += 1;
+      await heldRequest;
     }
     await route.continue();
   });
