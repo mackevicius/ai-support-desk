@@ -10,6 +10,7 @@ import {
   generateTicket,
   getTickets,
   loginOwner,
+  postCustomerMessage,
   resetDemo,
   reviewTicket,
   saveHelpArticle,
@@ -198,6 +199,27 @@ export async function submitRequest(formData: FormData) {
   const id = await submitQuestion(question, sessionId);
   revalidatePath('/', 'layout');
   redirect(`/tickets/${id}`);
+}
+
+export async function sendCustomerMessage(
+  _previous: string | null,
+  formData: FormData,
+): Promise<string | null> {
+  const jar = await cookies();
+  const sessionId = jar.get('demo_session')?.value;
+  const id = formData.get('id');
+  const message = formData.get('message');
+  if (!sessionId || jar.get('demo_seat')?.value === 'agent')
+    return 'Only the Customer seat can reply here.';
+  if (typeof id !== 'string' || !/^\d+$/.test(id) || typeof message !== 'string' || !message.trim() || message.length > 5000)
+    return 'Enter a message of up to 5000 characters.';
+  try {
+    await postCustomerMessage(id, sessionId, message);
+  } catch {
+    return 'Could not send your message. Please try again.';
+  }
+  revalidatePath('/', 'layout');
+  return null;
 }
 
 export async function reviewRequest(formData: FormData) {

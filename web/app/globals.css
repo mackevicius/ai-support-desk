@@ -270,6 +270,18 @@
 .new-conversation {
   @apply block rounded-[10px] bg-primary px-3 py-2.5 text-center text-[15px] font-extrabold text-primary-foreground hover:bg-[#ff8a33];
 }
+.new-conversation[aria-current='page'] {
+  @apply outline-2 -outline-offset-4 outline-primary-foreground;
+}
+.conversation-link-content {
+  @apply block;
+}
+.conversation-link-content[aria-busy='true'] {
+  @apply opacity-70;
+}
+.conversation-loading {
+  @apply mt-1 block text-xs font-bold;
+}
 .conversations nav {
   @apply min-h-0 max-h-40 flex-1 overflow-y-auto min-[901px]:max-h-none;
 }
@@ -309,6 +321,18 @@
 .conversation-messages > article {
   @apply my-0;
 }
+.conversation-current-reply > article {
+  @apply my-0;
+}
+.customer-composer {
+  @apply grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2 border-t border-border bg-[#fbf6f0] p-3;
+}
+.customer-composer textarea {
+  @apply min-h-12 max-h-32 resize-y bg-white text-[#241c15];
+}
+.customer-composer p {
+  @apply col-span-2 m-0 text-sm text-destructive;
+}
 .conversation-messages > article > div > p {
   @apply m-0;
 }
@@ -329,6 +353,9 @@
 }
 .chat-examples {
   @apply mt-6 grid grid-cols-1 gap-2 border-t border-border pt-5 sm:grid-cols-2;
+}
+.chat-empty {
+  @apply gap-0;
 }
 .chat-examples button {
   @apply h-full min-h-12 w-full justify-start whitespace-normal text-left;

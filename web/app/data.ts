@@ -187,6 +187,20 @@ export async function getTicket(
   return response.json();
 }
 
+export async function getConversation(
+  id: string,
+  sessionId?: string,
+  ownerSession?: string,
+  view: 'agent' | 'customer' = 'customer',
+) {
+  const [ticket, tickets, allowance] = await Promise.all([
+    getTicket(id, sessionId, ownerSession, view),
+    getTickets(sessionId),
+    getLiveAllowance(sessionId),
+  ]);
+  return { ticket, tickets, allowance };
+}
+
 export async function submitQuestion(
   question: string,
   sessionId: string,
@@ -206,6 +220,19 @@ export async function submitQuestion(
   if (!response.ok) throw new Error('Could not submit the support request');
   const ticket: { id: number } = await response.json();
   return ticket.id;
+}
+
+export async function postCustomerMessage(id: string, sessionId: string, message: string) {
+  const response = await fetch(
+    `${process.env.API_URL ?? 'http://localhost:3001'}/tickets/${encodeURIComponent(id)}/messages`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: `demo_session=${sessionId}; demo_seat=customer` },
+      body: JSON.stringify({ message }),
+      cache: 'no-store',
+    },
+  );
+  if (!response.ok) throw new Error('Could not send your message. Please try again.');
 }
 
 export async function resetDemo(sessionId: string) {

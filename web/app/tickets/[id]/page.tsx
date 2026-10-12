@@ -3,13 +3,14 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { generateRequest, reviewRequest } from '../../actions';
-import { getTicket, getTickets } from '../../data';
+import { getConversation } from '../../data';
 import { ReviewButtons, SubmitButton } from '../../_components/submit-button';
 import { ReplyForm } from '../../_components/reply-editor';
 import { SupportChat } from '../../_components/support-chat';
 import { Queue } from '../../queue';
 import { HelpArticleForm } from '../../_components/help-article-form';
 import { ChatBubble } from '../../_components/chat-bubble';
+import { ConversationUpdates } from '../../_components/conversation-updates';
 import {
   StatusPill,
   priorityTone,
@@ -28,14 +29,13 @@ export default async function TicketPage({
   const jar = await cookies();
   const sessionId = jar.get('demo_session')?.value;
   const owner = Boolean(jar.get('owner_session')?.value);
-  const ticket = await getTicket(
+  const { ticket, tickets: queue, allowance } = await getConversation(
     id,
     sessionId,
     jar.get('owner_session')?.value,
     jar.get('demo_seat')?.value === 'agent' ? 'agent' : 'customer',
   );
   if (!ticket) notFound();
-  const queue = await getTickets(sessionId);
   if (jar.get('demo_seat')?.value !== 'agent') {
     if (!ticket.decision) redirect('/');
     return (
@@ -43,7 +43,7 @@ export default async function TicketPage({
         <SupportChat
           tickets={queue}
           ticket={ticket}
-          allowance={ticket.live_ai!}
+          allowance={allowance}
         />
       </main>
     );
@@ -65,26 +65,11 @@ export default async function TicketPage({
               ? 'AI replied automatically'
               : 'AI handed this conversation to you'}
           </ChatBubble>
-          {ticket.history
-            .filter((event) =>
-              event.description.startsWith('Team asked for details: '),
-            )
-            .map((event) => (
-              <ChatBubble
-                key={event.id}
-                from="agent"
-                own
-                label="Tunely team"
-                aria-label="Team question"
-              >
-                {event.description.slice('Team asked for details: '.length)}
-              </ChatBubble>
-            ))}
-          {ticket.approved_reply && (
+          <ConversationUpdates history={ticket.history} agent reply={ticket.approved_reply && (
             <ChatBubble from="agent" own label="Approved in-app reply">
               {ticket.approved_reply}
             </ChatBubble>
-          )}
+          )} />
         </section>
         <div className="agent-composer">
           {generation && (

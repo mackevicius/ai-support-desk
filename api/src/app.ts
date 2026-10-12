@@ -174,8 +174,9 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       );
     }
     const events = await pool.query(
-      `SELECT id, description, created_at FROM ticket_events
-       WHERE ticket_id = $1 AND (session_id IS NULL OR session_id = $2) ORDER BY created_at, id`,
+      `SELECT id, description, COALESCE(occurred_at, created_at) AS created_at FROM ticket_events
+       WHERE ticket_id = $1 AND (session_id IS NULL OR session_id = $2)
+       ORDER BY COALESCE(occurred_at, created_at), id`,
       [id, session],
     );
     const current = review.rows[0];
@@ -233,6 +234,31 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
           : null,
       history: events.rows,
     };
+  }
+  async function archiveAutomaticReply(
+    ticket: NonNullable<Awaited<ReturnType<typeof detail>>>,
+    id: string,
+    session: string,
+    database: Pick<Pool, 'query'>,
+  ) {
+    if (
+      ticket.decision?.kind !== 'automatic_reply' ||
+      !ticket.approved_reply ||
+      ticket.decision.documents?.some((source: { kind: string }) => source.kind === 'internal_note') ||
+      ticket.history.some((event: { description: string }) =>
+        event.description.startsWith('Automatic in-app reply: ') ||
+        event.description.startsWith('Human approved in-app reply'),
+      )
+    ) return;
+    const deliveredAt = ticket.history.find((event: { description: string }) =>
+      event.description.startsWith('Automatic reply: '),
+    )?.created_at ?? ticket.created_at;
+    await database.query(
+      `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at, occurred_at)
+       VALUES (nextval('ticket_event_ids'), $1, $2, $3, $4, $5)
+       ON CONFLICT DO NOTHING`,
+      [id, session, `Automatic in-app reply: ${ticket.approved_reply}`, new Date().toISOString(), deliveredAt],
+    );
   }
   app.use((request, response, next) => {
     const session = request.headers.cookie?.match(
@@ -788,6 +814,59 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     }
   });
 
+  app.post('/tickets/:id/messages', async (request, response, next) => {
+    if (request.headers.cookie?.match(/(?:^|;\s*)demo_seat=agent(?:;|$)/)) {
+      response.sendStatus(403);
+      return;
+    }
+    const message = request.body?.message;
+    if (typeof message !== 'string' || !message.trim() || message.length > 5000) {
+      response.status(400).json({ error: 'Enter a message of up to 5000 characters.' });
+      return;
+    }
+    try {
+      const ticket = /^\d+$/.test(request.params.id)
+        ? await detail(request.params.id, response.locals.session)
+        : null;
+      if (!ticket) {
+        response.sendStatus(404);
+        return;
+      }
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `INSERT INTO ticket_reviews (session_id, ticket_id, state, priority, approved_reply)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (session_id, ticket_id) DO UPDATE SET state =
+             CASE WHEN ticket_reviews.state = 'approved' THEN 'reopened' ELSE ticket_reviews.state END`,
+          [
+            response.locals.session,
+            request.params.id,
+            ticket.status !== 'open' ? 'reopened' : (ticket.review_state ?? 'saved'),
+            ticket.priority,
+            ticket.approved_reply,
+          ],
+        );
+        await archiveAutomaticReply(ticket, request.params.id, response.locals.session, client);
+        await client.query(
+          `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
+           VALUES (nextval('ticket_event_ids'), $1, $2, $3, $4)`,
+          [request.params.id, response.locals.session, `Customer replied: ${message.trim()}`, new Date().toISOString()],
+        );
+        await client.query('COMMIT');
+        response.sendStatus(201);
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post('/tickets/:id/check', async (request, response, next) => {
     try {
       const ticket = /^\d+$/.test(request.params.id)
@@ -962,6 +1041,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
             .json({ error: 'Review action is no longer available' });
           return;
         }
+        await archiveAutomaticReply(ticket, request.params.id, response.locals.session, client);
         await client.query(
           `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
           VALUES (nextval('ticket_event_ids'), $1, $2, $3, $4)`,

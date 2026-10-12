@@ -562,7 +562,8 @@ test('a visitor explores saved cases and starts chats from every topic tile', as
     'Can I play Tunely in my car?',
   ]) {
     await page
-      .getByRole('link', { name: 'New conversation', exact: true })
+      .getByRole('banner')
+      .getByRole('link', { name: 'Tunely · music streaming' })
       .click();
     await page
       .getByRole('region', { name: 'Browse by topic' })
@@ -841,7 +842,7 @@ test('a customer gets a covered answer by keyboard and an example answer on a ph
   await expect(
     conversations.locator('a[aria-current="page"] time'),
   ).toHaveCount(1);
-  await expect(chat.getByRole('textbox')).toHaveCount(0);
+  await expect(chat.getByRole('textbox', { name: 'Reply to Tunely' })).toBeVisible();
   const customerBubble = await chat
     .getByRole('article', { name: 'Your message' })
     .boundingBox();
@@ -902,6 +903,91 @@ test('a customer gets a covered answer by keyboard and an example answer on a ph
     path: 'test-results/customer-desktop.png',
     fullPage: true,
   });
+});
+
+test('conversation links immediately announce loading while the next screen is delayed', async ({ page }) => {
+  await page.goto('/tickets/1');
+  let releaseNavigation!: () => void;
+  const navigationBlocked = new Promise<void>((resolve) => { releaseNavigation = resolve; });
+  await page.route('**/tickets/2?*', async (route) => {
+    await navigationBlocked;
+    await route.continue();
+  });
+  const conversations = page.getByRole('navigation', { name: 'Conversations', exact: true });
+  const destination = conversations.locator('a[href="/tickets/2"]');
+  try {
+    await destination.focus();
+    await page.keyboard.press('Enter');
+    await expect(destination.locator('[aria-busy]')).toHaveAttribute('aria-busy', 'true');
+    await expect(destination.getByRole('status')).toHaveText('Loading conversation...');
+    await expect(page).toHaveURL(/\/tickets\/1$/);
+  } finally {
+    releaseNavigation();
+  }
+  await expect(page).toHaveURL(/\/tickets\/2$/);
+  await expect(conversations.locator('a[aria-current="page"]')).toHaveAttribute('href', '/tickets/2');
+  await expect(page.getByText('Loading conversation...', { exact: true })).toHaveCount(0);
+});
+
+test('customers reply in the same conversation and the team sees their messages', async ({ page }) => {
+  await page.goto('/tickets/1');
+  const chat = page.getByRole('region', { name: 'Support chat' });
+  const input = chat.getByRole('textbox', { name: 'Reply to Tunely' });
+  await input.fill(' ');
+  await chat.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(chat.getByRole('alert')).toHaveText('Enter a message of up to 5000 characters.');
+  await expect(input).toHaveValue(' ');
+  await input.fill('The family invite fails on my phone.');
+  await input.press('Tab');
+  await page.keyboard.press('Enter');
+  await expect(chat.getByRole('article', { name: 'Your message' }).getByText('The family invite fails on my phone.', { exact: true })).toBeVisible();
+  await expect(input).toHaveValue('');
+  await page.reload();
+  await expect(chat.getByRole('article', { name: 'Your message' }).getByText('The family invite fails on my phone.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Agent', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Support inbox' })).toBeVisible();
+  const conversation = page.getByRole('region', { name: 'Conversation', exact: true });
+  await expect(conversation.getByText('The family invite fails on my phone.', { exact: true })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Reply', exact: true }).fill('Which phone are you using?');
+  await page.getByRole('button', { name: 'Ask for details', exact: true }).click();
+  await expect(conversation.getByRole('article', { name: 'Team question' })).toBeVisible();
+  await page.getByRole('button', { name: 'Customer', exact: true }).click();
+  await expect(input).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await input.fill('An iPhone 16.');
+  await chat.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(chat.getByRole('article', { name: 'Your message' }).getByText('An iPhone 16.', { exact: true })).toBeVisible();
+  const bubbles = chat.locator('.conversation-messages > article');
+  const texts = await bubbles.allTextContents();
+  expect(texts.findIndex((text) => text.includes('The family invite fails'))).toBeLessThan(texts.findIndex((text) => text.includes('Which phone')));
+  expect(texts.findIndex((text) => text.includes('Which phone'))).toBeLessThan(texts.findIndex((text) => text.includes('An iPhone 16.')));
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/customer-reply-phone.png', fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({ path: 'test-results/customer-reply-desktop.png', fullPage: true });
+});
+
+test('new conversations stay beside the customer conversation list', async ({ page }) => {
+  await page.goto('/tickets/1');
+  const conversations = page.getByRole('navigation', { name: 'Conversations', exact: true });
+  await expect(conversations.getByRole('link')).toHaveCount(5);
+  const newConversation = page.getByRole('link', { name: 'New conversation', exact: true });
+  await newConversation.focus();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/conversations\/new$/);
+  await expect(newConversation).toHaveAttribute('aria-current', 'page');
+  await expect(conversations.getByRole('link')).toHaveCount(5);
+  const chat = page.getByRole('region', { name: 'Support chat' });
+  await expect(chat.getByText("Hi! I'm Tunely Support. What's going wrong?", { exact: true })).toBeVisible();
+  await page.screenshot({ path: 'test-results/customer-new-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: 'test-results/customer-new-phone.png', fullPage: true });
+  await chat.getByRole('textbox', { name: 'New support request' }).fill('How do I download music for offline listening?');
+  await chat.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page).toHaveURL(/\/tickets\/\d+$/);
+  await expect(conversations.getByRole('link')).toHaveCount(6);
+  await expect(chat.getByText('Answered', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test('uncovered questions hand off and exhausted visitors still start conversations', async ({

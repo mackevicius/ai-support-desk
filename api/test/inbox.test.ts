@@ -1,9 +1,42 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { createServer } from 'node:http';
 import { createApp } from '../src/app.js';
-import { close, listening, startInbox } from './helpers.js';
+import { close, listening, startInbox, withEnv } from './helpers.js';
+import { getConversation } from '../../web/app/data.js';
 
 const { pool, baseUrl } = await startInbox();
+
+test('conversation loading starts ticket, list and allowance HTTP requests before waiting for any response', async () => {
+  const pending = new Map<string, import('node:http').ServerResponse>();
+  const server = createServer((request, response) => {
+    pending.set(request.url!, response);
+    if (pending.size === 3) {
+      pending.get('/tickets/1?view=customer')!.end(JSON.stringify({ id: 1 }));
+      pending.get('/tickets')!.end(JSON.stringify([{ id: 1 }]));
+      pending.get('/live-ai')!.end(JSON.stringify({ remaining: 4, paused: false }));
+    }
+  }).listen(0);
+  const url = await listening(server);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await withEnv({ API_URL: url }, async () => {
+      const loaded = await Promise.race([
+        getConversation('1', 'test-session', undefined, 'customer'),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error('Conversation reads waited for an earlier response')), 2000);
+        }),
+      ]);
+      assert.equal(loaded.ticket?.id, 1);
+      assert.deepEqual(loaded.tickets, [{ id: 1 }]);
+      assert.deepEqual(loaded.allowance, { remaining: 4, paused: false });
+    });
+  } finally {
+    clearTimeout(timer);
+    server.closeAllConnections();
+    await close(server);
+  }
+});
 
 test('a visitor can browse tickets through the API', async () => {
   const response = await fetch(`${baseUrl}/tickets`);

@@ -50,7 +50,8 @@ As a customer, the visitor submits a problem and the AI drafts an answer from Tu
 - The company is always shown as "Tunely · music streaming" so visitors know what it is without explanation.
 - One brand in two moods, from the chosen "Chat" prototype direction: warm orange accent, rounded shapes, chat bubbles. The customer side is dark charcoal; the agent side is light cream, built for reading many tickets.
 - The landing page is Tunely's own homepage: a top navigation, a headline beside a live support chat with clickable example problems, a three-step "How Tunely Support works" section (tell us, get an answer in seconds, a person steps in when it matters), and topic tiles that each start a chat with an example question.
-- The customer view is one panel, like a messaging app: the customer's conversations are listed on the left with their status, and the selected support ticket opens as its own chat on the right. "New conversation" starts a fresh chat.
+- The customer view is one panel, like a messaging app: the customer's conversations are listed on the left with their status, and the selected support ticket opens as its own chat on the right. "New conversation" opens a greeting, text box, and example questions beside the same list, with the new-chat link marked current. Sending opens the new conversation in that panel; first-time visitors still land on the homepage.
+- Conversation links show an accessible loading state immediately. The conversation, list, and daily allowance are fetched concurrently. Keyboard use and the 390px phone layout remain supported.
 - A thin strip on every page reads "Portfolio demo · How it works" and links to one page describing the architecture and the quality results.
 - A top-bar switch, "Viewing as: Customer | Agent", changes seats. After a customer submits a ticket that is handed off, the chat suggests switching to the agent seat.
 - The agent view has three columns: the inbox as a conversation list, the selected ticket as a chat thread with the editable answer draft in the reply box, and a numbered "How the AI decided" trail (topic and priority, documents found, rule applied, decision). After resolution the agent moves directly to the next ticket.
@@ -80,6 +81,7 @@ As a customer, the visitor submits a problem and the AI drafts an answer from Tu
 - Answers lacking adequate support request clarification or hand off rather than invent facts.
 - AI output cannot deliver a handed-off reply or change priority without a human action.
 - Replies are delivered and tracked inside the application. No real email is sent.
+- Customers can reply within any conversation. Follow-ups are private to the visitor, appear in the customer and agent threads in history order, and reopen answered requests for the team without generating another AI answer. Previous automatic and approved replies remain visible, and failed sends keep the customer's text for retrying.
 
 ### Visitors, roles, and cost
 

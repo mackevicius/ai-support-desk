@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { resetWorkspace, submitRequest } from '../actions';
 import type { Ticket, TicketSummary } from '../data';
 import { Textarea } from '../../components/ui/textarea';
@@ -7,6 +6,9 @@ import { SubmitButton } from './submit-button';
 import { AgentSeatButton } from './agent-seat-button';
 import { ChatBubble } from './chat-bubble';
 import { StatusPill } from './status-pill';
+import { CustomerComposer } from './customer-composer';
+import { ConversationUpdates } from './conversation-updates';
+import { ConversationLink } from './conversation-link';
 
 function CustomerStatus({
   ticket,
@@ -120,28 +122,29 @@ export function SupportChat({
       <div className="customer-panel-body">
         <aside className="conversations" aria-label="Your conversations">
           <div className="conversation-heading">
-            <Link
-              href="/#support-chat"
+            <ConversationLink
+              href="/conversations/new"
               className="new-conversation"
-              aria-label="New conversation"
+              label="New conversation"
+              current={!ticket}
             >
               <span aria-hidden="true">+ </span>New conversation
-            </Link>
+            </ConversationLink>
             <h2>Your conversations</h2>
           </div>
           <nav aria-label="Conversations">
             {conversations.map((item) => (
-              <Link
+              <ConversationLink
                 key={item.id}
                 href={`/tickets/${item.id}`}
-                aria-current={ticket?.id === item.id ? 'page' : undefined}
+                current={ticket?.id === item.id}
               >
                 <strong>{item.subject}</strong>
                 <div className="conversation-meta">
                   <CustomerStatus ticket={item} />
                   <ConversationTime value={item.created_at} />
                 </div>
-              </Link>
+              </ConversationLink>
             ))}
             {!conversations.length && <p>No conversations yet</p>}
           </nav>
@@ -175,20 +178,7 @@ export function SupportChat({
               <ChatBubble from="customer" own aria-label="Your message">
                 {ticket.question}
               </ChatBubble>
-              {ticket.history
-                .filter((event) =>
-                  event.description.startsWith('Team asked for details: '),
-                )
-                .map((event) => (
-                  <ChatBubble
-                    key={event.id}
-                    from="agent"
-                    label="Tunely team"
-                    aria-label="Team question"
-                  >
-                    {event.description.slice('Team asked for details: '.length)}
-                  </ChatBubble>
-                ))}
+              <ConversationUpdates history={ticket.history} reply={
               <ChatBubble
                 from="tunely"
                 label="Tunely"
@@ -226,6 +216,7 @@ export function SupportChat({
                   </details>
                 )}
               </ChatBubble>
+              } />
               {ticket.status !== 'resolved' && (
                 <ChatBubble from="system">
                   <p>
@@ -249,9 +240,11 @@ export function SupportChat({
               </details>
             </div>
           ) : (
-            <>
+            <div className="conversation-messages chat-empty">
               <div className="chat-welcome">
-                <h3>What can we help with?</h3>
+                <ChatBubble from="tunely">
+                  Hi! I'm Tunely Support. What's going wrong?
+                </ChatBubble>
               </div>
               {allowance.paused && (
                 <p role="status" className="paused-notice">
@@ -269,8 +262,8 @@ export function SupportChat({
                   placeholder="Ask about your Tunely plan, music, or downloads"
                 />
                 <SubmitButton
-                  label="Submit request"
-                  pendingLabel="Submitting request..."
+                  label="Send"
+                  pendingLabel="Sending..."
                 />
               </form>
               <div className="chat-examples">
@@ -285,8 +278,9 @@ export function SupportChat({
                   </form>
                 ))}
               </div>
-            </>
+            </div>
           )}
+          {ticket && <CustomerComposer key={ticket.id} ticketId={ticket.id} />}
         </section>
       </div>
     </section>

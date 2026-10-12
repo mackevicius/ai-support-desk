@@ -98,6 +98,14 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
     'ALTER TABLE ticket_events ADD COLUMN IF NOT EXISTS session_id text',
   );
   await pool.query(
+    'ALTER TABLE ticket_events ADD COLUMN IF NOT EXISTS occurred_at timestamptz',
+  );
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS ticket_automatic_reply
+     ON ticket_events (ticket_id, session_id)
+     WHERE description LIKE 'Automatic in-app reply: %'`,
+  );
+  await pool.query(
     'ALTER TABLE ticket_reviews ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT NOW()',
   );
   await pool.query(
