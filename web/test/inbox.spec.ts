@@ -150,15 +150,13 @@ test('Customer seat switch waits for a slow server action', async ({
   page,
 }) => {
   await page.goto('/how-it-works');
-  await page
-    .context()
-    .addCookies([
-      {
-        name: 'demo_seat',
-        value: 'agent',
-        url: test.info().project.use.baseURL!,
-      },
-    ]);
+  await page.context().addCookies([
+    {
+      name: 'demo_seat',
+      value: 'agent',
+      url: test.info().project.use.baseURL!,
+    },
+  ]);
   await page.goto('/how-it-works');
   await expect(
     page.getByRole('button', { name: 'Agent', exact: true }),
@@ -236,6 +234,9 @@ test('every page shares active top-bar tabs and only the owner sees Articles', a
   await expect(
     page.getByRole('banner').getByRole('link', { name: 'Articles' }),
   ).toHaveCount(0);
+  // Agent sign-out lands on / which then redirects to the selected ticket.
+  await expect(page).toHaveURL(/\/tickets\/\d+$/);
+  await page.goto('/how-it-works');
   await switchToCustomer(page);
   await page.goto('/how-it-works');
   await page
