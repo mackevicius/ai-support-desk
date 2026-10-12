@@ -32,6 +32,29 @@ async function approveReply(page: Page, nextPath: string) {
   await expect(page).toHaveURL(new RegExp(`${nextPath}$`));
 }
 
+async function switchToCustomer(page: Page) {
+  const pathname = new URL(page.url()).pathname;
+  const seatResponse = page.waitForResponse((response) => {
+    const request = response.request();
+    return (
+      request.method() === 'POST' &&
+      Boolean(request.headers()['next-action']) &&
+      request.postData() === JSON.stringify(['customer', pathname])
+    );
+  });
+  await page.getByRole('button', { name: 'Customer', exact: true }).click();
+  const selected = await seatResponse;
+  expect(selected.status()).toBeLessThan(400);
+  expect(
+    selected.headers()['x-action-redirect']?.split(';')[0] ??
+      selected.headers().location,
+  ).toBe('/');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(
+    page.getByRole('button', { name: 'Customer', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+}
+
 async function expectShell(page: Page, drafts: number) {
   await expect(page.getByText('Tunely is a fictional company')).toBeVisible();
   const header = page.getByRole('banner');
@@ -41,44 +64,130 @@ async function expectShell(page: Page, drafts: number) {
   await expect(
     header.getByText(`${drafts} live AI answers left today`, { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText(/\d+ (?:live AI )?answers left today/)).toHaveCount(1);
+  await expect(
+    page.getByText(/\d+ (?:live AI )?answers left today/),
+  ).toHaveCount(1);
   await expect(header.getByRole('group', { name: 'Viewing as' })).toBeVisible();
   const nav = header.getByRole('navigation', { name: 'Site' });
-  const agent = await page.locator('body').getAttribute('data-seat') === 'agent';
-  await expect(nav.getByRole('link', { name: agent ? 'Inbox' : 'Support', exact: true })).toHaveAttribute('href', '/');
-  await expect(nav.getByRole('link', { name: 'How it works', exact: true })).toBeVisible();
-  await expect(nav.getByRole('link', { name: 'Answer quality', exact: true })).toBeVisible();
+  const agent =
+    (await page.locator('body').getAttribute('data-seat')) === 'agent';
+  await expect(
+    nav.getByRole('link', { name: agent ? 'Inbox' : 'Support', exact: true }),
+  ).toHaveAttribute('href', '/');
+  await expect(
+    nav.getByRole('link', { name: 'How it works', exact: true }),
+  ).toBeVisible();
+  await expect(
+    nav.getByRole('link', { name: 'Answer quality', exact: true }),
+  ).toBeVisible();
   const path = new URL(page.url()).pathname;
-  const current = path === '/' || path.startsWith('/tickets/') ? '/' : path.startsWith('/quality') ? '/quality' : path;
-  await expect(nav.locator('[aria-current="page"]')).toHaveCount(path === '/owner' ? 0 : 1);
+  const current =
+    path === '/' || path.startsWith('/tickets/')
+      ? '/'
+      : path.startsWith('/quality')
+        ? '/quality'
+        : path;
+  await expect(nav.locator('[aria-current="page"]')).toHaveCount(
+    path === '/owner' ? 0 : 1,
+  );
   if (path !== '/owner') {
-    await expect(nav.locator('[aria-current="page"]')).toHaveAttribute('href', current);
-    await expect(nav.locator('[aria-current="page"]')).toHaveCSS('text-decoration-line', 'underline');
-    await expect(nav.locator('[aria-current="page"]')).toHaveCSS('color', 'rgb(255, 122, 26)');
+    await expect(nav.locator('[aria-current="page"]')).toHaveAttribute(
+      'href',
+      current,
+    );
+    await expect(nav.locator('[aria-current="page"]')).toHaveCSS(
+      'text-decoration-line',
+      'underline',
+    );
+    await expect(nav.locator('[aria-current="page"]')).toHaveCSS(
+      'color',
+      'rgb(255, 122, 26)',
+    );
   }
   await expect(nav.getByText('Premium', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('navigation', { name: 'Portfolio' }).getByRole('link')).toHaveCount(0);
+  await expect(
+    page.getByRole('navigation', { name: 'Portfolio' }).getByRole('link'),
+  ).toHaveCount(0);
   for (const link of await nav.locator('a:not([aria-current])').all()) {
     await expect(link).not.toHaveCSS('color', 'rgb(255, 122, 26)');
   }
-  const ownerAction = header.getByRole('link', { name: 'Owner sign in', exact: true });
-  const action = await ownerAction.count() ? ownerAction : header.getByRole('button', { name: 'Sign out', exact: true });
+  const ownerAction = header.getByRole('link', {
+    name: 'Owner sign in',
+    exact: true,
+  });
+  const action = (await ownerAction.count())
+    ? ownerAction
+    : header.getByRole('button', { name: 'Sign out', exact: true });
   await expect(action).not.toHaveCSS('color', 'rgb(255, 122, 26)');
-  expect(await action.evaluate((element) => {
-    const seatSwitch = element.closest('.topbar-actions')?.querySelector('[role="group"]');
-    return Boolean(seatSwitch && (seatSwitch.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING));
-  })).toBe(true);
+  expect(
+    await action.evaluate((element) => {
+      const seatSwitch = element
+        .closest('.topbar-actions')
+        ?.querySelector('[role="group"]');
+      return Boolean(
+        seatSwitch &&
+        seatSwitch.compareDocumentPosition(element) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    }),
+  ).toBe(true);
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(nav.getByRole('link', { name: 'Answer quality', exact: true })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.screenshot({ path: `test-results/header-${agent ? 'agent' : 'customer'}-${current.replaceAll('/', '-') || 'home'}-390.png` });
+  await expect(
+    nav.getByRole('link', { name: 'Answer quality', exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: `test-results/header-${agent ? 'agent' : 'customer'}-${current.replaceAll('/', '-') || 'home'}-390.png`,
+  });
   await page.setViewportSize({ width: 1440, height: 1000 });
 }
+
+test('Customer seat switch waits for a slow server action', async ({
+  page,
+}) => {
+  await page.goto('/how-it-works');
+  await page
+    .context()
+    .addCookies([
+      {
+        name: 'demo_seat',
+        value: 'agent',
+        url: test.info().project.use.baseURL!,
+      },
+    ]);
+  await page.goto('/how-it-works');
+  await expect(
+    page.getByRole('button', { name: 'Agent', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await page.route('**/how-it-works', async (route) => {
+    if (
+      route.request().method() === 'POST' &&
+      route.request().headers()['next-action']
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 6000));
+    }
+    await route.continue();
+  });
+  await switchToCustomer(page);
+  await expect(
+    page.getByRole('textbox', { name: 'New support request' }),
+  ).toBeVisible();
+});
 
 test('every page shares active top-bar tabs and only the owner sees Articles', async ({
   page,
 }) => {
-  for (const path of ['/', '/how-it-works', '/quality', '/quality/known-failure', '/owner']) {
+  for (const path of [
+    '/',
+    '/how-it-works',
+    '/quality',
+    '/quality/known-failure',
+    '/owner',
+  ]) {
     await page.goto(path);
     await expectShell(page, 5);
     await expect(
@@ -98,9 +207,14 @@ test('every page shares active top-bar tabs and only the owner sees Articles', a
   ).toBeVisible();
   await expectShell(page, 4);
   await page.goto('/how-it-works');
-  await page.getByRole('navigation', { name: 'Site' }).getByRole('link', { name: 'Inbox', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Site' })
+    .getByRole('link', { name: 'Inbox', exact: true })
+    .click();
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
-  await expect(page.getByRole('article', { name: 'Request detail' })).toBeVisible();
+  await expect(
+    page.getByRole('article', { name: 'Request detail' }),
+  ).toBeVisible();
   await expectShell(page, 4);
   await page.getByRole('link', { name: 'Owner sign in' }).click();
   await page.getByLabel('Password').fill('test-password');
@@ -116,14 +230,22 @@ test('every page shares active top-bar tabs and only the owner sees Articles', a
     ).toBeVisible();
   }
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(page.getByRole('banner').getByRole('link', { name: 'Owner sign in' })).toBeVisible();
-  await expect(page.getByRole('banner').getByRole('link', { name: 'Articles' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Customer', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Customer', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(
+    page.getByRole('banner').getByRole('link', { name: 'Owner sign in' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('banner').getByRole('link', { name: 'Articles' }),
+  ).toHaveCount(0);
+  await switchToCustomer(page);
   await page.goto('/how-it-works');
-  await page.getByRole('navigation', { name: 'Site' }).getByRole('link', { name: 'Support', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Site' })
+    .getByRole('link', { name: 'Support', exact: true })
+    .click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('textbox', { name: 'New support request' })).toBeVisible();
+  await expect(
+    page.getByRole('textbox', { name: 'New support request' }),
+  ).toBeVisible();
   await expectShell(page, 4);
 });
 
@@ -579,7 +701,9 @@ test('an agent edits a risky draft, asks for details and delivers a team reply',
   ).toContainText('Which dates were the two charges taken?');
   await page.getByRole('button', { name: 'Redraft', exact: true }).click();
   await expect(
-    page.getByRole('banner').getByText('3 live AI answers left today', { exact: true }),
+    page
+      .getByRole('banner')
+      .getByText('3 live AI answers left today', { exact: true }),
   ).toBeVisible();
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.screenshot({
