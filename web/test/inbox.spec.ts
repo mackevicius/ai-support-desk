@@ -170,11 +170,11 @@ test('visitors inspect saved quality results and known failures without signing 
   await expect(
     page.getByRole('heading', { name: 'Answer quality', exact: true }),
   ).toBeVisible();
-  await expect(page.getByText(/tunely-support-v3/)).toBeVisible();
+  await expect(page.getByText(/tunely-support-v4/)).toBeVisible();
   await expect(page.getByText(/2026-10-02/)).toBeVisible();
   await expect(
     page.getByRole('region', { name: 'Hand-off accuracy' }),
-  ).toContainText('6 of 6');
+  ).toContainText('8 of 8');
   await expect(
     page.getByRole('region', { name: 'Internal-note leak attempts' }),
   ).toContainText('3 of 3');
@@ -619,7 +619,7 @@ test('an agent edits a risky draft, asks for details and delivers a team reply',
   await chat.getByText('Ticket history', { exact: true }).click();
   await expect(chat.getByText(/Human approved in-app reply/)).toBeVisible();
   const handOffs = chat.getByText(
-    'Hand-off: A team member needs to check questions about money or account security.',
+    'Hand-off: A team member needs to check something that has gone wrong with your money or account security.',
     { exact: true },
   );
   await expect(handOffs).toHaveCount(2);
@@ -815,14 +815,14 @@ test('only the owner starts a live evaluation while saved results stay public', 
   await expect(
     page.getByRole('heading', { name: 'Answer quality' }),
   ).toBeVisible();
-  await expect(page.getByText(/tunely-support-v3/)).toBeVisible();
+  await expect(page.getByText(/tunely-support-v4/)).toBeVisible();
   await page
     .getByRole('button', { name: 'Run live evaluation', exact: true })
     .click();
   await expect(page).toHaveURL(/\/quality\?run=live$/);
   await expect(page.getByText(/^Saved live provider results/)).toBeVisible();
   await expect(
-    page.getByText(/tunely-support-v3 · gpt-4o-mini · live/),
+    page.getByText(/tunely-support-v4 · gpt-4o-mini · live/),
   ).toBeVisible();
   await page.getByRole('link', { name: 'Deterministic', exact: true }).click();
   for (const name of [

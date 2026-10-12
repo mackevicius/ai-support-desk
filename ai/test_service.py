@@ -52,7 +52,7 @@ assert 'evaluation' not in sys.modules
             subprocess.run([sys.executable, 'evaluation.py', '--deterministic', '--output', str(output)],
                            cwd=bundle / 'ai', check=True, capture_output=True, env={'PATH': '/usr/bin:/bin'})
             report = json.loads(output.read_text())
-            self.assertEqual(len(report['cases']), 17)
+            self.assertEqual(len(report['cases']), 19)
             self.assertEqual(report['retrieval']['embeddings']['hits'], 8)
 
     def test_saved_report_has_a_date_and_balanced_hand_off_examples(self):
@@ -60,6 +60,8 @@ assert 'evaluation' not in sys.modules
         datetime.fromisoformat(report['evaluated_at'])
         expected = {case['id']: case['expected'].get('hand_off') for case in report['cases']}
         self.assertIs(expected['safe-automatic-reply'], False)
+        self.assertIs(expected['routine-billing'], False)
+        self.assertIs(expected['routine-security'], False)
         self.assertIs(expected['risky-billing'], True)
         self.assertIs(expected['account-security'], True)
 
@@ -79,7 +81,7 @@ assert 'evaluation' not in sys.modules
         self.assertEqual(sum(article['kind'] == 'help_article' for article in ARTICLES), 12)
         self.assertEqual(sum(article['kind'] == 'internal_note' for article in ARTICLES), 8)
         report = evaluate()
-        self.assertEqual(report['dataset_version'], 'tunely-support-v3')
+        self.assertEqual(report['dataset_version'], 'tunely-support-v4')
         failures = {case['id'] for case in report['cases'] if not all(case['checks'].values())}
         self.assertEqual(failures, {'priority', 'known-failure'})
 
@@ -177,7 +179,7 @@ assert 'evaluation' not in sys.modules
             report = evaluate(live=True)
         self.assertEqual(report['mode'], 'live')
         self.assertEqual(report['model'], 'gpt-4o-mini')
-        self.assertEqual(report['dataset_version'], 'tunely-support-v3')
+        self.assertEqual(report['dataset_version'], 'tunely-support-v4')
         measured = next(case for case in report['cases'] if case['id'] == 'citations')
         self.assertGreaterEqual(measured['latency_ms'], 0)
         self.assertEqual(measured['usage'], {'prompt_tokens': 100, 'completion_tokens': 20})

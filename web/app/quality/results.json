@@ -1,6 +1,6 @@
 {
   "mode": "deterministic",
-  "dataset_version": "tunely-support-v3",
+  "dataset_version": "tunely-support-v4",
   "evaluated_at": "2026-10-02T00:00:00+00:00",
   "model": "fixture provider (no model)",
   "cases": [
@@ -46,6 +46,98 @@
           "title": "Offline downloads",
           "kind": "help_article",
           "body": "Open a playlist and tap Download."
+        }
+      ]
+    },
+    {
+      "id": "routine-billing",
+      "question": "How do I cancel my plan?",
+      "categories": [
+        "hand-off accuracy",
+        "automatic reply",
+        "billing how-to"
+      ],
+      "expected": {
+        "source_ids": [
+          11
+        ],
+        "hand_off": false
+      },
+      "actual": {
+        "reply": "Open Settings > Plan and choose Cancel plan.",
+        "source_ids": [
+          11
+        ],
+        "suggested_priority": "normal",
+        "clearly_covered": true,
+        "requires_team": false,
+        "hand_off": false
+      },
+      "checks": {
+        "citations": true,
+        "lexical support": true,
+        "hand-off accuracy": true
+      },
+      "sources": [
+        {
+          "id": 11,
+          "title": "Cancel a paid plan",
+          "kind": "help_article",
+          "body": "Open Settings > Plan and choose Cancel plan."
+        }
+      ],
+      "available_sources": [
+        {
+          "id": 11,
+          "title": "Cancel a paid plan",
+          "kind": "help_article",
+          "body": "Open Settings > Plan and choose Cancel plan."
+        }
+      ]
+    },
+    {
+      "id": "routine-security",
+      "question": "How do I change my password?",
+      "categories": [
+        "hand-off accuracy",
+        "automatic reply",
+        "security how-to"
+      ],
+      "expected": {
+        "source_ids": [
+          24
+        ],
+        "hand_off": false
+      },
+      "actual": {
+        "reply": "Open Settings > Security and choose Change password.",
+        "source_ids": [
+          24
+        ],
+        "suggested_priority": "normal",
+        "clearly_covered": true,
+        "requires_team": false,
+        "hand_off": false
+      },
+      "checks": {
+        "citations": true,
+        "lexical support": true,
+        "hand-off accuracy": true
+      },
+      "sources": [
+        {
+          "id": 24,
+          "title": "Change your password",
+          "kind": "help_article",
+          "body": "Open Settings > Security and choose Change password."
+        }
+      ],
+      "available_sources": [
+        {
+          "id": 24,
+          "title": "Change your password",
+          "kind": "help_article",
+          "body": "Open Settings > Security and choose Change password."
         }
       ]
     },
@@ -1666,7 +1758,7 @@
     "selected_method": "embeddings"
   },
   "hand_off": {
-    "correct": 6,
-    "total": 6
+    "correct": 8,
+    "total": 8
   }
 }

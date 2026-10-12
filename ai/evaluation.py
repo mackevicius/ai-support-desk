@@ -14,7 +14,7 @@ from server import STAFF_REVIEW_REPLY, copies_internal_phrase, generate, is_inst
 from retrieval import ROOT, comparison
 
 
-DATASET_VERSION = 'tunely-support-v3'
+DATASET_VERSION = 'tunely-support-v4'
 FIXTURE_DATE = '2026-10-02T00:00:00+00:00'
 INPUT_USD_PER_MILLION = 0.15
 OUTPUT_USD_PER_MILLION = 0.60
@@ -28,6 +28,24 @@ CASES = [
                    'suggested_priority': 'normal', 'clearly_covered': True, 'requires_team': False},
         'expected': {'source_ids': [5], 'hand_off': False},
         'categories': ['hand-off accuracy', 'automatic reply'],
+    },
+    {
+        'id': 'routine-billing', 'question': 'How do I cancel my plan?',
+        'articles': [{'id': 11, 'title': 'Cancel a paid plan', 'kind': 'help_article',
+                      'body': 'Open Settings > Plan and choose Cancel plan.'}],
+        'answer': {'reply': 'Open Settings > Plan and choose Cancel plan.', 'source_ids': [11],
+                   'suggested_priority': 'normal', 'clearly_covered': True, 'requires_team': False},
+        'expected': {'source_ids': [11], 'hand_off': False},
+        'categories': ['hand-off accuracy', 'automatic reply', 'billing how-to'],
+    },
+    {
+        'id': 'routine-security', 'question': 'How do I change my password?',
+        'articles': [{'id': 24, 'title': 'Change your password', 'kind': 'help_article',
+                      'body': 'Open Settings > Security and choose Change password.'}],
+        'answer': {'reply': 'Open Settings > Security and choose Change password.', 'source_ids': [24],
+                   'suggested_priority': 'normal', 'clearly_covered': True, 'requires_team': False},
+        'expected': {'source_ids': [24], 'hand_off': False},
+        'categories': ['hand-off accuracy', 'automatic reply', 'security how-to'],
     },
     {
         'id': 'risky-billing', 'question': 'I was charged twice. Can I get a refund?',

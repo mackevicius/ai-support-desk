@@ -22,7 +22,7 @@ export default function HowItWorks() {
         <Separator />
         <section className="quality-section" aria-labelledby="decision-heading">
           <h2 id="decision-heading">When a person steps in</h2>
-          <p>A clearly covered, non-risky question can receive an automatic reply based on public help articles. Money, account security, internal notes, uncertainty, or a knowledge gap require a support agent. An agent can edit, ask for details, fill a gap with a private help article, or approve a reply. No email is sent.</p>
+          <p>A clearly covered, non-risky question can receive an automatic reply based on public help articles, including routine billing and security how-to questions. Something that has gone wrong with a customer's money or account security, internal notes, uncertainty, or a knowledge gap require a support agent. An agent can edit, ask for details, fill a gap with a private help article, or approve a reply. No email is sent.</p>
           <p>Each visitor gets a temporary private workspace. The owner alone can change shared documents and start paid live evaluations. Browsing saved cases and fixture results makes no paid AI calls.</p>
         </section>
         <Separator />

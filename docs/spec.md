@@ -72,7 +72,7 @@ As a customer, the visitor submits a problem and the AI drafts an answer from Tu
 ### Drafting and hand-off
 
 - The AI drafts an answer as soon as a customer submits a support ticket.
-- The AI proposes a topic and priority; fixed rules in code decide whether the ticket is risky. Refunds, double charges, and account security are always risky.
+- The AI proposes a topic and priority; fixed rules in code decide whether the ticket is risky. Something that has gone wrong with the customer's money or account security, such as a refund request, a double or unauthorised charge, a hacked, compromised or locked account, or fraud, is always risky. Routine billing and security how-to questions are not risky.
 - An automatic reply is delivered only when a help article clearly supports the draft, the ticket is not risky, and the draft relies on no internal note. Everything else is handed off. See [ADR 0001](adr/0001-automatic-replies-with-hand-off.md).
 - On hand-off, the customer immediately sees "A Tunely team member will reply soon" and the status "With our team".
 - Every ticket shows a "Why" box in plain words: the decision, the reason, and the documents used, each labelled Help or Internal. The customer side links to it as "How was this answered?".

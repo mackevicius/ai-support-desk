@@ -46,18 +46,65 @@ test('a clearly covered, safe question gets an automatic reply', () => {
   });
 });
 
-test('money and account security questions always hand off', () => {
+test('clearly covered billing and security how-to questions get automatic replies', () => {
+  for (const question of [
+    'How do I cancel my plan?',
+    'How do I update my card?',
+    'What does the Family plan cost?',
+    'How do I change my password?',
+    'Where can I download invoices?',
+    'How do I enable two-factor authentication?',
+    'How do I log in to my account?',
+    'How do I protect my account from fraud?',
+    'How do I prevent my account from being hacked?',
+  ]) {
+    const decision = decide(question, drafted());
+    assert.equal(decision.kind, 'automatic_reply', question);
+    assert.equal(decision.reason_code, 'well_supported', question);
+  }
+});
+
+test('problems with money or account security always hand off', () => {
   for (const question of [
     'I need a refund',
     'I was charged twice',
+    'I was twice charged for the same purchase',
+    'I was charged two times for the same purchase',
+    'There is a double charge on my card',
+    'There is an unauthorised charge on my card',
+    'There is an unauthorized charge on my card',
     'Why did my subscription price increase?',
     'My account was hacked',
+    'My account is compromised',
+    'Someone took over my account',
+    'My account has been taken over',
+    'My account is locked',
+    'I need to report fraud',
     'I cannot log in',
     'My verification code never arrives',
+    'How do I cancel my plan after an unauthorised charge?',
+    'How do I protect my account from fraud? My account was hacked.',
+    'How do I prevent my account from being hacked? I was charged twice.',
   ]) {
     const decision = decide(question, drafted());
     assert.equal(decision.kind, 'hand_off', question);
+    assert.equal(decision.reason_code, 'risky', question);
     assert.equal(decision.rule, 'Money or account security', question);
+    assert.equal(
+      decision.reason,
+      'A team member needs to check something that has gone wrong with your money or account security.',
+      question,
+    );
+  }
+});
+
+test('routine billing questions still need clear coverage and no other hand-off rule', () => {
+  for (const generated of [
+    drafted({ clearly_covered: false }),
+    drafted({ requires_team: true }),
+    drafted({ sources: [internalNote], source_ids: [900] }),
+  ]) {
+    assert.equal(decide('How do I cancel my plan?', generated).kind, 'hand_off');
   }
 });
 

@@ -34,8 +34,10 @@ test('only a valid owner session can run evaluations and anyone can inspect save
     const report = await run.json();
     assert.equal(report.model, 'test-model');
     assert.equal(report.evaluated_at, '2026-10-02T12:00:00+00:00');
-    assert.deepEqual(report.hand_off, { correct: 6, total: 6 });
+    assert.deepEqual(report.hand_off, { correct: 8, total: 8 });
     assert.equal(report.cases.find((item: { id: string }) => item.id === 'safe-automatic-reply').actual.hand_off, false);
+    assert.equal(report.cases.find((item: { id: string }) => item.id === 'routine-billing').actual.hand_off, false);
+    assert.equal(report.cases.find((item: { id: string }) => item.id === 'routine-security').actual.hand_off, false);
     assert.equal(report.cases.find((item: { id: string }) => item.id === 'risky-billing').actual.hand_off, true);
     assert.equal(report.cases.find((item: { id: string }) => item.id === 'account-security').actual.hand_off, true);
     const saved = await fetch(`${baseUrl}/quality/live`);

@@ -176,7 +176,7 @@
       "source_key": "refund-policy",
       "reply": "Our team needs to check the two charges before deciding on a refund. Please share the charge dates and amounts, but not your card details.",
       "rule": "Money or account security",
-      "reason": "A team member needs to check questions about money or account security."
+      "reason": "A team member needs to check something that has gone wrong with your money or account security."
     },
     {
       "id": 4,

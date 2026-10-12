@@ -10,8 +10,18 @@ export function decide(
   agentReview = false,
 ) {
   const draft = generated.draft;
+  const securityProblems = question.replace(
+    /\bhow (?:do|can|should) (?:i|we) (?:protect (?:my|our) accounts? (?:from|against)|prevent (?:my|our) accounts? from being|prevent|avoid) (?:fraud|hacking|hacked|compromised)\b/gi,
+    '',
+  );
   const risky =
-    /\b(refunds?|charg(?:e|ed|es|ing)|bill(?:ed|s|ing)?|pay(?:ment|ments|ing)?|paid|price|pricing|cost|card|money|purchase|subscription|cancel|passwords?|credentials?|hack(?:ed|ing)?|compromis(?:e|ed)|breach(?:ed)?|security|stolen|unauthori[sz]ed|accounts?|log(?:ged|ging)?[ -]?in(?:to)?|sign.?in|two.factor|2fa|verification code|locked|identity|fraud)\b/i.test(
+    /\b(refunds?|hack(?:ed|ing)?|compromis(?:e|ed)|breach(?:ed)?|stolen|unauthori[sz]ed|locked|fraud)\b|\b(?:took|taken) over (?:my|our|the) account\b|\baccount (?:was|has been) taken over\b/i.test(
+      securityProblems,
+    ) ||
+    /\b(?:charg(?:e|ed|es|ing)|bill(?:ed|s|ing)?|pay(?:ment|ments|ing)?|paid)\b.*\b(?:twice|two times|double|duplicate|unexpected|incorrect|wrong|extra|unrecogni[sz]ed)\b|\b(?:twice|two times|double|duplicate|unexpected|incorrect|wrong|extra|unrecogni[sz]ed)\b.*\b(?:charg(?:e|ed|es|ing)|bill(?:ed|s|ing)?|pay(?:ment|ments|ing)?|paid)\b/i.test(
+      question,
+    ) ||
+    /\b(?:price|cost)\b.*\bincreas(?:e|ed)\b|\b(?:cannot|can't|unable to)\s+(?:log[ -]?in|sign[ -]?in)\b|\bverification code\b.*\b(?:never|not)\b/i.test(
       question,
     );
   const internal = draft?.sources.some(
@@ -38,7 +48,7 @@ export function decide(
             reason_code: 'risky',
             rule: 'Money or account security',
             reason:
-              'A team member needs to check questions about money or account security.',
+              'A team member needs to check something that has gone wrong with your money or account security.',
           }
         : internal || copied
           ? {
