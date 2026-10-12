@@ -20,7 +20,7 @@ A document for Tunely staff only, such as a known bug, a policy, or a release no
 _Avoid_: Private article
 
 **Support ticket**:
-A customer's request for help, tracked from submission through resolution.
+A customer's request for help, tracked from submission through resolution. Customers see a support ticket as a "conversation".
 _Avoid_: Ticket (when it could mean a GitHub issue)
 
 **Customer**:
@@ -49,11 +49,11 @@ An answer draft delivered to the customer without review, because a help article
 _Avoid_: Auto-resolve, bot reply
 
 **Hand-off**:
-The AI's decision to route a support ticket to a support agent instead of replying automatically: because it is unsure, the answer depends on an internal note, or the ticket is risky.
+Routing a support ticket to a support agent instead of replying automatically. Either the AI decides to (because it is unsure, the answer depends on an internal note, or the ticket is risky), or the customer asks for a person after an automatic reply.
 _Avoid_: Escalation
 
 **Risky ticket**:
-A support ticket about money, account security, or anything else Tunely never lets the AI answer alone, such as a refund or a double charge.
+A support ticket where something has gone wrong with the customer's money or account security, such as a refund, a double charge, a hacked or locked account, or fraud. Tunely never lets the AI answer one alone. A how-to question about billing or security (cancelling a plan, updating a card, changing a password) is not risky.
 
 **Knowledge gap**:
 A question that no document in the knowledge base covers. A support agent fills it by writing a new help article.
