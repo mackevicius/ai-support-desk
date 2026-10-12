@@ -23,6 +23,12 @@ jobs:
       - run: npm run typecheck
       - run: npm run quality:snapshot && git diff --exit-code -- web/app/quality/results.json ai/retrieval-results.json
       - run: npm test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results
+          path: web/test-results/
+          retention-days: 7
       - run: npm run build --workspace web
 
   kubernetes:

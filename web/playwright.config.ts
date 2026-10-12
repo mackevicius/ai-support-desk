@@ -6,9 +6,12 @@ const port = Number(process.env.PLAYWRIGHT_PORT ?? 3100);
 export default defineConfig({
   testDir: './test',
   testMatch: '*.spec.ts',
+  // Late tests take ~22s locally against next dev + pg-mem; CI runs ~1.7x slower.
+  timeout: 90_000,
   use: {
     baseURL: deploymentUrl ?? `http://localhost:${port}`,
     browserName: 'chromium',
+    trace: 'retain-on-failure',
   },
   webServer: deploymentUrl
     ? undefined
