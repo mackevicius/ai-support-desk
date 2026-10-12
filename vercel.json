@@ -5,7 +5,12 @@
       "root": "web/",
       "framework": "nextjs",
       "bindings": [
-        { "type": "service", "service": "api", "format": "url", "env": "API_URL" }
+        {
+          "type": "service",
+          "service": "api",
+          "format": "url",
+          "env": "API_URL"
+        }
       ]
     },
     "api": {
@@ -13,16 +18,21 @@
       "framework": "express",
       "entrypoint": "server.ts",
       "bindings": [
-        { "type": "service", "service": "ai", "format": "url", "env": "PYTHON_URL" }
+        {
+          "type": "service",
+          "service": "ai",
+          "format": "url",
+          "env": "PYTHON_URL"
+        }
       ]
     },
     "ai": {
       "root": "ai/",
-      "buildCommand": "mkdir -p evaluation-data && cp ../api/starter-data.json ../api/retrieval-cases.json ../api/saved-embeddings.json evaluation-data/",
+      "functions": {
+        "app.py": { "includeFiles": "evaluation-data/**" }
+      },
       "entrypoint": "app:app"
     }
   },
-  "rewrites": [
-    { "source": "/(.*)", "destination": { "service": "web" } }
-  ]
+  "rewrites": [{ "source": "/(.*)", "destination": { "service": "web" } }]
 }

@@ -18,17 +18,36 @@ from server import Handler, generate_request
 
 
 class EvaluationTests(unittest.TestCase):
+    def test_python_service_starts_without_evaluation_data(self):
+        root = Path(__file__).parent
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory) / 'ai'
+            shutil.copytree(root, bundle, ignore=shutil.ignore_patterns('__pycache__', 'evaluation-data'))
+            subprocess.run([sys.executable, '-c', '''
+import io
+import sys
+from app import app
+
+statuses = []
+assert app({'REQUEST_METHOD': 'GET', 'PATH_INFO': '/health'},
+           lambda status, headers: statuses.append(status)) == [b'']
+assert statuses == ['200 OK']
+app({'REQUEST_METHOD': 'POST', 'PATH_INFO': '/generate', 'wsgi.input': io.BytesIO()},
+    lambda status, headers: statuses.append(status))
+assert statuses[-1] != '200 OK'
+assert 'evaluation' not in sys.modules
+'''], cwd=bundle, check=True, capture_output=True, env={'PATH': '/usr/bin:/bin'})
+
     def test_vercel_python_bundle_evaluates_without_sibling_api_files(self):
         root = Path(__file__).parent.parent
-        build = json.loads((root / 'vercel.json').read_text())['services']['ai']['buildCommand']
+        for filename in ('starter-data.json', 'retrieval-cases.json', 'saved-embeddings.json'):
+            self.assertEqual((root / 'ai' / 'evaluation-data' / filename).read_bytes(),
+                             (root / 'api' / filename).read_bytes(), filename)
         with tempfile.TemporaryDirectory() as directory:
             bundle = Path(directory)
-            shutil.copytree(root / 'ai', bundle / 'ai', ignore=shutil.ignore_patterns('__pycache__', 'evaluation-data'))
-            (bundle / 'api').mkdir()
-            for filename in ('starter-data.json', 'retrieval-cases.json', 'saved-embeddings.json'):
-                shutil.copyfile(root / 'api' / filename, bundle / 'api' / filename)
-            subprocess.run(build, shell=True, cwd=bundle / 'ai', check=True, capture_output=True)
-            shutil.rmtree(bundle / 'api')
+            shutil.copytree(root / 'ai', bundle / 'ai', ignore=shutil.ignore_patterns('__pycache__'))
+            subprocess.run([sys.executable, '-c', 'from app import app; from evaluation import evaluate_request'],
+                           cwd=bundle / 'ai', check=True, capture_output=True, env={'PATH': '/usr/bin:/bin'})
             output = bundle / 'report.json'
             subprocess.run([sys.executable, 'evaluation.py', '--deterministic', '--output', str(output)],
                            cwd=bundle / 'ai', check=True, capture_output=True, env={'PATH': '/usr/bin:/bin'})

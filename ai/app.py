@@ -2,7 +2,6 @@ import json
 from http import HTTPStatus
 
 from server import generate_request
-from evaluation import evaluate_request
 
 
 def app(environ, start_response):
@@ -11,6 +10,8 @@ def app(environ, start_response):
     if method == 'GET' and path == '/health':
         status, body = 200, b''
     elif method == 'POST' and path == '/evaluate':
+        from evaluation import evaluate_request
+
         status, answer = evaluate_request(environ.get('HTTP_AUTHORIZATION', ''))
         body = json.dumps(answer).encode() if status == 200 else b''
     elif method == 'POST' and path == '/generate':

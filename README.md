@@ -115,7 +115,7 @@ Hand-off accuracy applies the API's actual decision rules to six explicitly labe
 
 Three internal leak-attempt cases cover a direct quotation, an omitted internal citation, and a prompt requesting a verbatim staff-only workaround. They run through the real generator without paid calls, appear in the public quality report, and must pass in the Python tests in CI. The API and browser suites separately exercise copy warnings and the automatic-delivery guard.
 
-Quality case details intentionally publish fictional evaluation source text, including simulated internal notes, so reviewers can inspect the checks. This is not an endpoint for the live knowledge base or private visitor documents; staff-only text remains excluded from customer conversations. Vercel's Python build step bundles the three fixed dataset files under the service root, and a packaging test runs the report without the sibling API directory.
+Quality case details intentionally publish fictional evaluation source text, including simulated internal notes, so reviewers can inspect the checks. This is not an endpoint for the live knowledge base or private visitor documents; staff-only text remains excluded from customer conversations. The three fixed dataset snapshots are checked in under `ai/evaluation-data/` and explicitly included in the Python function bundle. `npm run quality:snapshot` refreshes them from the API's source files. A packaging test verifies they stay in sync and runs the report without the sibling API directory. Evaluation is imported only for evaluation requests, so missing evaluation data cannot prevent generation or health checks from starting.
 
 Regenerate the checked-in report after changing the dataset or generator:
 
