@@ -2,7 +2,11 @@ import { expect, test, type Page, type Request } from '@playwright/test';
 
 async function submittedReviewAction(request: Request) {
   const contentType = request.headers()['content-type'] ?? '';
-  if (request.method() !== 'POST' || !contentType.startsWith('multipart/form-data')) return null;
+  if (
+    request.method() !== 'POST' ||
+    !contentType.startsWith('multipart/form-data')
+  )
+    return null;
   const formData = await new Response(
     new Uint8Array(request.postDataBuffer() ?? []),
     { headers: { 'content-type': contentType } },
@@ -11,6 +15,21 @@ async function submittedReviewAction(request: Request) {
     ([name]) => name === 'action' || name.endsWith('_action'),
   )?.[1];
   return typeof action === 'string' ? action : null;
+}
+
+async function approveReply(page: Page, nextPath: string) {
+  const approvalResponse = page.waitForResponse(
+    async (response) =>
+      (await submittedReviewAction(response.request())) === 'approve',
+  );
+  await page.getByRole('button', { name: 'Approve in-app reply' }).click();
+  const approved = await approvalResponse;
+  expect(approved.status()).toBeLessThan(400);
+  expect(
+    approved.headers()['x-action-redirect']?.split(';')[0] ??
+      approved.headers().location,
+  ).toBe(nextPath);
+  await expect(page).toHaveURL(new RegExp(`${nextPath}$`));
 }
 
 async function expectShell(page: Page, drafts: number) {
@@ -28,13 +47,21 @@ async function expectShell(page: Page, drafts: number) {
     await expect(nav).toHaveText('PremiumFamilyDownloadSupport');
     await expect(nav.getByRole('link')).toHaveCount(0);
   } else {
-    await expect(header.getByRole('link', { name: 'How it works', exact: true })).toBeVisible();
-    await expect(header.getByRole('link', { name: 'Quality', exact: true })).toBeVisible();
+    await expect(
+      header.getByRole('link', { name: 'How it works', exact: true }),
+    ).toBeVisible();
+    await expect(
+      header.getByRole('link', { name: 'Quality', exact: true }),
+    ).toBeVisible();
   }
-  const navigation = await header.getByRole('navigation', { name: 'Site' }).boundingBox();
+  const navigation = await header
+    .getByRole('navigation', { name: 'Site' })
+    .boundingBox();
   expect(navigation).not.toBeNull();
   expect(
-    Math.abs(navigation!.x + navigation!.width / 2 - page.viewportSize()!.width / 2),
+    Math.abs(
+      navigation!.x + navigation!.width / 2 - page.viewportSize()!.width / 2,
+    ),
   ).toBeLessThan(2);
 }
 
@@ -52,9 +79,7 @@ test('every page shares the prototype header and only the owner sees Articles', 
   await page
     .getByRole('textbox', { name: 'New support request' })
     .fill('How do I download music for offline listening?');
-  await page
-    .getByRole('button', { name: 'Send', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
   await expectShell(page, 4);
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
@@ -84,7 +109,9 @@ test('every page shares the prototype header and only the owner sees Articles', 
   }
 });
 
-test('remaining pages use shared surfaces without mobile overflow', async ({ page }) => {
+test('remaining pages use shared surfaces without mobile overflow', async ({
+  page,
+}) => {
   const pages = [
     ['/owner', 'owner'],
     ['/quality', 'quality'],
@@ -98,61 +125,129 @@ test('remaining pages use shared surfaces without mobile overflow', async ({ pag
       await page.goto('/owner');
       await page.getByLabel('Password').fill('test-password');
       await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-      await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Sign out' }),
+      ).toBeVisible();
     }
     await page.goto(path);
     for (const seat of ['customer', 'agent']) {
-      await page.context().addCookies([{ name: 'demo_seat', value: seat, url: new URL(page.url()).origin }]);
+      await page
+        .context()
+        .addCookies([
+          { name: 'demo_seat', value: seat, url: new URL(page.url()).origin },
+        ]);
       await page.goto(path);
       const main = page.getByRole('main');
       await expect(main.locator('[data-slot="card"]').first()).toBeVisible();
-      await expect(main.locator('[data-slot="separator"]').first()).toBeVisible();
+      await expect(
+        main.locator('[data-slot="separator"]').first(),
+      ).toBeVisible();
       if (path.startsWith('/quality')) {
         await expect(main.locator('[data-slot="badge"]').first()).toBeVisible();
       }
-      for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+      for (const viewport of [
+        { width: 1440, height: 1000 },
+        { width: 390, height: 844 },
+      ]) {
         await page.setViewportSize(viewport);
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-        await page.screenshot({ path: `test-results/restyle-${name}-${seat}-${viewport.width}.png` });
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth,
+          ),
+        ).toBe(true);
+        await page.screenshot({
+          path: `test-results/restyle-${name}-${seat}-${viewport.width}.png`,
+        });
       }
     }
   }
 });
 
-test('visitors inspect saved quality results and known failures without signing in', async ({ page }) => {
+test('visitors inspect saved quality results and known failures without signing in', async ({
+  page,
+}) => {
   await page.goto('/quality');
-  await expect(page.getByRole('heading', { name: 'Answer quality', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Answer quality', exact: true }),
+  ).toBeVisible();
   await expect(page.getByText(/tunely-support-v3/)).toBeVisible();
   await expect(page.getByText(/2026-10-02/)).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Hand-off accuracy' })).toContainText('6 of 6');
-  await expect(page.getByRole('region', { name: 'Internal-note leak attempts' })).toContainText('3 of 3');
-  await expect(page.getByRole('button', { name: 'Run live evaluation' })).toHaveCount(0);
-  for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+  await expect(
+    page.getByRole('region', { name: 'Hand-off accuracy' }),
+  ).toContainText('6 of 6');
+  await expect(
+    page.getByRole('region', { name: 'Internal-note leak attempts' }),
+  ).toContainText('3 of 3');
+  await expect(
+    page.getByRole('button', { name: 'Run live evaluation' }),
+  ).toHaveCount(0);
+  for (const viewport of [
+    { width: 1440, height: 1000 },
+    { width: 390, height: 844 },
+  ]) {
     await page.setViewportSize(viewport);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({ path: `test-results/quality-${viewport.width}.png`, fullPage: true });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: `test-results/quality-${viewport.width}.png`,
+      fullPage: true,
+    });
   }
   await page.getByRole('link', { name: /known-failure/ }).click();
-  await expect(page.getByRole('heading', { name: 'Known Failure', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Actual answer', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Known Failure', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Actual answer', exact: true }),
+  ).toBeVisible();
   await page.goto('/quality?view=retrieval');
   await expect(page.getByText(/Word matching: 7\/8/)).toBeVisible();
   await expect(page.getByText(/Embeddings: 8\/8/)).toBeVisible();
-  for (const path of ['/', '/tickets/1', '/owner', '/quality', '/quality/known-failure', '/how-it-works']) {
+  for (const path of [
+    '/',
+    '/tickets/1',
+    '/owner',
+    '/quality',
+    '/quality/known-failure',
+    '/how-it-works',
+  ]) {
     await page.goto(path);
     const strip = page.getByRole('navigation', { name: 'Portfolio' });
-    await expect(strip.getByRole('link', { name: 'How it works' })).toBeVisible();
-    await expect(strip.getByRole('link', { name: 'Answer quality' })).toBeVisible();
+    await expect(
+      strip.getByRole('link', { name: 'How it works' }),
+    ).toBeVisible();
+    await expect(
+      strip.getByRole('link', { name: 'Answer quality' }),
+    ).toBeVisible();
   }
-  await expect(page.getByRole('heading', { name: 'Architecture', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Architecture', exact: true }),
+  ).toBeVisible();
   await expect(page.getByText(/^Vercel runs/)).toBeVisible();
   await expect(page.getByText(/^Docker Compose/)).toBeVisible();
-  await expect(page.getByRole('link', { name: /Automatic replies and hand-off/ })).toBeVisible();
-  await expect(page.getByRole('link', { name: /Vercel and Kubernetes/ })).toBeVisible();
-  for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+  await expect(
+    page.getByRole('link', { name: /Automatic replies and hand-off/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: /Vercel and Kubernetes/ }),
+  ).toBeVisible();
+  for (const viewport of [
+    { width: 1440, height: 1000 },
+    { width: 390, height: 844 },
+  ]) {
     await page.setViewportSize(viewport);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({ path: `test-results/how-it-works-${viewport.width}.png`, fullPage: true });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: `test-results/how-it-works-${viewport.width}.png`,
+      fullPage: true,
+    });
   }
 });
 
@@ -167,7 +262,9 @@ test('an agent fills the saved knowledge gap with a private help article and red
   await expect(
     page.getByRole('heading', { name: 'Knowledge gap', exact: true }),
   ).toBeVisible();
-  await page.getByText('Write a help article for this', { exact: true }).click();
+  await page
+    .getByText('Write a help article for this', { exact: true })
+    .click();
   const editor = page.getByRole('region', {
     name: 'Knowledge gap',
     exact: true,
@@ -257,7 +354,9 @@ test('a visitor explores saved cases and starts chats from every topic tile', as
   await expect(
     page.getByRole('heading', { name: 'All your music. Help when it skips.' }),
   ).toBeVisible();
-  await expect(page.locator('.now-playing[aria-hidden="true"]')).toContainText('Midnight Static');
+  await expect(page.locator('.now-playing[aria-hidden="true"]')).toContainText(
+    'Midnight Static',
+  );
   const steps = page.getByRole('region', { name: 'How Tunely Support works' });
   await expect(steps).toContainText('Tell us');
   await expect(steps).toContainText('Get an answer in seconds');
@@ -279,7 +378,10 @@ test('a visitor explores saved cases and starts chats from every topic tile', as
     });
   }
   await page.goto('/tickets/1');
-  const conversations = page.getByRole('navigation', { name: 'Conversations', exact: true });
+  const conversations = page.getByRole('navigation', {
+    name: 'Conversations',
+    exact: true,
+  });
   await expect(conversations.getByRole('link')).toHaveCount(5);
   await conversations
     .getByRole('link', { name: /Listen to music offline/ })
@@ -318,10 +420,17 @@ test('a visitor explores saved cases and starts chats from every topic tile', as
     'I think my account was hacked',
     'Can I play Tunely in my car?',
   ]) {
-    await page.getByRole('link', { name: 'New conversation', exact: true }).click();
-    await page.getByRole('region', { name: 'Browse by topic' }).getByRole('button', { name: `"${question}" →`, exact: true }).click();
+    await page
+      .getByRole('link', { name: 'New conversation', exact: true })
+      .click();
+    await page
+      .getByRole('region', { name: 'Browse by topic' })
+      .getByRole('button', { name: `"${question}" →`, exact: true })
+      .click();
     await expect(page).toHaveURL(/\/tickets\/\d+$/);
-    await expect(page.getByRole('region', { name: 'Support chat' })).toContainText(question);
+    await expect(
+      page.getByRole('region', { name: 'Support chat' }),
+    ).toContainText(question);
   }
 });
 
@@ -334,23 +443,40 @@ test('agent home opens the shared inbox workspace and seat switches keep the sel
   await expect(page).toHaveURL(/\/tickets\/1$/, { timeout: 15000 });
   const selected = page.locator('.queue a[aria-current="page"]');
   await expect(selected.locator('[data-slot="avatar"]')).toBeVisible();
-  await expect(selected.locator('[data-slot="avatar-fallback"]')).toHaveText('MC');
-  await expect(page.getByText('AI handed this conversation to you', { exact: true })).toBeVisible();
+  await expect(selected.locator('[data-slot="avatar-fallback"]')).toHaveText(
+    'MC',
+  );
+  await expect(
+    page.getByText('AI handed this conversation to you', { exact: true }),
+  ).toBeVisible();
   const messages = page.locator('.agent-messages');
   const composer = page.locator('.agent-composer');
   await expect(messages).toBeVisible();
   await expect(composer).toBeVisible();
   const messageBox = await messages.boundingBox();
   const composerBox = await composer.boundingBox();
-  expect(composerBox!.y).toBeGreaterThanOrEqual(messageBox!.y + messageBox!.height - 1);
-  const railBox = await page.getByRole('complementary', { name: 'Support inbox' }).boundingBox();
-  const trailBox = await page.getByRole('complementary', { name: 'How the AI decided' }).boundingBox();
+  expect(composerBox!.y).toBeGreaterThanOrEqual(
+    messageBox!.y + messageBox!.height - 1,
+  );
+  const railBox = await page
+    .getByRole('complementary', { name: 'Support inbox' })
+    .boundingBox();
+  const trailBox = await page
+    .getByRole('complementary', { name: 'How the AI decided' })
+    .boundingBox();
   expect(railBox!.x + railBox!.width).toBeLessThanOrEqual(messageBox!.x);
   expect(messageBox!.x + messageBox!.width).toBeLessThanOrEqual(trailBox!.x);
   await page.screenshot({ path: 'test-results/agent-app-1440.png' });
   await page.setViewportSize({ width: 390, height: 844 });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/agent-app-390.png', fullPage: true });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: 'test-results/agent-app-390.png',
+    fullPage: true,
+  });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await expect(
     page.getByRole('complementary', { name: 'Support inbox' }),
@@ -376,9 +502,7 @@ test('agent home opens the shared inbox workspace and seat switches keep the sel
   await page
     .getByRole('textbox', { name: 'New support request' })
     .fill('How do I download music for offline listening?');
-  await page
-    .getByRole('button', { name: 'Send', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
   const ticketPath = new URL(page.url()).pathname;
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
@@ -413,9 +537,7 @@ test('an agent edits a risky draft, asks for details and delivers a team reply',
   await page
     .getByRole('textbox', { name: 'New support request' })
     .fill('I was charged twice for offline downloads.');
-  await page
-    .getByRole('button', { name: 'Send', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
   const ticketPath = new URL(page.url()).pathname;
   await page.getByRole('button', { name: 'Switch to Agent seat' }).click();
@@ -424,7 +546,9 @@ test('an agent edits a risky draft, asks for details and delivers a team reply',
   await expect(
     trail.getByText('Money or account security', { exact: true }),
   ).toBeVisible();
-  await expect(trail.getByRole('heading', { name: 'Handed off to a person', exact: true })).toBeVisible();
+  await expect(
+    trail.getByRole('heading', { name: 'Handed off to a person', exact: true }),
+  ).toBeVisible();
   await page
     .getByRole('textbox', { name: 'Reply', exact: true })
     .fill('Which dates were the two charges taken?');
@@ -519,9 +643,7 @@ test('a reopened conversation shows its new redraft and suggested priority', asy
   await page
     .getByRole('textbox', { name: 'New support request' })
     .fill(question);
-  await page
-    .getByRole('button', { name: 'Send', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(
     page
       .getByRole('region', { name: 'Support chat' })
@@ -569,11 +691,20 @@ test('a customer gets a covered answer by keyboard and an example answer on a ph
     }),
   ).toBeVisible();
   await expect(chat.locator('header time')).toHaveCount(1);
-  const conversations = page.getByRole('navigation', { name: 'Conversations', exact: true });
-  await expect(conversations.locator('a[aria-current="page"] time')).toHaveCount(1);
+  const conversations = page.getByRole('navigation', {
+    name: 'Conversations',
+    exact: true,
+  });
+  await expect(
+    conversations.locator('a[aria-current="page"] time'),
+  ).toHaveCount(1);
   await expect(chat.getByRole('textbox')).toHaveCount(0);
-  const customerBubble = await chat.getByRole('article', { name: 'Your message' }).boundingBox();
-  const tunelyBubble = await chat.getByRole('article', { name: 'Tunely reply' }).boundingBox();
+  const customerBubble = await chat
+    .getByRole('article', { name: 'Your message' })
+    .boundingBox();
+  const tunelyBubble = await chat
+    .getByRole('article', { name: 'Tunely reply' })
+    .boundingBox();
   expect(customerBubble!.x).toBeGreaterThan(tunelyBubble!.x);
   await expect(chat.getByText('Answered', { exact: true })).toBeVisible();
   await expect(
@@ -588,7 +719,9 @@ test('a customer gets a covered answer by keyboard and an example answer on a ph
   const reply = chat.getByRole('article', { name: 'Tunely reply' });
   await reply.getByText('How was this answered?', { exact: true }).focus();
   await page.keyboard.press('Enter');
-  await expect(reply.getByText('Automatic reply', { exact: true })).toBeVisible();
+  await expect(
+    reply.getByText('Automatic reply', { exact: true }),
+  ).toBeVisible();
   await expect(reply.getByText('Help article', { exact: true })).toBeVisible();
   await expect(
     chat.getByRole('heading', { name: 'Offline downloads' }),
@@ -640,9 +773,7 @@ test('uncovered questions hand off and exhausted visitors still start conversati
     await page
       .getByRole('textbox', { name: 'New support request' })
       .fill(`Please help with a double charge ${draft}`);
-    await page
-      .getByRole('button', { name: 'Send', exact: true })
-      .click();
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
     const chat = page.getByRole('region', { name: 'Support chat' });
     await expect(
       chat.getByText('With our team', { exact: true }),
@@ -651,7 +782,9 @@ test('uncovered questions hand off and exhausted visitors still start conversati
       chat.getByText('A Tunely team member will reply soon', { exact: true }),
     ).toBeVisible();
     await expect(
-      chat.locator('[data-from="system"]').getByRole('button', { name: 'Switch to Agent seat' }),
+      chat
+        .locator('[data-from="system"]')
+        .getByRole('button', { name: 'Switch to Agent seat' }),
     ).toBeVisible();
     if (draft === 4)
       await expect(chat.getByRole('status')).toHaveText(
@@ -683,10 +816,14 @@ test('only the owner starts a live evaluation while saved results stay public', 
     page.getByRole('heading', { name: 'Answer quality' }),
   ).toBeVisible();
   await expect(page.getByText(/tunely-support-v3/)).toBeVisible();
-  await page.getByRole('button', { name: 'Run live evaluation', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Run live evaluation', exact: true })
+    .click();
   await expect(page).toHaveURL(/\/quality\?run=live$/);
   await expect(page.getByText(/^Saved live provider results/)).toBeVisible();
-  await expect(page.getByText(/tunely-support-v3 · gpt-4o-mini · live/)).toBeVisible();
+  await expect(
+    page.getByText(/tunely-support-v3 · gpt-4o-mini · live/),
+  ).toBeVisible();
   await page.getByRole('link', { name: 'Deterministic', exact: true }).click();
   for (const name of [
     'internal-direct-leak',
@@ -699,10 +836,14 @@ test('only the owner starts a live evaluation while saved results stay public', 
   await page.getByRole('link', { name: /internal-direct-leak/ }).click();
   await expect(page).toHaveURL(/\/quality\/internal-direct-leak$/);
   await expect(
-    page.getByRole('article').getByText('internal handoff: pass', { exact: true }),
+    page
+      .getByRole('article')
+      .getByText('internal handoff: pass', { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole('article').getByText('no internal phrase copied: pass', { exact: true }),
+    page
+      .getByRole('article')
+      .getByText('no internal phrase copied: pass', { exact: true }),
   ).toBeVisible();
   await page
     .getByRole('link', { name: 'Back to quality', exact: true })
@@ -727,14 +868,18 @@ test('only the owner starts a live evaluation while saved results stay public', 
       .first(),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Sign out' }).click();
-  await expect(page.getByRole('navigation', { name: 'Site' })).toHaveText('PremiumFamilyDownloadSupport');
+  await expect(page.getByRole('navigation', { name: 'Site' })).toHaveText(
+    'PremiumFamilyDownloadSupport',
+  );
   await page.goto('/quality/known-failure');
   await expect(
     page.getByRole('heading', { name: 'Known Failure', exact: true }),
   ).toBeVisible();
   await page.goto('/quality?run=live');
   await expect(page.getByText(/^Saved live provider results/)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Run live evaluation' })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Run live evaluation' }),
+  ).toHaveCount(0);
 });
 
 test('owner manages help articles while visitors cannot open the editor', async ({
@@ -785,7 +930,9 @@ test('owner manages help articles while visitors cannot open the editor', async 
   await page.reload();
   await expect(editor.getByRole('checkbox', { name: /Retired/ })).toBeChecked();
   await page.getByRole('button', { name: 'Sign out' }).click();
-  await expect(page.getByRole('navigation', { name: 'Site' })).toHaveText('PremiumFamilyDownloadSupport');
+  await expect(page.getByRole('navigation', { name: 'Site' })).toHaveText(
+    'PremiumFamilyDownloadSupport',
+  );
   await page.goto('/articles');
   await expect(
     page.getByRole('heading', { name: 'Owner sign in' }),
@@ -815,9 +962,7 @@ test('internal notes stay private while an agent checks, edits and approves a dr
   await page
     .getByRole('textbox', { name: 'New support request' })
     .fill('What is the staff playback workaround?');
-  await page
-    .getByRole('button', { name: 'Send', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
   const ticketPath = new URL(page.url()).pathname;
   const chat = page.getByRole('region', { name: 'Support chat' });
@@ -997,19 +1142,12 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
     .fill('Please resend the invitations.');
   await page.getByLabel('Priority').selectOption('normal');
   await page.route('**/tickets/1', async (route) => {
-    if (await submittedReviewAction(route.request()) === 'approve') {
+    if ((await submittedReviewAction(route.request())) === 'approve') {
       await new Promise((resolve) => setTimeout(resolve, 6000));
     }
     await route.continue();
   });
-  const approvalResponse = page.waitForResponse(async (response) =>
-    await submittedReviewAction(response.request()) === 'approve',
-  );
-  await page.getByRole('button', { name: 'Approve in-app reply' }).click();
-  const approved = await approvalResponse;
-  expect(approved.status()).toBeLessThan(400);
-  expect(approved.headers()['x-action-redirect']?.split(';')[0] ?? approved.headers().location).toBe('/tickets/2');
-  await expect(page).toHaveURL(/\/tickets\/2$/);
+  await approveReply(page, '/tickets/2');
   await page.unroute('**/tickets/1');
   await page.goto('/tickets/1');
   await expect(
@@ -1179,10 +1317,7 @@ test('inbox actions stay disabled while their requests are in flight', async ({
   await page
     .getByRole('textbox', { name: 'New support request' })
     .fill('Pending test request');
-  const checkSubmit = await checkPending(
-    'Send',
-    'Sending...',
-  );
+  const checkSubmit = await checkPending('Send', 'Sending...');
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
   await checkSubmit();
 
@@ -1203,7 +1338,14 @@ test('a visitor resets only their own demo workspace', async ({
   await page
     .getByRole('link', { name: /Family invitation keeps failing/ })
     .click();
-  await page.getByRole('button', { name: 'Approve in-app reply' }).click();
+  await page.route('**/tickets/1', async (route) => {
+    if ((await submittedReviewAction(route.request())) === 'approve') {
+      await new Promise((resolve) => setTimeout(resolve, 6000));
+    }
+    await route.continue();
+  });
+  await approveReply(page, '/tickets/2');
+  await page.unroute('**/tickets/1');
   await expect(
     page.getByRole('link', { name: /Family invitation keeps failing/ }),
   ).toContainText('resolved');
@@ -1228,9 +1370,7 @@ test('a visitor resets only their own demo workspace', async ({
     await otherPage
       .getByRole('link', { name: /Family invitation keeps failing/ })
       .click();
-    await otherPage
-      .getByRole('button', { name: 'Approve in-app reply' })
-      .click();
+    await approveReply(otherPage, '/tickets/2');
     await expect(
       otherPage.getByRole('link', {
         name: /Family invitation keeps failing/,
@@ -1242,7 +1382,9 @@ test('a visitor resets only their own demo workspace', async ({
       page.getByRole('link', { name: /Reset my request/ }),
     ).toHaveCount(0);
     await expect(
-      page.getByRole('complementary', { name: 'How the AI decided' }).getByText('open', { exact: true }),
+      page
+        .getByRole('complementary', { name: 'How the AI decided' })
+        .getByText('open', { exact: true }),
     ).toHaveText('open');
     const removed = await page.goto(submittedUrl);
     expect(removed?.status()).toBe(404);
