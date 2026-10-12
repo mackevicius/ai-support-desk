@@ -34,9 +34,7 @@ export default async function RootLayout({
       </head>
       <body data-seat={seat} className={seat}>
         <nav className="demo-strip" aria-label="Portfolio">
-          Portfolio demo · Tunely is a fictional company ·{' '}
-          <Link href="/how-it-works">How it works →</Link> ·{' '}
-          <Link href="/quality">Answer quality</Link>
+          Portfolio demo · Tunely is a fictional company
         </nav>
         <header className="topbar">
           <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
@@ -49,14 +47,13 @@ export default async function RootLayout({
             </Link>
             {allowance && (
               <span className="live-count">
-                {allowance.remaining} live drafts left
+                {allowance.remaining} live AI answers left today
               </span>
             )}
           </div>
-          <SiteNavigation seat={seat} owner={owner}>
-            <Link href="/how-it-works">How it works</Link>
-            <Link href="/quality">Quality</Link>
-            {owner && <Link href="/articles">Articles</Link>}
+          <SiteNavigation seat={seat} owner={owner} />
+          <div className="topbar-actions">
+            <SeatSwitch seat={seat} />
             {owner ? (
               <form action={signOutOwner}>
                 <Button variant="ghost" size="sm" className="owner-link">
@@ -66,8 +63,7 @@ export default async function RootLayout({
             ) : (
               <Link href="/owner" className="owner-link">Owner sign in</Link>
             )}
-          </SiteNavigation>
-          <SeatSwitch seat={seat} />
+          </div>
         </header>
         {children}
       </body>

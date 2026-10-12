@@ -145,11 +145,8 @@
 .demo-strip {
   @apply bg-strip px-3 py-1.5 text-center font-[system-ui,sans-serif] text-xs text-strip-foreground;
 }
-.demo-strip a {
-  @apply font-bold underline underline-offset-2;
-}
 .topbar {
-  @apply flex flex-wrap items-center gap-x-5 gap-y-3 px-5 py-4 sm:px-7 lg:grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)];
+  @apply flex flex-wrap items-center gap-x-5 gap-y-3 px-5 py-4 sm:px-7;
 }
 .agent .topbar {
   @apply border-b border-border bg-card;
@@ -164,16 +161,19 @@
   @apply text-[13px] text-muted-foreground;
 }
 .topbar nav {
-  @apply flex flex-wrap items-center gap-x-5 gap-y-1 text-sm lg:justify-self-center;
+  @apply flex flex-wrap items-center gap-x-5 gap-y-2 text-sm;
 }
-.topbar > [role='group'] {
-  @apply lg:justify-self-end;
+.topbar-actions {
+  @apply ml-auto flex max-w-full flex-wrap items-center justify-end gap-x-4 gap-y-2;
 }
 .topbar nav a {
-  @apply font-semibold hover:text-link hover:underline;
+  @apply font-semibold whitespace-nowrap hover:text-link hover:underline;
+}
+.topbar nav a[aria-current='page'] {
+  @apply text-primary underline decoration-2 underline-offset-8;
 }
 .owner-link {
-  @apply text-sm font-bold text-link hover:underline;
+  @apply text-sm font-bold whitespace-nowrap hover:text-link hover:underline;
 }
 
 .workspace {

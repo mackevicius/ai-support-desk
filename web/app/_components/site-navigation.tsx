@@ -1,15 +1,26 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-export function SiteNavigation({ seat, owner, children }: { seat: 'customer' | 'agent'; owner: boolean; children: ReactNode }) {
+export function SiteNavigation({ seat, owner }: { seat: 'customer' | 'agent'; owner: boolean }) {
   const pathname = usePathname();
+  const current = pathname === '/' || pathname.startsWith('/tickets/')
+    ? '/'
+    : pathname.startsWith('/quality/') ? '/quality' : pathname;
+  const tabs = [
+    { href: '/', label: seat === 'customer' ? 'Support' : 'Inbox' },
+    { href: '/how-it-works', label: 'How it works' },
+    { href: '/quality', label: 'Answer quality' },
+    ...(owner ? [{ href: '/articles', label: 'Articles' }] : []),
+  ];
   return (
     <nav aria-label="Site">
-      {seat === 'customer' && !owner && pathname === '/' ? (
-        <><span>Premium</span><span>Family</span><span>Download</span><strong className="text-primary">Support</strong></>
-      ) : children}
+      {tabs.map(({ href, label }) => (
+        <Link key={href} href={href} aria-current={current === href ? 'page' : undefined}>
+          {label}
+        </Link>
+      ))}
     </nav>
   );
 }

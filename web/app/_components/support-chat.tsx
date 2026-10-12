@@ -70,8 +70,7 @@ export function SupportChat({
         <header>
           <h2>Tunely Support</h2>
           <p>
-            AI assistant · a person steps in when it matters · Live AI:{' '}
-            {allowance.remaining} answers left today
+            AI assistant · a person steps in when it matters
           </p>
         </header>
         <div className="home-chat-messages">
@@ -117,7 +116,6 @@ export function SupportChat({
     <section className="customer-panel" aria-label="Tunely Support">
       <header className="customer-panel-heading">
         <h2>Tunely Support</h2>
-        <p>Live AI: {allowance.remaining} answers left today</p>
       </header>
       <div className="customer-panel-body">
         <aside className="conversations" aria-label="Your conversations">

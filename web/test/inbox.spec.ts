@@ -39,36 +39,46 @@ async function expectShell(page: Page, drafts: number) {
     header.getByRole('link', { name: 'Tunely · music streaming' }),
   ).toBeVisible();
   await expect(
-    header.getByText(`${drafts} live drafts left`, { exact: true }),
+    header.getByText(`${drafts} live AI answers left today`, { exact: true }),
   ).toBeVisible();
+  await expect(page.getByText(/\d+ (?:live AI )?answers left today/)).toHaveCount(1);
   await expect(header.getByRole('group', { name: 'Viewing as' })).toBeVisible();
-  if (new URL(page.url()).pathname === '/') {
-    const nav = header.getByRole('navigation', { name: 'Site' });
-    await expect(nav).toHaveText('PremiumFamilyDownloadSupport');
-    await expect(nav.getByRole('link')).toHaveCount(0);
-  } else {
-    await expect(
-      header.getByRole('link', { name: 'How it works', exact: true }),
-    ).toBeVisible();
-    await expect(
-      header.getByRole('link', { name: 'Quality', exact: true }),
-    ).toBeVisible();
+  const nav = header.getByRole('navigation', { name: 'Site' });
+  const agent = await page.locator('body').getAttribute('data-seat') === 'agent';
+  await expect(nav.getByRole('link', { name: agent ? 'Inbox' : 'Support', exact: true })).toHaveAttribute('href', '/');
+  await expect(nav.getByRole('link', { name: 'How it works', exact: true })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Answer quality', exact: true })).toBeVisible();
+  const path = new URL(page.url()).pathname;
+  const current = path === '/' || path.startsWith('/tickets/') ? '/' : path.startsWith('/quality') ? '/quality' : path;
+  await expect(nav.locator('[aria-current="page"]')).toHaveCount(path === '/owner' ? 0 : 1);
+  if (path !== '/owner') {
+    await expect(nav.locator('[aria-current="page"]')).toHaveAttribute('href', current);
+    await expect(nav.locator('[aria-current="page"]')).toHaveCSS('text-decoration-line', 'underline');
+    await expect(nav.locator('[aria-current="page"]')).toHaveCSS('color', 'rgb(255, 122, 26)');
   }
-  const navigation = await header
-    .getByRole('navigation', { name: 'Site' })
-    .boundingBox();
-  expect(navigation).not.toBeNull();
-  expect(
-    Math.abs(
-      navigation!.x + navigation!.width / 2 - page.viewportSize()!.width / 2,
-    ),
-  ).toBeLessThan(2);
+  await expect(nav.getByText('Premium', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Portfolio' }).getByRole('link')).toHaveCount(0);
+  for (const link of await nav.locator('a:not([aria-current])').all()) {
+    await expect(link).not.toHaveCSS('color', 'rgb(255, 122, 26)');
+  }
+  const ownerAction = header.getByRole('link', { name: 'Owner sign in', exact: true });
+  const action = await ownerAction.count() ? ownerAction : header.getByRole('button', { name: 'Sign out', exact: true });
+  await expect(action).not.toHaveCSS('color', 'rgb(255, 122, 26)');
+  expect(await action.evaluate((element) => {
+    const seatSwitch = element.closest('.topbar-actions')?.querySelector('[role="group"]');
+    return Boolean(seatSwitch && (seatSwitch.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING));
+  })).toBe(true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(nav.getByRole('link', { name: 'Answer quality', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: `test-results/header-${agent ? 'agent' : 'customer'}-${current.replaceAll('/', '-') || 'home'}-390.png` });
+  await page.setViewportSize({ width: 1440, height: 1000 });
 }
 
-test('every page shares the prototype header and only the owner sees Articles', async ({
+test('every page shares active top-bar tabs and only the owner sees Articles', async ({
   page,
 }) => {
-  for (const path of ['/', '/how-it-works', '/owner']) {
+  for (const path of ['/', '/how-it-works', '/quality', '/quality/known-failure', '/owner']) {
     await page.goto(path);
     await expectShell(page, 5);
     await expect(
@@ -87,6 +97,11 @@ test('every page shares the prototype header and only the owner sees Articles', 
     page.getByRole('article', { name: 'Request detail' }),
   ).toBeVisible();
   await expectShell(page, 4);
+  await page.goto('/how-it-works');
+  await page.getByRole('navigation', { name: 'Site' }).getByRole('link', { name: 'Inbox', exact: true }).click();
+  await expect(page).toHaveURL(/\/tickets\/\d+$/);
+  await expect(page.getByRole('article', { name: 'Request detail' })).toBeVisible();
+  await expectShell(page, 4);
   await page.getByRole('link', { name: 'Owner sign in' }).click();
   await page.getByLabel('Password').fill('test-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
@@ -99,14 +114,17 @@ test('every page shares the prototype header and only the owner sees Articles', 
         .getByRole('banner')
         .getByRole('link', { name: 'Articles', exact: true }),
     ).toBeVisible();
-    await page.setViewportSize({ width: 390, height: 844 });
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= window.innerWidth,
-      ),
-    ).toBe(true);
-    await page.setViewportSize({ width: 1440, height: 1000 });
   }
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page.getByRole('banner').getByRole('link', { name: 'Owner sign in' })).toBeVisible();
+  await expect(page.getByRole('banner').getByRole('link', { name: 'Articles' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Customer', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Customer', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.goto('/how-it-works');
+  await page.getByRole('navigation', { name: 'Site' }).getByRole('link', { name: 'Support', exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('textbox', { name: 'New support request' })).toBeVisible();
+  await expectShell(page, 4);
 });
 
 test('remaining pages use shared surfaces without mobile overflow', async ({
@@ -215,12 +233,12 @@ test('visitors inspect saved quality results and known failures without signing 
     '/how-it-works',
   ]) {
     await page.goto(path);
-    const strip = page.getByRole('navigation', { name: 'Portfolio' });
+    const navigation = page.getByRole('navigation', { name: 'Site' });
     await expect(
-      strip.getByRole('link', { name: 'How it works' }),
+      navigation.getByRole('link', { name: 'How it works' }),
     ).toBeVisible();
     await expect(
-      strip.getByRole('link', { name: 'Answer quality' }),
+      navigation.getByRole('link', { name: 'Answer quality' }),
     ).toBeVisible();
   }
   await expect(
@@ -284,7 +302,7 @@ test('an agent fills the saved knowledge gap with a private help article and red
     page.getByText('Help article saved.', { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText('5 live drafts left', { exact: true }).first(),
+    page.getByText('5 live AI answers left today', { exact: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Redraft', exact: true }).click();
   await expect(
@@ -299,7 +317,7 @@ test('an agent fills the saved knowledge gap with a private help article and red
     page.getByRole('textbox', { name: 'Reply', exact: true }),
   ).toHaveValue(/Settings > Music > Import/);
   await expect(
-    page.getByText('4 live drafts left', { exact: true }).first(),
+    page.getByText('4 live AI answers left today', { exact: true }),
   ).toBeVisible();
   for (const viewport of [
     { width: 1440, height: 1000 },
@@ -361,7 +379,7 @@ test('a visitor explores saved cases and starts chats from every topic tile', as
   await expect(steps).toContainText('Tell us');
   await expect(steps).toContainText('Get an answer in seconds');
   await expect(steps).toContainText('A person steps in when it matters');
-  await expect(page.getByText('5 live drafts left')).toBeVisible();
+  await expect(page.getByText('5 live AI answers left today')).toBeVisible();
   for (const viewport of [
     { width: 1440, height: 1000 },
     { width: 390, height: 844 },
@@ -389,7 +407,7 @@ test('a visitor explores saved cases and starts chats from every topic tile', as
   await expect(
     page.getByRole('article', { name: 'Tunely reply' }),
   ).toContainText('tap Download');
-  await expect(page.getByText('5 live drafts left')).toBeVisible();
+  await expect(page.getByText('5 live AI answers left today')).toBeVisible();
   const topics = [
     ['Offline downloads', 'How do I download music for offline listening?'],
     [
@@ -561,7 +579,7 @@ test('an agent edits a risky draft, asks for details and delivers a team reply',
   ).toContainText('Which dates were the two charges taken?');
   await page.getByRole('button', { name: 'Redraft', exact: true }).click();
   await expect(
-    page.getByRole('banner').getByText('3 live drafts left', { exact: true }),
+    page.getByRole('banner').getByText('3 live AI answers left today', { exact: true }),
   ).toBeVisible();
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.screenshot({
@@ -714,7 +732,7 @@ test('a customer gets a covered answer by keyboard and an example answer on a ph
       .filter({ hasText: /Tunely paid plans include offline listening/ }),
   ).toBeVisible();
   await expect(
-    page.getByRole('banner').getByText('4 live drafts left'),
+    page.getByRole('banner').getByText('4 live AI answers left today'),
   ).toBeVisible();
   const reply = chat.getByRole('article', { name: 'Tunely reply' });
   await reply.getByText('How was this answered?', { exact: true }).focus();
@@ -744,7 +762,7 @@ test('a customer gets a covered answer by keyboard and an example answer on a ph
       .getByRole('region', { name: 'Support chat' })
       .getByText('Answered', { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText('3 live drafts left')).toBeVisible();
+  await expect(page.getByText('3 live AI answers left today')).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -794,7 +812,7 @@ test('uncovered questions hand off and exhausted visitors still start conversati
   await expect(
     page.getByRole('region', { name: 'Support chat' }).getByRole('status'),
   ).toHaveText('Live AI is paused for today');
-  await expect(page.getByText('0 live drafts left')).toBeVisible();
+  await expect(page.getByText('0 live AI answers left today')).toBeVisible();
   await page.getByRole('button', { name: 'Switch to Agent seat' }).click();
   await expect(
     page.getByRole('heading', { name: 'Support inbox' }),
@@ -811,7 +829,7 @@ test('only the owner starts a live evaluation while saved results stay public', 
   await page.getByLabel('Password').fill('test-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
-  await page.getByRole('link', { name: 'Quality', exact: true }).click();
+  await page.getByRole('link', { name: 'Answer quality', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'Answer quality' }),
   ).toBeVisible();
@@ -869,7 +887,7 @@ test('only the owner starts a live evaluation while saved results stay public', 
   ).toBeVisible();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('navigation', { name: 'Site' })).toHaveText(
-    'PremiumFamilyDownloadSupport',
+    'SupportHow it worksAnswer quality',
   );
   await page.goto('/quality/known-failure');
   await expect(
@@ -931,7 +949,7 @@ test('owner manages help articles while visitors cannot open the editor', async 
   await expect(editor.getByRole('checkbox', { name: /Retired/ })).toBeChecked();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('navigation', { name: 'Site' })).toHaveText(
-    'PremiumFamilyDownloadSupport',
+    'SupportHow it worksAnswer quality',
   );
   await page.goto('/articles');
   await expect(
