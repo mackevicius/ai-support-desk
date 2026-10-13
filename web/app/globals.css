@@ -517,10 +517,18 @@
   @apply grid-cols-[auto_minmax(0,1fr)] items-center;
 }
 .agent-composer .review-form > label[for='reply'],
-.agent-composer .review-form > textarea,
-.agent-composer .review-form > [role='alert'],
-.agent-composer .review-actions {
+.agent-composer .review-form > .reply-row,
+.agent-composer .review-form > [role='alert'] {
   @apply col-span-2;
+}
+.reply-row {
+  @apply flex flex-col rounded-lg border border-border bg-[#fffaf5] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50;
+}
+.agent-composer .reply-row textarea {
+  @apply min-h-20 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0;
+}
+.reply-row .review-actions {
+  @apply justify-end px-2 pb-2;
 }
 .review-actions {
   @apply flex flex-wrap gap-2;

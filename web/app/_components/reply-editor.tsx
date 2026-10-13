@@ -111,22 +111,24 @@ function ReplyEditor({
           Internal text check is unavailable. Nothing has been sent.
         </p>
       )}
-      <Textarea
-        id="reply"
-        name="reply"
-        aria-label="Reply"
-        value={reply}
-        onChange={(event) => setReply(event.target.value)}
-        required
-        maxLength={5000}
-        rows={5}
-      />
+      <div className="reply-row">
+        <Textarea
+          id="reply"
+          name="reply"
+          aria-label="Reply"
+          value={reply}
+          onChange={(event) => setReply(event.target.value)}
+          required
+          maxLength={5000}
+          rows={3}
+        />
+        <SendButton
+          hasInternalCopies={checked.copies.length > 0}
+          empty={!reply.trim()}
+        />
+      </div>
       {submitError && <p role="alert">{submitError}</p>}
       {children}
-      <SendButton
-        hasInternalCopies={checked.copies.length > 0}
-        empty={!reply.trim()}
-      />
     </>
   );
 }

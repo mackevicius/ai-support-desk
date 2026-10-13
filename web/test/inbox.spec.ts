@@ -775,6 +775,17 @@ test('an agent sends replies from one box and the customer is left to answer', a
     'Reject suggestion',
   ])
     await expect(page.getByRole('button', { name: removed })).toHaveCount(0);
+  const replyBox = (await detail.locator('.reply-row').boundingBox())!;
+  const sendButton = (await page
+    .getByRole('button', { name: 'Send', exact: true })
+    .boundingBox())!;
+  expect(sendButton.x).toBeGreaterThan(replyBox.x + replyBox.width / 2);
+  expect(sendButton.x + sendButton.width).toBeLessThanOrEqual(
+    replyBox.x + replyBox.width,
+  );
+  expect(sendButton.y + sendButton.height).toBeLessThanOrEqual(
+    replyBox.y + replyBox.height,
+  );
   await page.getByRole('textbox', { name: 'Reply', exact: true }).fill('   ');
   await expect(
     page.getByRole('button', { name: 'Send', exact: true }),
