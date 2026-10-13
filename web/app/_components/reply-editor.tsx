@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState, useEffect, useState, type ReactNode } from 'react';
-import { checkDraft, reviewCheckedRequest } from '../actions';
+import { reviewCheckedRequest } from '../actions';
 import type { InternalCopy } from '../data';
 import { Textarea } from '../../components/ui/textarea';
 
@@ -47,21 +47,29 @@ function ReplyEditor({
   const [confirmed, setConfirmed] = useState(false);
 
   useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
     const timer = setTimeout(() => {
-      checkDraft(ticketId, reply)
+      fetch(`/tickets/${encodeURIComponent(ticketId)}/check`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ reply }),
+        signal: controller.signal,
+      })
+        .then((response) => {
+          if (!response.ok) throw new Error('Draft check failed');
+          return response.json() as Promise<InternalCopy[]>;
+        })
         .then((result) => {
-          if (active) {
-            setCopies(result);
-            setError(false);
-          }
+          if (controller.signal.aborted) return;
+          setCopies(result);
+          setError(false);
         })
         .catch(() => {
-          if (active) setError(true);
+          if (!controller.signal.aborted) setError(true);
         });
     }, 300);
     return () => {
-      active = false;
+      controller.abort();
       clearTimeout(timer);
     };
   }, [ticketId, reply]);

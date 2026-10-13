@@ -5,7 +5,6 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import {
   agentHomeTicket,
-  checkReply,
   type InternalCopy,
   generateTicket,
   getTickets,
@@ -65,15 +64,20 @@ export async function runQualityEvaluation() {
   if (!session || !owner) redirect('/owner');
   let status = 503;
   try {
-    const response = await fetch(`${process.env.API_URL ?? 'http://localhost:3001'}/quality/live`, {
-      method: 'POST',
-      headers: { cookie: `demo_session=${session}; owner_session=${owner}` },
-      cache: 'no-store',
-    });
+    const response = await fetch(
+      `${process.env.API_URL ?? 'http://localhost:3001'}/quality/live`,
+      {
+        method: 'POST',
+        headers: { cookie: `demo_session=${session}; owner_session=${owner}` },
+        cache: 'no-store',
+      },
+    );
     status = response.status;
   } catch {}
   if (status === 403) redirect('/owner');
-  redirect(`/quality?run=live${status === 200 ? '' : `&evaluation=${status === 429 ? 'limit' : 'unavailable'}`}`);
+  redirect(
+    `/quality?run=live${status === 200 ? '' : `&evaluation=${status === 429 ? 'limit' : 'unavailable'}`}`,
+  );
 }
 
 export async function generateRequest(formData: FormData) {
@@ -153,18 +157,6 @@ export async function writeVisitorArticle(
   redirect(`/tickets/${id}?article=saved`);
 }
 
-export async function checkDraft(id: string, reply: string) {
-  const sessionId = (await cookies()).get('demo_session')?.value;
-  if (
-    !sessionId ||
-    !/^\d+$/.test(id) ||
-    typeof reply !== 'string' ||
-    reply.length > 5000
-  )
-    throw new Error('Invalid draft check');
-  return checkReply(id, sessionId, reply);
-}
-
 export type DraftReviewState = {
   reply: string;
   copies: InternalCopy[];
@@ -212,7 +204,13 @@ export async function sendCustomerMessage(
   const message = formData.get('message');
   if (!sessionId || jar.get('demo_seat')?.value === 'agent')
     return 'Only the Customer seat can reply here.';
-  if (typeof id !== 'string' || !/^\d+$/.test(id) || typeof message !== 'string' || !message.trim() || message.length > 5000)
+  if (
+    typeof id !== 'string' ||
+    !/^\d+$/.test(id) ||
+    typeof message !== 'string' ||
+    !message.trim() ||
+    message.length > 5000
+  )
     return 'Enter a message of up to 5000 characters.';
   try {
     await postCustomerMessage(id, sessionId, message);
