@@ -1,11 +1,13 @@
+type ReviewState = 'saved' | 'reopened' | 'waiting_on_customer' | 'solved';
+
 export type TicketSummary = {
   id: number;
   customer_name: string;
   subject: string;
-  status: string;
+  status: 'open' | 'waiting_on_customer' | 'solved';
   priority: string;
   created_at: string;
-  review_state?: 'saved' | 'reopened' | null;
+  review_state?: ReviewState | null;
 };
 
 export function agentHomeTicket(tickets: TicketSummary[]) {
@@ -83,10 +85,10 @@ export type Ticket = TicketSummary & {
   live_ai?: { remaining: number; paused: boolean };
   question: string;
   approved_reply: string | null;
-  review_state: 'saved' | 'reopened' | null;
+  review_state: ReviewState | null;
   draft: null | {
     live?: boolean;
-    state: 'saved' | 'reopened';
+    state: ReviewState;
     reply: string;
     suggested_priority: 'low' | 'normal' | 'high';
     sources: { id: number; title: string; body: string; kind?: string }[];
@@ -234,6 +236,21 @@ export async function postCustomerMessage(id: string, sessionId: string, message
     },
   );
   if (!response.ok) throw new Error('Could not send your message. Please try again.');
+}
+
+export async function solveCustomerConversation(id: string, sessionId: string): Promise<string | null> {
+  const response = await fetch(
+    `${process.env.API_URL ?? 'http://localhost:3001'}/tickets/${encodeURIComponent(id)}/solve`,
+    {
+      method: 'POST',
+      headers: { cookie: `demo_session=${sessionId}; demo_seat=customer` },
+      cache: 'no-store',
+    },
+  );
+  if (response.ok) return null;
+  if (response.status === 409)
+    return 'This conversation is no longer waiting on you.';
+  return 'Could not mark this conversation solved. Please try again.';
 }
 
 export async function requestCustomerHandOff(id: string, sessionId: string): Promise<string | null> {

@@ -29,7 +29,7 @@ test('an agent reply is sent and leaves the ticket waiting on the customer', asy
   });
   assert.equal(sent.status, 200);
   const ticket = await sent.json();
-  assert.equal(ticket.status, 'open');
+  assert.equal(ticket.status, 'waiting_on_customer');
   assert.equal(ticket.priority, 'high');
   assert.equal(ticket.approved_reply, null);
   assert.equal(
@@ -39,7 +39,7 @@ test('an agent reply is sent and leaves the ticket waiting on the customer', asy
   const again = await (
     await review({ action: 'reply', reply: 'Did the new link work?' })
   ).json();
-  assert.equal(again.status, 'open');
+  assert.equal(again.status, 'waiting_on_customer');
   assert.deepEqual(
     again.history
       .map((event: { description: string }) => event.description)
@@ -94,7 +94,7 @@ test('a risky live draft can be reviewed by the visitor acting as a support agen
       });
       assert.equal(asked.status, 200);
       const waiting = await asked.json();
-      assert.equal(waiting.status, 'open');
+      assert.equal(waiting.status, 'waiting_on_customer');
       assert.ok(
         waiting.history.some(
           (event: { description: string }) =>
@@ -111,7 +111,9 @@ test('a risky live draft can be reviewed by the visitor acting as a support agen
           },
         );
         assert.equal(redraft.status, 200);
-        assert.equal((await redraft.json()).live_ai.remaining, remaining);
+        const redrafted = await redraft.json();
+        assert.equal(redrafted.status, 'waiting_on_customer');
+        assert.equal(redrafted.live_ai.remaining, remaining);
       }
       assert.equal(
         (
@@ -132,7 +134,7 @@ test('a risky live draft can be reviewed by the visitor acting as a support agen
       });
       assert.equal(replied.status, 200);
       const delivered = await replied.json();
-      assert.equal(delivered.status, 'open');
+      assert.equal(delivered.status, 'waiting_on_customer');
       assert.equal(
         delivered.history.at(-1).description,
         'Agent replied: Our team will check the two charges.',
@@ -141,7 +143,7 @@ test('a risky live draft can be reviewed by the visitor acting as a support agen
   );
 });
 
-test('redrafting a reopened automatic reply stays open and keeps an agent reply sent meanwhile', async () => {
+test('redrafting a handed-off automatic reply keeps an agent reply sent meanwhile', async () => {
   let calls = 0;
   let holdRequests = false;
   let announceGeneration: () => void = () => {};
@@ -185,17 +187,16 @@ test('redrafting a reopened automatic reply stays open and keeps an agent reply 
         });
         const cookie = submitted.headers.get('set-cookie')!.split(';')[0];
         const ticket = await submitted.json();
-        assert.equal(ticket.status, 'resolved');
+        assert.equal(ticket.status, 'waiting_on_customer');
         const headers = { cookie, 'content-type': 'application/json' };
         assert.equal(
           (
-            await fetch(`${baseUrl}/tickets/${ticket.id}/review`, {
+            await fetch(`${baseUrl}/tickets/${ticket.id}/hand-off`, {
               method: 'POST',
               headers,
-              body: JSON.stringify({ action: 'reopen' }),
             })
           ).status,
-          200,
+          201,
         );
         const redraft = await fetch(
           `${baseUrl}/tickets/${ticket.id}/generate`,
@@ -237,11 +238,11 @@ test('redrafting a reopened automatic reply stays open and keeps an agent reply 
         });
         assert.equal(replied.status, 200);
         releaseGeneration();
-        assert.equal((await pending).status, 200);
+        assert.equal((await pending).status, 409);
         const saved = await (
           await fetch(`${baseUrl}/tickets/${ticket.id}`, { headers })
         ).json();
-        assert.equal(saved.status, 'open');
+        assert.equal(saved.status, 'waiting_on_customer');
         assert.equal(saved.approved_reply, ticket.approved_reply);
         assert.ok(
           saved.history.some(
@@ -302,8 +303,8 @@ test('an agent reply stays in the visitor session', async () => {
   );
 });
 
-test('reopening requires an explicit human action and a reply needs no draft', async () => {
-  await pool.query('DELETE FROM saved_drafts WHERE ticket_id = 5');
+test('the agent reopen action is unavailable and a reply needs no draft', async () => {
+  await pool.query('DELETE FROM saved_drafts WHERE ticket_id = 2');
   const inbox = await fetch(`${baseUrl}/tickets`);
   const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
   const review = (id: number, body: object) =>
@@ -324,36 +325,33 @@ test('reopening requires an explicit human action and a reply needs no draft', a
   assert.equal(unchanged.priority, 'normal');
   assert.equal(unchanged.history.length, 2);
 
-  const oldResolved = await (await review(5, { action: 'reopen' })).json();
-  assert.equal(oldResolved.status, 'open');
-  assert.equal(oldResolved.draft, null);
-  assert.ok(oldResolved.history.at(-1).description.includes('reopened'));
   assert.equal((await review(5, { action: 'reopen' })).status, 409);
   const manual = await (
-    await review(5, {
+    await review(2, {
       action: 'reply',
       reply: 'Downloaded music is available offline.',
     })
   ).json();
-  assert.equal(manual.status, 'open');
+  assert.equal(manual.status, 'waiting_on_customer');
+  assert.equal(manual.draft, null);
   assert.equal(
     manual.history.at(-1).description,
     'Agent replied: Downloaded music is available offline.',
   );
 });
 
-test('only one simultaneous review action changes a request', async () => {
+test('only one simultaneous agent reply changes an unreviewed request', async () => {
   const inbox = await fetch(`${baseUrl}/tickets`);
   const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
   const submit = () =>
-    fetch(`${baseUrl}/tickets/5/review`, {
+    fetch(`${baseUrl}/tickets/1/review`, {
       method: 'POST',
       headers: { cookie, 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'reopen' }),
+      body: JSON.stringify({ action: 'reply', reply: 'Our team is checking this.' }),
     });
   const responses = await Promise.all([submit(), submit()]);
   const ticket = await (
-    await fetch(`${baseUrl}/tickets/5`, { headers: { cookie } })
+    await fetch(`${baseUrl}/tickets/1`, { headers: { cookie } })
   ).json();
   assert.deepEqual(
     responses.map((response) => response.status).sort(),
@@ -362,7 +360,7 @@ test('only one simultaneous review action changes a request', async () => {
   assert.equal(
     ticket.history.filter(
       (event: { description: string }) =>
-        event.description === 'Human reopened request',
+        event.description === 'Agent replied: Our team is checking this.',
     ).length,
     1,
   );

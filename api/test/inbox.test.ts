@@ -56,6 +56,29 @@ test('a visitor can browse tickets through the API', async () => {
   });
 });
 
+test('closed starter conversations are solved and cannot be reopened', async () => {
+  const response = await fetch(`${baseUrl}/tickets/5?view=customer`);
+  const cookie = response.headers.get('set-cookie')!.split(';')[0];
+  const ticket = await response.json();
+  assert.equal(ticket.status, 'solved');
+  assert.equal(ticket.can_redraft, false);
+  assert.equal(ticket.can_request_hand_off, false);
+  const solved = await (await fetch(`${baseUrl}/tickets?status=solved`, { headers: { cookie } })).json();
+  assert.deepEqual(solved.map((item: { id: number }) => item.id), [5]);
+  for (const [path, body] of [
+    ['review', { action: 'reopen' }],
+    ['review', { action: 'reply', reply: 'A new answer' }],
+    ['messages', { message: 'A new question' }],
+  ] as const) {
+    assert.equal((await fetch(`${baseUrl}/tickets/5/${path}`, {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })).status, 409);
+  }
+  assert.equal((await (await fetch(`${baseUrl}/tickets/5`, { headers: { cookie } })).json()).status, 'solved');
+});
+
 test('health reports database availability without exposing private details', async () => {
   const healthy = await fetch(`${baseUrl}/health`);
   assert.equal(healthy.status, 200);
@@ -148,7 +171,7 @@ test('the inbox sorts reviewed tickets after open tickets and filters by status'
   );
   const cookie = submitted.headers.get('set-cookie')!.split(';')[0];
   const { id, status } = await submitted.json();
-  assert.equal(status, 'resolved');
+  assert.equal(status, 'waiting_on_customer');
   const tickets = await (
     await fetch(`${baseUrl}/tickets`, { headers: { cookie } })
   ).json();
@@ -163,19 +186,23 @@ test('the inbox sorts reviewed tickets after open tickets and filters by status'
     open.map((ticket: { id: number }) => ticket.id),
     [1, 2, 3, 4],
   );
-  const resolved = await (
-    await fetch(`${baseUrl}/tickets?status=resolved`, { headers: { cookie } })
+  const waiting = await (
+    await fetch(`${baseUrl}/tickets?status=waiting_on_customer`, { headers: { cookie } })
   ).json();
   assert.deepEqual(
-    resolved.map((ticket: { id: number }) => ticket.id),
-    [id, 5],
+    waiting.map((ticket: { id: number }) => ticket.id),
+    [id],
   );
-  const reopened = await fetch(`${baseUrl}/tickets/${id}/review`, {
+  const solved = await (
+    await fetch(`${baseUrl}/tickets?status=solved`, { headers: { cookie } })
+  ).json();
+  assert.deepEqual(solved.map((ticket: { id: number }) => ticket.id), [5]);
+  const replied = await fetch(`${baseUrl}/tickets/${id}/messages`, {
     method: 'POST',
     headers: { cookie, 'content-type': 'application/json' },
-    body: JSON.stringify({ action: 'reopen' }),
+    body: JSON.stringify({ message: 'I still need help with this.' }),
   });
-  assert.equal(reopened.status, 200);
+  assert.equal(replied.status, 201);
   const reordered = await (
     await fetch(`${baseUrl}/tickets`, { headers: { cookie } })
   ).json();

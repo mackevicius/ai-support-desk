@@ -5,16 +5,85 @@ import type { Server } from 'node:http';
 import pg from 'pg';
 import { createApp } from '../src/app.js';
 import { prepareDatabase } from '../src/schema.js';
-import { startInbox, withProvider } from './helpers.js';
+import { startInbox, submitAutomaticConversation, withProvider } from './helpers.js';
 import { close, listening, readJson, sendJson } from './helpers.js';
 
 const { pool, baseUrl } = await startInbox();
 
+test('only the customer can solve a waiting conversation and solved conversations are final', async () => {
+  const cookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
+  const read = async (sessionCookie = cookie) =>
+    (await fetch(`${baseUrl}/tickets/1?view=customer`, { headers: { cookie: sessionCookie } })).json();
+  const solve = (id: number | string = 1, sessionCookie = cookie) =>
+    fetch(`${baseUrl}/tickets/${id}/solve`, {
+      method: 'POST',
+      headers: { cookie: sessionCookie },
+    });
+  assert.equal((await solve()).status, 409);
+  assert.equal((await solve('invalid')).status, 404);
+  assert.equal((await solve(999999)).status, 404);
+  const replied = await fetch(`${baseUrl}/tickets/1/review`, {
+    method: 'POST',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'reply', reply: 'Please try a new family invitation.' }),
+  });
+  assert.equal(replied.status, 200);
+  assert.equal((await read()).status, 'waiting_on_customer');
+  assert.equal((await solve(1, `${cookie}; demo_seat=agent`)).status, 403);
+  const allowance = await (await fetch(`${baseUrl}/live-ai`, { headers: { cookie } })).json();
+  assert.equal((await solve()).status, 201);
+  const solved = await read();
+  assert.equal(solved.status, 'solved');
+  assert.equal(solved.can_redraft, false);
+  assert.equal(solved.can_request_hand_off, false);
+  assert.equal(solved.history.at(-1).description, 'Customer marked conversation solved');
+  const tickets = await (await fetch(`${baseUrl}/tickets?status=solved`, { headers: { cookie } })).json();
+  assert.ok(tickets.some((ticket: { id: number }) => ticket.id === 1));
+  assert.equal((await solve()).status, 409);
+  for (const [path, body] of [
+    ['messages', { message: 'Another question' }],
+    ['hand-off', {}],
+    ['generate', {}],
+    ['review', { action: 'reply', reply: 'Another answer' }],
+    ['review', { action: 'reopen' }],
+    ['review', { action: 'priority', priority: 'low' }],
+  ] as const) {
+    const result = await fetch(`${baseUrl}/tickets/1/${path}`, {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    assert.equal(result.status, 409, path);
+  }
+  assert.deepEqual(await read(), solved);
+  assert.deepEqual(await (await fetch(`${baseUrl}/live-ai`, { headers: { cookie } })).json(), allowance);
+  const otherCookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
+  const other = await read(otherCookie);
+  assert.equal(other.status, 'open');
+  assert.ok(!other.history.some((event: { description: string }) => event.description === 'Customer marked conversation solved'));
+});
+
+test('a customer solves an automatic reply once without spending AI allowance', async () => {
+  const { cookie, ticket } = await submitAutomaticConversation(baseUrl);
+  const allowance = await (await fetch(`${baseUrl}/live-ai`, { headers: { cookie } })).json();
+  const solve = () => fetch(`${baseUrl}/tickets/${ticket.id}/solve`, {
+    method: 'POST',
+    headers: { cookie },
+  });
+  const responses = await Promise.all([solve(), solve()]);
+  assert.deepEqual(responses.map((response) => response.status).sort(), [201, 409]);
+  const solved = await (await fetch(`${baseUrl}/tickets/${ticket.id}`, { headers: { cookie } })).json();
+  assert.equal(solved.status, 'solved');
+  assert.equal(solved.approved_reply, ticket.approved_reply);
+  assert.deepEqual(solved.decision, ticket.decision);
+  assert.equal(solved.history.filter((event: { description: string }) => event.description === 'Customer marked conversation solved').length, 1);
+  assert.equal(solved.history.filter((event: { description: string }) => event.description === `Automatic in-app reply: ${ticket.approved_reply}`).length, 1);
+  assert.deepEqual(await (await fetch(`${baseUrl}/live-ai`, { headers: { cookie } })).json(), allowance);
+  assert.equal((await fetch(`${baseUrl}/tickets/${ticket.id}`)).status, 404);
+});
+
 test('customer can ask for a person after an automatic reply without changing the AI decision', async () => {
-  const session = await fetch(`${baseUrl}/tickets`);
-  const cookie = session.headers.get('set-cookie')!.split(';')[0];
-  const tickets = await session.json();
-  const answered = tickets.find((ticket: { status: string }) => ticket.status === 'resolved');
+  const { cookie, ticket: answered } = await submitAutomaticConversation(baseUrl);
   const read = async (sessionCookie?: string) =>
     (await fetch(`${baseUrl}/tickets/${answered.id}`, {
       headers: sessionCookie ? { cookie: sessionCookie } : undefined,
@@ -39,15 +108,11 @@ test('customer can ask for a person after an automatic reply without changing th
   assert.equal(ownList.find((ticket: { id: number }) => ticket.id === answered.id).status, 'open');
   assert.deepEqual(await (await fetch(`${baseUrl}/live-ai`, { headers: { cookie } })).json(), allowance);
 
-  const other = await read();
-  assert.equal(other.status, 'resolved');
-  assert.equal(other.approved_reply, original.approved_reply);
-  assert.deepEqual(other.decision, original.decision);
-  assert.ok(!other.history.some((event: { description: string }) => event.description === 'Customer asked for a person'));
+  assert.equal((await fetch(`${baseUrl}/tickets/${answered.id}`)).status, 404);
 });
 
 test('customer hand-off is only available for an automatic reply before a person replies', async () => {
-  const cookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
+  const { cookie, ticket: { id } } = await submitAutomaticConversation(baseUrl);
   const read = async (id: number) =>
     (await fetch(`${baseUrl}/tickets/${id}?view=customer`, { headers: { cookie } })).json();
   const handOff = (id: number | string, sessionCookie = cookie) =>
@@ -55,42 +120,42 @@ test('customer hand-off is only available for an automatic reply before a person
       method: 'POST',
       headers: { cookie: sessionCookie },
     });
-  assert.equal((await read(5)).can_request_hand_off, true);
+  assert.equal((await read(id)).can_request_hand_off, true);
   assert.equal((await read(1)).can_request_hand_off, false);
   assert.equal((await handOff(1)).status, 409);
   assert.equal((await handOff('invalid')).status, 404);
   assert.equal((await handOff(999999)).status, 404);
-  assert.equal((await handOff(5, `${cookie}; demo_seat=agent`)).status, 403);
+  assert.equal((await handOff(id, `${cookie}; demo_seat=agent`)).status, 403);
 
-  const review = (action: string, reply?: string) => fetch(`${baseUrl}/tickets/5/review`, {
+  const review = (action: string, reply?: string) => fetch(`${baseUrl}/tickets/${id}/review`, {
     method: 'POST',
     headers: { cookie, 'content-type': 'application/json' },
     body: JSON.stringify({ action, reply, priority: 'normal' }),
   });
-  assert.equal((await review('reopen')).status, 200);
-  assert.equal((await read(5)).can_request_hand_off, false);
+  assert.equal((await review('reopen')).status, 409);
+  assert.equal((await read(id)).can_request_hand_off, true);
   assert.equal((await review('reply', 'Our team has checked your downloads.')).status, 200);
-  const replied = await read(5);
-  assert.equal(replied.status, 'open');
+  const replied = await read(id);
+  assert.equal(replied.status, 'waiting_on_customer');
   assert.equal(replied.can_request_hand_off, false);
-  assert.equal((await handOff(5)).status, 409);
+  assert.equal((await handOff(id)).status, 409);
   assert.ok(!replied.history.some((event: { description: string }) => event.description === 'Customer asked for a person'));
 });
 
 test('simultaneous customer hand-offs record one request and an agent reply does not offer another', async () => {
-  const cookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
-  const handOff = () => fetch(`${baseUrl}/tickets/5/hand-off`, {
+  const { cookie, ticket: { id } } = await submitAutomaticConversation(baseUrl);
+  const handOff = () => fetch(`${baseUrl}/tickets/${id}/hand-off`, {
     method: 'POST',
     headers: { cookie },
   });
   const results = await Promise.all([handOff(), handOff()]);
   assert.deepEqual(results.map((result) => result.status).sort(), [201, 409]);
-  const read = async () => (await fetch(`${baseUrl}/tickets/5`, { headers: { cookie } })).json();
+  const read = async () => (await fetch(`${baseUrl}/tickets/${id}`, { headers: { cookie } })).json();
   const handedOff = await read();
   assert.equal(handedOff.can_request_hand_off, false);
   assert.equal(handedOff.history.filter((event: { description: string }) => event.description === 'Customer asked for a person').length, 1);
 
-  const reply = await fetch(`${baseUrl}/tickets/5/review`, {
+  const reply = await fetch(`${baseUrl}/tickets/${id}/review`, {
     method: 'POST',
     headers: { cookie, 'content-type': 'application/json' },
     body: JSON.stringify({ action: 'reply', reply: 'Our team has checked the problem.' }),
@@ -98,8 +163,8 @@ test('simultaneous customer hand-offs record one request and an agent reply does
   assert.equal(reply.status, 200);
   assert.equal((await handOff()).status, 409);
   const replied = await read();
-  assert.equal(replied.status, 'open');
-  assert.equal(replied.review_state, 'reopened');
+  assert.equal(replied.status, 'waiting_on_customer');
+  assert.equal(replied.review_state, 'waiting_on_customer');
   assert.equal(replied.approved_reply, handedOff.approved_reply);
   assert.equal(replied.history.at(-1).description, 'Agent replied: Our team has checked the problem.');
   assert.equal(replied.history.filter((event: { description: string }) => event.description === 'Customer asked for a person').length, 1);
@@ -128,6 +193,7 @@ test('a customer hands off their newly generated automatic reply without another
       const cookie = response.headers.get('set-cookie')!.split(';')[0];
       const original = await response.json();
       assert.equal(original.is_sample, false);
+      assert.equal(original.status, 'waiting_on_customer');
       assert.equal(original.can_request_hand_off, true);
       assert.equal(original.decision.kind, 'automatic_reply');
       const allowance = await (await fetch(`${baseUrl}/live-ai`, { headers: { cookie } })).json();
@@ -149,11 +215,39 @@ test('a customer hands off their newly generated automatic reply without another
   );
 });
 
-test('customer replies stay in their own conversation and reopen an answered request without AI', async () => {
-  const session = await fetch(`${baseUrl}/tickets`);
-  const cookie = session.headers.get('set-cookie')!.split(';')[0];
-  const tickets = await session.json();
-  const answered = tickets.find((ticket: { status: string }) => ticket.status === 'resolved');
+test('an unsent redraft keeps customer hand-off available after an automatic reply', async () => {
+  const { cookie, ticket } = await submitAutomaticConversation(baseUrl);
+  await withProvider(
+    async (request, response) => {
+      const input = await readJson(request);
+      const article = input.articles.find((item: { title: string }) => item.title === 'Offline downloads');
+      sendJson(response, {
+        reply: 'Try downloading a playlist again.',
+        suggested_priority: 'normal',
+        source_ids: [article.id],
+        clearly_covered: true,
+        requires_team: false,
+      });
+    },
+    async () => {
+      const generated = await fetch(`${baseUrl}/tickets/${ticket.id}/generate`, { method: 'POST', headers: { cookie } });
+      assert.equal(generated.status, 200);
+      const updated = await generated.json();
+      assert.equal(updated.status, 'waiting_on_customer');
+      assert.equal(updated.decision.kind, 'hand_off');
+      assert.equal(updated.approved_reply, ticket.approved_reply);
+      assert.equal(updated.can_request_hand_off, true);
+      assert.equal((await fetch(`${baseUrl}/tickets/${ticket.id}/hand-off`, { method: 'POST', headers: { cookie } })).status, 201);
+      const handedOff = await (await fetch(`${baseUrl}/tickets/${ticket.id}`, { headers: { cookie } })).json();
+      assert.equal(handedOff.status, 'open');
+      assert.equal(handedOff.can_request_hand_off, false);
+      assert.equal(handedOff.history.at(-1).description, 'Customer asked for a person');
+    },
+  );
+});
+
+test('customer replies stay in their own conversation and return an answered request to the team without AI', async () => {
+  const { cookie, ticket: answered } = await submitAutomaticConversation(baseUrl);
   const send = (message: unknown, sessionCookie = cookie, id = answered.id) =>
     fetch(`${baseUrl}/tickets/${id}/messages`, {
       method: 'POST',
@@ -174,9 +268,7 @@ test('customer replies stay in their own conversation and reopen an answered req
   assert.ok(own.history.some((event: { description: string }) => event.description === 'Customer replied: I still need help with my downloads.'));
   const agent = await (await fetch(`${baseUrl}/tickets/${answered.id}`, { headers: { cookie } })).json();
   assert.equal(agent.draft.state, 'reopened');
-  const other = await (await fetch(`${baseUrl}/tickets/${answered.id}?view=customer`)).json();
-  assert.equal(other.status, 'resolved');
-  assert.ok(!other.history.some((event: { description: string }) => event.description.startsWith('Customer replied:')));
+  assert.equal((await fetch(`${baseUrl}/tickets/${answered.id}?view=customer`)).status, 404);
   assert.deepEqual(await (await fetch(`${baseUrl}/live-ai`, { headers: { cookie } })).json(), allowance);
   const ownList = await (await fetch(`${baseUrl}/tickets`, { headers: { cookie } })).json();
   assert.equal(ownList.find((ticket: { id: number }) => ticket.id === answered.id).status, 'open');
@@ -184,18 +276,41 @@ test('customer replies stay in their own conversation and reopen an answered req
   assert.ok(refreshed.history.some((event: { description: string }) => event.description.startsWith('Automatic in-app reply: ')));
 });
 
-test('the original automatic reply survives agent reopening and agent replies', async () => {
-  const cookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
-  const read = async () => (await fetch(`${baseUrl}/tickets/5`, { headers: { cookie } })).json();
+test('customer follow-ups return a waiting conversation to the team after a priority change', async () => {
+  const { cookie, ticket } = await submitAutomaticConversation(baseUrl, 'high');
+  const headers = { cookie, 'content-type': 'application/json' };
+  const prioritized = await fetch(`${baseUrl}/tickets/${ticket.id}/review`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ action: 'priority', priority: 'high' }),
+  });
+  assert.equal(prioritized.status, 200);
+  assert.equal((await prioritized.json()).status, 'waiting_on_customer');
+  const message = await fetch(`${baseUrl}/tickets/${ticket.id}/messages`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ message: 'Downloads are still not working.' }),
+  });
+  assert.equal(message.status, 201);
+  const updated = await (await fetch(`${baseUrl}/tickets/${ticket.id}`, { headers })).json();
+  assert.equal(updated.status, 'open');
+  assert.equal(updated.priority, 'high');
+  assert.equal(updated.can_request_hand_off, false);
+  assert.equal((await fetch(`${baseUrl}/tickets/${ticket.id}/solve`, { method: 'POST', headers })).status, 409);
+});
+
+test('the original automatic reply survives customer hand-off and agent replies', async () => {
+  const { cookie, ticket: { id } } = await submitAutomaticConversation(baseUrl);
+  const read = async () => (await fetch(`${baseUrl}/tickets/${id}`, { headers: { cookie } })).json();
   const original = (await read()).approved_reply;
-  const review = (action: string, reply?: string) => fetch(`${baseUrl}/tickets/5/review`, {
+  const review = (action: string, reply?: string) => fetch(`${baseUrl}/tickets/${id}/review`, {
     method: 'POST',
     headers: { cookie, 'content-type': 'application/json' },
     body: JSON.stringify({ action, reply, priority: 'normal' }),
   });
-  assert.equal((await review('reopen')).status, 200);
+  assert.equal((await fetch(`${baseUrl}/tickets/${id}/hand-off`, { method: 'POST', headers: { cookie } })).status, 201);
   assert.equal((await review('reply', 'Which device are you using?')).status, 200);
-  const send = await fetch(`${baseUrl}/tickets/5/messages`, {
+  const send = await fetch(`${baseUrl}/tickets/${id}/messages`, {
     method: 'POST',
     headers: { cookie, 'content-type': 'application/json' },
     body: JSON.stringify({ message: 'An iPhone.' }),
@@ -211,28 +326,26 @@ test('the original automatic reply survives agent reopening and agent replies', 
   assert.equal(afterReply.history.at(-1).description, 'Agent replied: Restart your phone and try the download again.');
   assert.equal(afterReply.history.filter((event: { description: string }) => event.description === `Automatic in-app reply: ${original}`).length, 1);
 
-  const otherCookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
-  for (const action of ['reopen', 'reply']) {
-    assert.equal((await fetch(`${baseUrl}/tickets/5/review`, {
-      method: 'POST',
-      headers: { cookie: otherCookie, 'content-type': 'application/json' },
-      body: JSON.stringify({ action, reply: 'Try another device.', priority: 'normal' }),
-    })).status, 200);
-  }
-  const replaced = await (await fetch(`${baseUrl}/tickets/5`, { headers: { cookie: otherCookie } })).json();
+  const { cookie: otherCookie, ticket: otherTicket } = await submitAutomaticConversation(baseUrl);
+  assert.equal((await fetch(`${baseUrl}/tickets/${otherTicket.id}/review`, {
+    method: 'POST',
+    headers: { cookie: otherCookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'reply', reply: 'Try another device.', priority: 'normal' }),
+  })).status, 200);
+  const replaced = await (await fetch(`${baseUrl}/tickets/${otherTicket.id}`, { headers: { cookie: otherCookie } })).json();
   assert.ok(replaced.history.some((event: { description: string }) => event.description === `Automatic in-app reply: ${original}`));
 });
 
 test('simultaneous customer replies preserve one original answer and an agent reply sent meanwhile', async () => {
-  const cookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
+  const { cookie, ticket: { id } } = await submitAutomaticConversation(baseUrl);
   const send = (id: number, message: string) => fetch(`${baseUrl}/tickets/${id}/messages`, {
     method: 'POST',
     headers: { cookie, 'content-type': 'application/json' },
     body: JSON.stringify({ message }),
   });
-  const results = await Promise.all([send(5, 'First follow-up'), send(5, 'Second follow-up')]);
+  const results = await Promise.all([send(id, 'First follow-up'), send(id, 'Second follow-up')]);
   assert.deepEqual(results.map((result) => result.status), [201, 201]);
-  const answered = await (await fetch(`${baseUrl}/tickets/5`, { headers: { cookie } })).json();
+  const answered = await (await fetch(`${baseUrl}/tickets/${id}`, { headers: { cookie } })).json();
   assert.equal(answered.history.filter((event: { description: string }) => event.description.startsWith('Automatic in-app reply: ')).length, 1);
   assert.equal(answered.history.filter((event: { description: string }) => event.description.startsWith('Customer replied: ')).length, 2);
   assert.equal((await send(1, 'Initial details')).status, 201);
@@ -511,7 +624,7 @@ test('a new visitor sees five saved Tunely outcomes without an AI call', async (
       );
       assert.ok(details.every((ticket) => ticket.draft?.reply));
       const automatic = details.find((ticket) => ticket.id === 5);
-      assert.equal(automatic.status, 'resolved');
+      assert.equal(automatic.status, 'solved');
       assert.equal(automatic.approved_reply, automatic.draft.reply);
       assert.equal(details[1].draft.sources[0].kind, 'internal_note');
       assert.equal(details[3].draft.sources.length, 0);
@@ -533,7 +646,7 @@ test('expired visitor reviews and their events are removed from the demo inbox',
     }),
   });
   assert.equal(sentReply.status, 200);
-  assert.equal((await sentReply.json()).review_state, 'saved');
+  assert.equal((await sentReply.json()).review_state, 'waiting_on_customer');
   await pool.query(
     "UPDATE ticket_reviews SET created_at = '2020-01-01T00:00:00Z' WHERE session_id = $1",
     [sessionId],
@@ -668,8 +781,8 @@ test('reset restores fictional tickets without changing another visitor session'
   const other = await (
     await fetch(`${baseUrl}/tickets/1`, { headers: { cookie: secondCookie } })
   ).json();
-  assert.equal(other.status, 'open');
-  assert.equal(other.review_state, 'saved');
+  assert.equal(other.status, 'waiting_on_customer');
+  assert.equal(other.review_state, 'waiting_on_customer');
   assert.equal(other.history.length, 3);
   assert.equal(
     (

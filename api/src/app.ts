@@ -20,8 +20,8 @@ import {
 const ownerSessionAge = 8 * 60 * 60 * 1000;
 const statusOrder: Record<string, number> = {
   open: 0,
-  pending: 1,
-  resolved: 2,
+  waiting_on_customer: 1,
+  solved: 2,
 };
 
 function validArticle(input: unknown): input is {
@@ -98,8 +98,22 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     ]);
   }
   function reviewedStatus(status: string, state?: string) {
+    if (status === 'solved') return status;
     if (state === 'reopened') return 'open';
+    if (state === 'waiting_on_customer' || state === 'solved') return state;
     return status;
+  }
+  function automaticReplyDelivered(
+    decision: { kind: string; documents?: { kind?: string }[] } | null | undefined,
+    history: { description: string }[],
+  ) {
+    return history.some((event) =>
+      event.description.startsWith('Automatic reply: ') ||
+      event.description.startsWith('Automatic in-app reply: '),
+    ) || (
+      decision?.kind === 'automatic_reply' &&
+      !decision.documents?.some((source) => source.kind === 'internal_note')
+    );
   }
   async function detail(id: string, session: string, owner = false) {
     const ticket = await pool.query(
@@ -190,27 +204,28 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         ? (live.rows[0]?.reply ?? draft.rows[0]?.reply)
         : null) ??
       null;
+    const status = reviewedStatus(ticket.rows[0].status, current?.state);
     return {
       ...ticketFields,
       is_sample: ticketSession === null,
       can_redraft:
-        owner ||
-        (ticketSession === null
-          ? originalDecision?.reason_code === 'knowledge_gap' &&
-            privateArticles.rows.length > 0
-          : Boolean(decision)),
+        status !== 'solved' &&
+        (owner ||
+          (ticketSession === null
+            ? originalDecision?.reason_code === 'knowledge_gap' &&
+              privateArticles.rows.length > 0
+            : Boolean(decision))),
       can_request_hand_off:
-        decision?.kind === 'automatic_reply' &&
+        automaticReplyDelivered(decision, events.rows) &&
         Boolean(approvedReply) &&
-        reviewedStatus(ticket.rows[0].status, current?.state) === 'resolved' &&
-        !decision.documents?.some((source: { kind: string }) => source.kind === 'internal_note') &&
+        status === 'waiting_on_customer' &&
         !events.rows.some((event: { description: string }) =>
           event.description.startsWith('Agent replied: '),
         ),
       ...(decision
         ? { decision, live_ai: await liveAllowance(pool, session) }
         : {}),
-      status: reviewedStatus(ticket.rows[0].status, current?.state),
+      status,
       priority: current?.priority ?? ticket.rows[0].priority,
       approved_reply: approvedReply,
       review_state: current?.state ?? null,
@@ -250,9 +265,8 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     database: Pick<Pool, 'query'>,
   ) {
     if (
-      ticket.decision?.kind !== 'automatic_reply' ||
+      !automaticReplyDelivered(ticket.decision, ticket.history) ||
       !ticket.approved_reply ||
-      ticket.decision.documents?.some((source: { kind: string }) => source.kind === 'internal_note') ||
       ticket.history.some((event: { description: string }) =>
         event.description.startsWith('Automatic in-app reply: '),
       )
@@ -576,14 +590,14 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         response.sendStatus(404);
         return;
       }
-      if (!ticket.can_redraft) {
-        response.sendStatus(403);
-        return;
-      }
-      if (ticket.status === 'resolved') {
+      if (ticket.status === 'solved') {
         response
           .status(409)
           .json({ error: 'Generation is not available for this request' });
+        return;
+      }
+      if (!ticket.can_redraft) {
+        response.sendStatus(403);
         return;
       }
       const outcome = await redraftAnswer(
@@ -659,7 +673,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
           })
           .filter(
             (ticket) =>
-              !['open', 'pending', 'resolved'].includes(
+              !['open', 'waiting_on_customer', 'solved'].includes(
                 String(request.query.status),
               ) || ticket.status === request.query.status,
           )
@@ -821,6 +835,70 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     }
   });
 
+  app.post('/tickets/:id/solve', async (request, response, next) => {
+    if (request.headers.cookie?.match(/(?:^|;\s*)demo_seat=agent(?:;|$)/)) {
+      response.sendStatus(403);
+      return;
+    }
+    try {
+      const ticket = /^\d+$/.test(request.params.id)
+        ? await detail(request.params.id, response.locals.session)
+        : null;
+      if (!ticket) {
+        response.sendStatus(404);
+        return;
+      }
+      if (ticket.status !== 'waiting_on_customer') {
+        response.sendStatus(409);
+        return;
+      }
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          'SELECT id FROM support_tickets WHERE id = $1 FOR NO KEY UPDATE',
+          [request.params.id],
+        );
+        const changed = ticket.review_state === null
+          ? await client.query(
+              `INSERT INTO ticket_reviews (session_id, ticket_id, state, priority, approved_reply)
+               VALUES ($1, $2, 'solved', $3, $4)
+               RETURNING ticket_id`,
+              [response.locals.session, request.params.id, ticket.priority, ticket.approved_reply],
+            )
+          : await client.query(
+              `UPDATE ticket_reviews SET state = 'solved'
+               WHERE session_id = $1 AND ticket_id = $2 AND state = $3 RETURNING ticket_id`,
+              [response.locals.session, request.params.id, ticket.review_state],
+            );
+        if (!changed.rows.length) {
+          await client.query('ROLLBACK');
+          response.sendStatus(409);
+          return;
+        }
+        await archiveAutomaticReply(ticket, request.params.id, response.locals.session, client);
+        await client.query(
+          `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
+           VALUES (nextval('ticket_event_ids'), $1, $2, 'Customer marked conversation solved', $3)`,
+          [request.params.id, response.locals.session, new Date().toISOString()],
+        );
+        await client.query('COMMIT');
+        response.sendStatus(201);
+      } catch (error) {
+        await client.query('ROLLBACK');
+        if ((error as { code?: string }).code === '23505') {
+          response.sendStatus(409);
+          return;
+        }
+        throw error;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post('/tickets/:id/hand-off', async (request, response, next) => {
     if (request.headers.cookie?.match(/(?:^|;\s*)demo_seat=agent(?:;|$)/)) {
       response.sendStatus(403);
@@ -841,6 +919,10 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
+        await client.query(
+          'SELECT id FROM support_tickets WHERE id = $1 FOR NO KEY UPDATE',
+          [request.params.id],
+        );
         const reopened = ticket.review_state === null
           ? await client.query(
               `INSERT INTO ticket_reviews (session_id, ticket_id, state, priority, approved_reply)
@@ -849,8 +931,8 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
             )
           : await client.query(
               `UPDATE ticket_reviews SET state = 'reopened'
-               WHERE session_id = $1 AND ticket_id = $2 AND state = 'saved' RETURNING ticket_id`,
-              [response.locals.session, request.params.id],
+               WHERE session_id = $1 AND ticket_id = $2 AND state = $3 RETURNING ticket_id`,
+              [response.locals.session, request.params.id, ticket.review_state],
             );
         if (!reopened.rows.length) {
           await client.query('ROLLBACK');
@@ -898,9 +980,22 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         response.sendStatus(404);
         return;
       }
+      if (ticket.status === 'solved') {
+        response.sendStatus(409);
+        return;
+      }
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
+        const locked = await client.query(
+          'SELECT status FROM support_tickets WHERE id = $1 FOR NO KEY UPDATE',
+          [request.params.id],
+        );
+        if (!locked.rows.length) {
+          await client.query('ROLLBACK');
+          response.sendStatus(404);
+          return;
+        }
         await client.query(
           `INSERT INTO ticket_reviews (session_id, ticket_id, state, priority, approved_reply)
            VALUES ($1, $2, $3, $4, $5)
@@ -913,6 +1008,17 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
             ticket.approved_reply,
           ],
         );
+        const changed = await client.query(
+          `UPDATE ticket_reviews
+           SET state = CASE WHEN state = 'waiting_on_customer' OR $3 = 'waiting_on_customer' THEN 'reopened' ELSE state END
+           WHERE session_id = $1 AND ticket_id = $2 AND state <> 'solved' RETURNING state`,
+          [response.locals.session, request.params.id, locked.rows[0].status],
+        );
+        if (!changed.rows.length) {
+          await client.query('ROLLBACK');
+          response.sendStatus(409);
+          return;
+        }
         await archiveAutomaticReply(ticket, request.params.id, response.locals.session, client);
         await client.query(
           `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
@@ -978,14 +1084,14 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       const { action, reply, priority } = request.body ?? {};
       const state = ticket.review_state ?? ticket.draft?.state ?? 'saved';
       if (
+        ticket.status === 'solved' ||
         !(
-          (action === 'reply' && ticket.status !== 'resolved') ||
+          action === 'reply' ||
           (action === 'priority' &&
             state === 'saved' &&
             ticket.draft &&
             priority === ticket.draft.suggested_priority &&
-            priority !== ticket.priority) ||
-          (action === 'reopen' && ticket.status === 'resolved')
+            priority !== ticket.priority)
         )
       ) {
         response.status(409).json({ error: 'Review action is not available' });
@@ -999,21 +1105,19 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         return;
       }
       const newState =
-        action === 'reply'
-          ? state
-          : action === 'priority'
-            ? 'saved'
-            : 'reopened';
+        action === 'reply' ? 'waiting_on_customer' : 'saved';
       const newPriority = action === 'priority' ? priority : ticket.priority;
       const description =
         action === 'reply'
           ? `Agent replied: ${reply.trim()}`
-          : action === 'priority'
-            ? `Human approved ${priority} priority suggestion`
-            : 'Human reopened request';
+          : `Human approved ${priority} priority suggestion`;
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
+        await client.query(
+          'SELECT id FROM support_tickets WHERE id = $1 FOR NO KEY UPDATE',
+          [request.params.id],
+        );
         if (action === 'reply') {
           const copies = await checkedCopies(
             reply.trim(),

@@ -5,9 +5,9 @@ import { Input } from '../../components/ui/input';
 import { SubmitButton } from './submit-button';
 import { AgentSeatButton } from './agent-seat-button';
 import { ChatBubble } from './chat-bubble';
-import { StatusPill } from './status-pill';
+import { StatusPill, ticketLabel, ticketTone } from './status-pill';
 import { CustomerComposer } from './customer-composer';
-import { CustomerHandOff } from './customer-hand-off';
+import { CustomerHandOff, CustomerSolve } from './customer-hand-off';
 import { ConversationUpdates } from './conversation-updates';
 import { ConversationLink } from './conversation-link';
 
@@ -18,10 +18,9 @@ function CustomerStatus({
   ticket: TicketSummary;
   className?: string;
 }) {
-  const answered = ticket.status === 'resolved';
   return (
-    <StatusPill tone={answered ? 'ok' : 'team'} className={className}>
-      {answered ? 'Answered' : 'With our team'}
+    <StatusPill tone={ticketTone(ticket.status)} className={className}>
+      {ticket.status === 'open' ? 'With our team' : ticketLabel(ticket.status)}
     </StatusPill>
   );
 }
@@ -217,7 +216,7 @@ export function SupportChat({
                 )}
               </ChatBubble>
               } />
-              {ticket.status !== 'resolved' && (
+              {ticket.status === 'open' && (
                 <ChatBubble from="system">
                   <p>
                     Handed to the Tunely team · a team member will reply soon
@@ -230,14 +229,11 @@ export function SupportChat({
                   Live AI is paused for today
                 </ChatBubble>
               )}
-              <details className="chat-history">
-                <summary>Ticket history</summary>
-                <ol>
-                  {ticket.history.map((event) => (
-                    <li key={event.id}>{event.description}</li>
-                  ))}
-                </ol>
-              </details>
+              {ticket.status === 'waiting_on_customer' && (
+                <div className="mt-3 flex justify-end">
+                  <CustomerSolve ticketId={ticket.id} />
+                </div>
+              )}
             </div>
           ) : (
             <div className="conversation-messages chat-empty">
@@ -280,7 +276,18 @@ export function SupportChat({
               </div>
             </div>
           )}
-          {ticket && <CustomerComposer key={ticket.id} ticketId={ticket.id} />}
+          {ticket && (ticket.status === 'solved' ? (
+            <div className="customer-composer">
+              <ConversationLink
+                href="/conversations/new"
+                className="new-conversation"
+                label="Start a new conversation"
+                current={false}
+              >
+                Start a new conversation
+              </ConversationLink>
+            </div>
+          ) : <CustomerComposer key={ticket.id} ticketId={ticket.id} />)}
         </section>
       </div>
     </section>

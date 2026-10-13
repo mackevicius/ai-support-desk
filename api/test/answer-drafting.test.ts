@@ -205,7 +205,7 @@ test('a covered visitor question receives an automatic reply and a recorded expl
         });
         assert.equal(response.status, 201);
         const ticket = await response.json();
-        assert.equal(ticket.status, 'resolved');
+        assert.equal(ticket.status, 'waiting_on_customer');
         assert.equal(ticket.decision.kind, 'automatic_reply');
         assert.equal(ticket.decision.sources[0].title, 'Offline downloads');
         assert.equal(
@@ -494,6 +494,147 @@ test('uncertain, risky, internal-note and invalid answers hand off without deliv
   }
 });
 
+test('a delayed first draft cannot change a conversation after the customer responds', async () => {
+  for (const action of ['solve', 'messages']) {
+    let announceGeneration: () => void = () => {};
+    let releaseGeneration: () => void = () => {};
+    const started = new Promise<void>((resolve) => { announceGeneration = resolve; });
+    const held = new Promise<void>((resolve) => { releaseGeneration = resolve; });
+    await withProvider(
+      async (request, response) => {
+        const input = await readJson(request);
+        announceGeneration();
+        await held;
+        const article = input.articles.find((item: { title: string }) => item.title === 'Offline downloads');
+        sendJson(response, {
+          reply: 'Open a playlist and tap Download.',
+          suggested_priority: 'normal',
+          source_ids: [article.id],
+          clearly_covered: true,
+          requires_team: false,
+        });
+      },
+      async () => {
+        const cookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
+        const headers = { cookie, 'content-type': 'application/json' };
+        const question = `How do I download music? delayed initial draft ${action}`;
+        const pending = fetch(`${baseUrl}/tickets`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ question }),
+        });
+        try {
+          await started;
+          const tickets = await (await fetch(`${baseUrl}/tickets`, { headers })).json();
+          const ticket = tickets.find((item: { subject: string }) => item.subject === question);
+          assert.ok(ticket);
+          const replied = await fetch(`${baseUrl}/tickets/${ticket.id}/review`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ action: 'reply', reply: 'I helped you set up downloads.' }),
+          });
+          assert.equal(replied.status, 200);
+          assert.equal((await fetch(`${baseUrl}/tickets/${ticket.id}/${action}`, {
+            method: 'POST',
+            headers,
+            ...(action === 'messages' ? { body: JSON.stringify({ message: 'I still need help.' }) } : {}),
+          })).status, 201);
+          const read = async () => (await fetch(`${baseUrl}/tickets/${ticket.id}`, { headers })).json();
+          const answered = await read();
+          assert.equal(answered.status, action === 'solve' ? 'solved' : 'open');
+          releaseGeneration();
+          assert.equal((await pending).status, 201);
+          assert.deepEqual(await read(), answered);
+        } finally {
+          releaseGeneration();
+          await pending;
+        }
+      },
+    );
+  }
+});
+
+test('a follow-up read before initial generation commits still returns the conversation to the team', async () => {
+  let announceGeneration: () => void = () => {};
+  let releaseGeneration: () => void = () => {};
+  let announceMessage: () => void = () => {};
+  let releaseMessage: () => void = () => {};
+  let holdMessage = false;
+  const generationStarted = new Promise<void>((resolve) => { announceGeneration = resolve; });
+  const generationHeld = new Promise<void>((resolve) => { releaseGeneration = resolve; });
+  const messageStarted = new Promise<void>((resolve) => { announceMessage = resolve; });
+  const messageHeld = new Promise<void>((resolve) => { releaseMessage = resolve; });
+  const server = createApp({
+    query: pool.query.bind(pool),
+    connect: async () => {
+      if (holdMessage) {
+        holdMessage = false;
+        announceMessage();
+        await messageHeld;
+      }
+      return pool.connect();
+    },
+  } as Parameters<typeof createApp>[0]).listen(0);
+  try {
+    const url = await listening(server);
+    await withProvider(
+      async (request, response) => {
+        const input = await readJson(request);
+        announceGeneration();
+        await generationHeld;
+        const article = input.articles.find((item: { title: string }) => item.title === 'Offline downloads');
+        sendJson(response, {
+          reply: 'Open a playlist and tap Download.',
+          suggested_priority: 'normal',
+          source_ids: [article.id],
+          clearly_covered: true,
+          requires_team: false,
+        });
+      },
+      async () => {
+        const cookie = (await fetch(`${url}/tickets`)).headers.get('set-cookie')!.split(';')[0];
+        const headers = { cookie, 'content-type': 'application/json' };
+        const pending = fetch(`${url}/tickets`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ question: 'How do I download music? overlapping follow-up' }),
+        });
+        let message: Promise<Response> | undefined;
+        try {
+          await generationStarted;
+          const tickets = await (await fetch(`${url}/tickets`, { headers })).json();
+          const ticket = tickets.find((item: { subject: string }) => item.subject === 'How do I download music? overlapping follow-up');
+          assert.ok(ticket);
+          holdMessage = true;
+          message = fetch(`${url}/tickets/${ticket.id}/messages`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ message: 'I still need help with downloads.' }),
+          });
+          await messageStarted;
+          releaseGeneration();
+          assert.equal((await pending).status, 201);
+          releaseMessage();
+          assert.equal((await message).status, 201);
+          const updated = await (await fetch(`${url}/tickets/${ticket.id}`, { headers })).json();
+          assert.equal(updated.status, 'open');
+          assert.equal(updated.history.at(-1).description, 'Customer replied: I still need help with downloads.');
+          assert.equal((await fetch(`${url}/tickets/${ticket.id}/solve`, { method: 'POST', headers })).status, 409);
+        } finally {
+          releaseGeneration();
+          releaseMessage();
+          await pending;
+          await message;
+        }
+      },
+    );
+  } finally {
+    releaseGeneration();
+    releaseMessage();
+    await close(server);
+  }
+});
+
 test('a visitor cannot request live generation', async () => {
   const inbox = await fetch(`${baseUrl}/tickets`);
   const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
@@ -669,7 +810,7 @@ test('an owner generates a cited draft through Python without approving it', asy
           body: JSON.stringify({ action: 'reply', reply: ticket.draft.reply }),
         });
         assert.equal(replied.status, 200);
-        assert.equal((await replied.json()).status, 'open');
+        assert.equal((await replied.json()).status, 'waiting_on_customer');
         assert.equal(calls.length, 2);
         await pool.query(
           'UPDATE generation_usage SET requests = 200 WHERE day = $1',
@@ -702,7 +843,11 @@ test('an owner generates a cited draft through Python without approving it', asy
         });
         const coveredTicket = await covered.json();
         assert.equal(coveredTicket.decision.kind, 'automatic_reply');
-        const callsBeforeResolved = calls.length;
+        assert.equal((await fetch(`${baseUrl}/tickets/${coveredTicket.id}/solve`, {
+          method: 'POST',
+          headers: { cookie },
+        })).status, 201);
+        const callsBeforeSolved = calls.length;
         assert.equal(
           (
             await fetch(`${baseUrl}/tickets/${coveredTicket.id}/generate`, {
@@ -712,7 +857,7 @@ test('an owner generates a cited draft through Python without approving it', asy
           ).status,
           409,
         );
-        assert.equal(calls.length, callsBeforeResolved);
+        assert.equal(calls.length, callsBeforeSolved);
         providerStatus = 429;
         const paused = await fetch(`${baseUrl}/tickets`, {
           method: 'POST',

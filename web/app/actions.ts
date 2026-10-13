@@ -15,6 +15,7 @@ import {
   reviewTicket,
   saveHelpArticle,
   saveVisitorHelpArticle,
+  solveCustomerConversation,
   submitQuestion,
 } from './data';
 
@@ -221,6 +222,27 @@ export async function sendCustomerMessage(
   return null;
 }
 
+export async function markConversationSolved(
+  _previous: string | null,
+  formData: FormData,
+): Promise<string | null> {
+  const jar = await cookies();
+  const sessionId = jar.get('demo_session')?.value;
+  const id = formData.get('id');
+  if (!sessionId || jar.get('demo_seat')?.value === 'agent')
+    return 'Only the Customer seat can mark a conversation solved.';
+  if (typeof id !== 'string' || !/^\d+$/.test(id))
+    return 'Choose a conversation first.';
+  try {
+    const error = await solveCustomerConversation(id, sessionId);
+    if (error) return error;
+  } catch {
+    return 'Could not mark this conversation solved. Please try again.';
+  }
+  revalidatePath('/', 'layout');
+  return null;
+}
+
 export async function requestPerson(
   _previous: string | null,
   formData: FormData,
@@ -254,7 +276,7 @@ async function performReview(formData: FormData): Promise<DraftReviewState> {
     typeof id !== 'string' ||
     !/^\d+$/.test(id) ||
     typeof action !== 'string' ||
-    !['reply', 'reopen', 'priority'].includes(action) ||
+    !['reply', 'priority'].includes(action) ||
     !sessionId
   ) {
     throw new Error('Invalid review request');

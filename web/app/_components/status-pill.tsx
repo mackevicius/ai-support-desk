@@ -24,7 +24,15 @@ export function StatusPill({
 }
 
 export function ticketTone(status: string) {
-  return status === 'resolved' ? 'ok' : status === 'open' ? 'team' : 'neutral';
+  return status === 'solved' ? 'ok' : status === 'open' ? 'team' : 'neutral';
+}
+
+export function ticketLabel(status: string) {
+  return status === 'waiting_on_customer'
+    ? 'Waiting on customer'
+    : status === 'solved'
+      ? 'Solved'
+      : 'Open';
 }
 
 export function priorityTone(priority: string) {

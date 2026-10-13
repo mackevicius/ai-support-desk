@@ -34,8 +34,8 @@ export function Queue({
         >
           <option value="all">All</option>
           <option value="open">Open</option>
-          <option value="pending">Pending</option>
-          <option value="resolved">Resolved</option>
+          <option value="waiting_on_customer">Waiting on customer</option>
+          <option value="solved">Solved</option>
         </select>
       </label>
       <nav aria-label="Requests">
@@ -62,8 +62,8 @@ export function Queue({
                 <strong>{ticket.customer_name}</strong>
                 <small>
                   {' · '}
-                  {ticket.status === 'resolved'
-                    ? 'resolved'
+                  {ticket.status === 'solved'
+                    ? 'Solved'
                     : new Date(ticket.created_at).toLocaleTimeString('en-US', {
                         hour: 'numeric',
                         minute: '2-digit',

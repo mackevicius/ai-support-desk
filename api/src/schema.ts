@@ -39,6 +39,11 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
   await pool.query(
     'ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS session_id text',
   );
+  await pool.query(
+    `UPDATE support_tickets
+     SET status = CASE WHEN session_id IS NULL THEN 'solved' ELSE 'waiting_on_customer' END
+     WHERE status IN ('resolved', 'closed')`,
+  );
   for (const [table, columns] of [
     [
       'help_articles',
@@ -321,7 +326,7 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
         ticket.customer,
         ticket.subject,
         ticket.question,
-        automatic ? 'resolved' : 'open',
+        automatic ? 'solved' : 'open',
         ticket.priority,
         created,
         JSON.stringify(decision),

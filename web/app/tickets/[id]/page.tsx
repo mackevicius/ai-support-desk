@@ -1,8 +1,8 @@
 import React from 'react';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
-import { notFound, redirect } from 'next/navigation';
-import { generateRequest, reviewRequest } from '../../actions';
+import { notFound } from 'next/navigation';
+import { generateRequest } from '../../actions';
 import { getConversation } from '../../data';
 import { SubmitButton } from '../../_components/submit-button';
 import { ReplyForm } from '../../_components/reply-editor';
@@ -14,6 +14,7 @@ import { ConversationUpdates } from '../../_components/conversation-updates';
 import {
   StatusPill,
   priorityTone,
+  ticketLabel,
   ticketTone,
 } from '../../_components/status-pill';
 
@@ -41,7 +42,6 @@ export default async function TicketPage({
   );
   if (!ticket) notFound();
   if (jar.get('demo_seat')?.value !== 'agent') {
-    if (!ticket.decision) redirect('/');
     return (
       <main className="workspace customer-ticket">
         <SupportChat tickets={queue} ticket={ticket} allowance={allowance} />
@@ -96,56 +96,32 @@ export default async function TicketPage({
               No answer draft has been generated for this request.
             </section>
           )}
-          {ticket.draft && (
+          {ticket.draft && ticket.status !== 'solved' && (
             <section className="draft" aria-label="Answer draft">
-              {ticket.status !== 'resolved' && (
-                <div className="review-controls">
-                  <ReplyForm
-                    key={`${ticket.draft.reply}-${ticket.history.length}`}
-                    ticketId={String(ticket.id)}
-                    initialCopies={
-                      draftAnswered ? [] : (ticket.draft.internal_copies ?? [])
-                    }
-                    defaultValue={draftAnswered ? '' : ticket.draft.reply}
+              <div className="review-controls">
+                <ReplyForm
+                  key={`${ticket.draft.reply}-${ticket.history.length}`}
+                  ticketId={String(ticket.id)}
+                  initialCopies={
+                    draftAnswered ? [] : (ticket.draft.internal_copies ?? [])
+                  }
+                  defaultValue={draftAnswered ? '' : ticket.draft.reply}
+                >
+                  <label htmlFor="priority">Priority</label>
+                  <select
+                    id="priority"
+                    name="priority"
+                    defaultValue={ticket.draft.suggested_priority}
                   >
-                    <label htmlFor="priority">Priority</label>
-                    <select
-                      id="priority"
-                      name="priority"
-                      defaultValue={ticket.draft.suggested_priority}
-                    >
-                      <option value="low">Low</option>
-                      <option value="normal">Normal</option>
-                      <option value="high">High</option>
-                    </select>
-                  </ReplyForm>
-                </div>
-              )}
-              {ticket.status === 'resolved' && (
-                <form action={reviewRequest}>
-                  <input type="hidden" name="id" value={ticket.id} />
-                  <input type="hidden" name="action" value="reopen" />
-                  <SubmitButton
-                    label="Reopen request"
-                    pendingLabel="Reopening request..."
-                    variant="secondary"
-                  />
-                </form>
-              )}
+                    <option value="low">Low</option>
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                  </select>
+                </ReplyForm>
+              </div>
             </section>
           )}
-          {!ticket.draft && ticket.status === 'resolved' && (
-            <form action={reviewRequest} className="draft">
-              <input type="hidden" name="id" value={ticket.id} />
-              <input type="hidden" name="action" value="reopen" />
-              <SubmitButton
-                label="Reopen request"
-                pendingLabel="Reopening request..."
-                variant="secondary"
-              />
-            </form>
-          )}
-          {!ticket.draft && ticket.status !== 'resolved' && (
+          {!ticket.draft && ticket.status !== 'solved' && (
             <section className="draft">
               <h2>Write a replacement reply</h2>
               <ReplyForm
@@ -166,7 +142,7 @@ export default async function TicketPage({
               </ReplyForm>
             </section>
           )}
-          {ticket.can_redraft && ticket.status !== 'resolved' && (
+          {ticket.can_redraft && ticket.status !== 'solved' && (
             <form action={generateRequest} className="agent-redraft">
               <input type="hidden" name="id" value={ticket.id} />
               <SubmitButton
@@ -209,7 +185,7 @@ export default async function TicketPage({
                 {ticket.priority} priority
               </StatusPill>
               <StatusPill tone={ticketTone(ticket.status)}>
-                {ticket.status}
+                {ticketLabel(ticket.status)}
               </StatusPill>
             </div>
           </li>
@@ -265,7 +241,7 @@ export default async function TicketPage({
           )}
         </ol>
         {ticket.decision?.reason_code === 'knowledge_gap' &&
-          ticket.status !== 'resolved' && (
+          ticket.status !== 'solved' && (
             <section
               className="knowledge-gap"
               aria-labelledby="knowledge-gap-title"

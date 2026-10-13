@@ -139,7 +139,7 @@ async function recordDecision(
   else
     await database.query(
       'UPDATE support_tickets SET status = $1, decision = $2 WHERE id = $3',
-      [automatic ? 'resolved' : 'open', JSON.stringify(decision), ticketId],
+      [automatic ? 'waiting_on_customer' : 'open', JSON.stringify(decision), ticketId],
     );
   await database.query(
     `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
@@ -161,14 +161,36 @@ export async function draftAnswer(
   owner: boolean,
 ) {
   const generated = await generateDraft(pool, session, ticket.question, owner);
-  if (generated.draft)
-    await saveDraft(pool, ticket.id, session, generated.draft);
-  await recordDecision(
-    pool,
-    ticket.id,
-    session,
-    decide(ticket.question, generated),
-  );
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const locked = await client.query(
+      'SELECT status FROM support_tickets WHERE id = $1 FOR NO KEY UPDATE',
+      [ticket.id],
+    );
+    const review = await client.query(
+      'SELECT state FROM ticket_reviews WHERE ticket_id = $1 AND session_id = $2',
+      [ticket.id, session],
+    );
+    if (!locked.rows.length || locked.rows[0].status === 'solved' || review.rows.length) {
+      await client.query('ROLLBACK');
+      return;
+    }
+    if (generated.draft)
+      await saveDraft(client, ticket.id, session, generated.draft);
+    await recordDecision(
+      client,
+      ticket.id,
+      session,
+      decide(ticket.question, generated),
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 // A support agent's request for a replacement answer draft.
@@ -177,6 +199,7 @@ export async function redraftAnswer(
   ticket: {
     id: string;
     question: string;
+    status: string;
     decision: unknown;
     review_state: string | null;
     priority: string;
@@ -191,10 +214,20 @@ export async function redraftAnswer(
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const locked = await client.query(
+      'SELECT status FROM support_tickets WHERE id = $1 FOR NO KEY UPDATE',
+      [ticket.id],
+    );
+    if (!locked.rows.length || locked.rows[0].status === 'solved') {
+      await client.query('ROLLBACK');
+      return 'conflict';
+    }
     const state =
-      !ticket.decision && ticket.review_state === 'reopened'
-        ? 'reopened'
-        : 'saved';
+      ticket.status === 'waiting_on_customer'
+        ? 'waiting_on_customer'
+        : !ticket.decision && ticket.review_state === 'reopened'
+          ? 'reopened'
+          : 'saved';
     // Guards against a review action that landed while the draft was generating.
     const changed =
       ticket.review_state === null

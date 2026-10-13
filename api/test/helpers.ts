@@ -96,3 +96,29 @@ export function sendJson(
   response.writeHead(status, { 'content-type': 'application/json' });
   response.end(JSON.stringify(value));
 }
+
+export async function submitAutomaticConversation(baseUrl: string, suggestedPriority = 'normal') {
+  const response = await withProvider(
+    async (request, response) => {
+      const input = await readJson(request);
+      const article = input.articles.find((item: { title: string }) => item.title === 'Offline downloads');
+      sendJson(response, {
+        reply: 'Open a playlist and tap Download. Downloads need a paid plan.',
+        suggested_priority: suggestedPriority,
+        source_ids: [article.id],
+        clearly_covered: true,
+        requires_team: false,
+      });
+    },
+    () => fetch(`${baseUrl}/tickets`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'How do I download music for offline listening?' }),
+    }),
+  );
+  if (response.status !== 201) throw new Error('Could not submit an automatic-reply conversation');
+  return {
+    cookie: response.headers.get('set-cookie')!.split(';')[0],
+    ticket: await response.json(),
+  };
+}
