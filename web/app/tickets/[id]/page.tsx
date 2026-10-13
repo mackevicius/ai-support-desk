@@ -29,7 +29,11 @@ export default async function TicketPage({
   const jar = await cookies();
   const sessionId = jar.get('demo_session')?.value;
   const owner = Boolean(jar.get('owner_session')?.value);
-  const { ticket, tickets: queue, allowance } = await getConversation(
+  const {
+    ticket,
+    tickets: queue,
+    allowance,
+  } = await getConversation(
     id,
     sessionId,
     jar.get('owner_session')?.value,
@@ -40,11 +44,7 @@ export default async function TicketPage({
     if (!ticket.decision) redirect('/');
     return (
       <main className="workspace customer-ticket">
-        <SupportChat
-          tickets={queue}
-          ticket={ticket}
-          allowance={allowance}
-        />
+        <SupportChat tickets={queue} ticket={ticket} allowance={allowance} />
       </main>
     );
   }

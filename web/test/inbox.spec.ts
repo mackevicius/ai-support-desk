@@ -587,7 +587,9 @@ test('agent home opens the shared inbox workspace and seat switches keep the sel
   const filter = inbox.getByRole('combobox', { name: 'Filter by status' });
   await expect(filter).toHaveValue('open');
   const openRequests = await inbox.getByRole('link').count();
-  await expect(inbox.getByRole('link').filter({ hasText: 'resolved' })).toHaveCount(0);
+  await expect(
+    inbox.getByRole('link').filter({ hasText: 'resolved' }),
+  ).toHaveCount(0);
   await filter.selectOption('all');
   expect(await inbox.getByRole('link').count()).toBeGreaterThan(openRequests);
   await filter.selectOption('resolved');
@@ -669,7 +671,9 @@ test('agent home opens the shared inbox workspace and seat switches keep the sel
     }),
   ).toBeVisible();
   await expect(
-    page.locator('.agent-messages').getByText('Automatic reply · no review needed', { exact: true }),
+    page
+      .locator('.agent-messages')
+      .getByText('Automatic reply · no review needed', { exact: true }),
   ).toBeVisible();
   await expect(
     page.locator('.agent-messages').getByText(/Approved.*reply/),
@@ -818,7 +822,9 @@ test('a reopened conversation shows its new redraft and suggested priority', asy
   await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
   await page.getByRole('button', { name: 'Reopen request' }).click();
   await expect(
-    page.locator('.agent-messages').getByText('Automatic reply · no review needed', { exact: true }),
+    page
+      .locator('.agent-messages')
+      .getByText('Automatic reply · no review needed', { exact: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Redraft', exact: true }).click();
   await expect(
@@ -828,10 +834,14 @@ test('a reopened conversation shows its new redraft and suggested priority', asy
     page.getByRole('combobox', { name: 'Priority', exact: true }),
   ).toHaveValue('high');
   await expect(
-    page.locator('.agent-messages').getByText('Automatic reply · no review needed', { exact: true }),
+    page
+      .locator('.agent-messages')
+      .getByText('Automatic reply · no review needed', { exact: true }),
   ).toBeVisible();
   await expect(
-    page.locator('.agent-messages').getByText('Approved reply', { exact: true }),
+    page
+      .locator('.agent-messages')
+      .getByText('Approved reply', { exact: true }),
   ).toHaveCount(0);
   await expect(
     page
@@ -871,7 +881,9 @@ test('a customer gets a covered answer by keyboard and an example answer on a ph
   await expect(
     conversations.locator('a[aria-current="page"] time'),
   ).toHaveCount(1);
-  await expect(chat.getByRole('textbox', { name: 'Reply to Tunely' })).toBeVisible();
+  await expect(
+    chat.getByRole('textbox', { name: 'Reply to Tunely' }),
+  ).toBeVisible();
   const customerBubble = await chat
     .getByRole('article', { name: 'Your message' })
     .boundingBox();
@@ -934,89 +946,175 @@ test('a customer gets a covered answer by keyboard and an example answer on a ph
   });
 });
 
-test('conversation links immediately announce loading while the next screen is delayed', async ({ page }) => {
+test('conversation links immediately announce loading while the next screen is delayed', async ({
+  page,
+}) => {
   await page.goto('/tickets/1');
   let releaseNavigation!: () => void;
-  const navigationBlocked = new Promise<void>((resolve) => { releaseNavigation = resolve; });
+  const navigationBlocked = new Promise<void>((resolve) => {
+    releaseNavigation = resolve;
+  });
   await page.route('**/tickets/2?*', async (route) => {
     await navigationBlocked;
     await route.continue();
   });
-  const conversations = page.getByRole('navigation', { name: 'Conversations', exact: true });
+  const conversations = page.getByRole('navigation', {
+    name: 'Conversations',
+    exact: true,
+  });
   const destination = conversations.locator('a[href="/tickets/2"]');
   try {
     await destination.focus();
     await page.keyboard.press('Enter');
-    await expect(destination.locator('[aria-busy]')).toHaveAttribute('aria-busy', 'true');
-    await expect(destination.getByRole('status')).toHaveText('Loading conversation...');
+    await expect(destination.locator('[aria-busy]')).toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
+    await expect(destination.getByRole('status')).toHaveText(
+      'Loading conversation...',
+    );
     await expect(page).toHaveURL(/\/tickets\/1$/);
   } finally {
     releaseNavigation();
   }
   await expect(page).toHaveURL(/\/tickets\/2$/);
-  await expect(conversations.locator('a[aria-current="page"]')).toHaveAttribute('href', '/tickets/2');
-  await expect(page.getByText('Loading conversation...', { exact: true })).toHaveCount(0);
+  await expect(conversations.locator('a[aria-current="page"]')).toHaveAttribute(
+    'href',
+    '/tickets/2',
+  );
+  await expect(
+    page.getByText('Loading conversation...', { exact: true }),
+  ).toHaveCount(0);
 });
 
-test('customers reply in the same conversation and the team sees their messages', async ({ page }) => {
+test('customers reply in the same conversation and the team sees their messages', async ({
+  page,
+}) => {
   await page.goto('/tickets/1');
   const chat = page.getByRole('region', { name: 'Support chat' });
   const input = chat.getByRole('textbox', { name: 'Reply to Tunely' });
   await input.fill(' ');
   await chat.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(chat.getByRole('alert')).toHaveText('Enter a message of up to 5000 characters.');
+  await expect(chat.getByRole('alert')).toHaveText(
+    'Enter a message of up to 5000 characters.',
+  );
   await expect(input).toHaveValue(' ');
   await input.fill('The family invite fails on my phone.');
   await input.press('Tab');
   await page.keyboard.press('Enter');
-  await expect(chat.getByRole('article', { name: 'Your message' }).getByText('The family invite fails on my phone.', { exact: true })).toBeVisible();
+  await expect(
+    chat
+      .getByRole('article', { name: 'Your message' })
+      .getByText('The family invite fails on my phone.', { exact: true }),
+  ).toBeVisible();
   await expect(input).toHaveValue('');
   await page.reload();
-  await expect(chat.getByRole('article', { name: 'Your message' }).getByText('The family invite fails on my phone.', { exact: true })).toBeVisible();
+  await expect(
+    chat
+      .getByRole('article', { name: 'Your message' })
+      .getByText('The family invite fails on my phone.', { exact: true }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Support inbox' })).toBeVisible();
-  const conversation = page.getByRole('region', { name: 'Conversation', exact: true });
-  await expect(conversation.getByText('The family invite fails on my phone.', { exact: true })).toBeVisible();
-  await page.getByRole('textbox', { name: 'Reply', exact: true }).fill('Which phone are you using?');
-  await page.getByRole('button', { name: 'Ask for details', exact: true }).click();
-  await expect(conversation.getByRole('article', { name: 'Team question' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Support inbox' }),
+  ).toBeVisible();
+  const conversation = page.getByRole('region', {
+    name: 'Conversation',
+    exact: true,
+  });
+  await expect(
+    conversation.getByText('The family invite fails on my phone.', {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole('textbox', { name: 'Reply', exact: true })
+    .fill('Which phone are you using?');
+  await page
+    .getByRole('button', { name: 'Ask for details', exact: true })
+    .click();
+  await expect(
+    conversation.getByRole('article', { name: 'Team question' }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
   await expect(input).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await input.fill('An iPhone 16.');
   await chat.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(chat.getByRole('article', { name: 'Your message' }).getByText('An iPhone 16.', { exact: true })).toBeVisible();
+  await expect(
+    chat
+      .getByRole('article', { name: 'Your message' })
+      .getByText('An iPhone 16.', { exact: true }),
+  ).toBeVisible();
   const bubbles = chat.locator('.conversation-messages > article');
   const texts = await bubbles.allTextContents();
-  expect(texts.findIndex((text) => text.includes('The family invite fails'))).toBeLessThan(texts.findIndex((text) => text.includes('Which phone')));
-  expect(texts.findIndex((text) => text.includes('Which phone'))).toBeLessThan(texts.findIndex((text) => text.includes('An iPhone 16.')));
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/customer-reply-phone.png', fullPage: true });
+  expect(
+    texts.findIndex((text) => text.includes('The family invite fails')),
+  ).toBeLessThan(texts.findIndex((text) => text.includes('Which phone')));
+  expect(texts.findIndex((text) => text.includes('Which phone'))).toBeLessThan(
+    texts.findIndex((text) => text.includes('An iPhone 16.')),
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: 'test-results/customer-reply-phone.png',
+    fullPage: true,
+  });
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.screenshot({ path: 'test-results/customer-reply-desktop.png', fullPage: true });
+  await page.screenshot({
+    path: 'test-results/customer-reply-desktop.png',
+    fullPage: true,
+  });
 });
 
-test('new conversations stay beside the customer conversation list', async ({ page }) => {
+test('new conversations stay beside the customer conversation list', async ({
+  page,
+}) => {
   await page.goto('/tickets/1');
-  const conversations = page.getByRole('navigation', { name: 'Conversations', exact: true });
+  const conversations = page.getByRole('navigation', {
+    name: 'Conversations',
+    exact: true,
+  });
   await expect(conversations.getByRole('link')).toHaveCount(5);
-  const newConversation = page.getByRole('link', { name: 'New conversation', exact: true });
+  const newConversation = page.getByRole('link', {
+    name: 'New conversation',
+    exact: true,
+  });
   await newConversation.focus();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/conversations\/new$/);
   await expect(newConversation).toHaveAttribute('aria-current', 'page');
   await expect(conversations.getByRole('link')).toHaveCount(5);
   const chat = page.getByRole('region', { name: 'Support chat' });
-  await expect(chat.getByText("Hi! I'm Tunely Support. What's going wrong?", { exact: true })).toBeVisible();
-  await page.screenshot({ path: 'test-results/customer-new-desktop.png', fullPage: true });
+  await expect(
+    chat.getByText("Hi! I'm Tunely Support. What's going wrong?", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: 'test-results/customer-new-desktop.png',
+    fullPage: true,
+  });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.screenshot({ path: 'test-results/customer-new-phone.png', fullPage: true });
-  await chat.getByRole('textbox', { name: 'New support request' }).fill('How do I download music for offline listening?');
+  await page.screenshot({
+    path: 'test-results/customer-new-phone.png',
+    fullPage: true,
+  });
+  await chat
+    .getByRole('textbox', { name: 'New support request' })
+    .fill('How do I download music for offline listening?');
   await chat.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
   await expect(conversations.getByRole('link')).toHaveCount(6);
   await expect(chat.getByText('Answered', { exact: true })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
 });
 
 test('uncovered questions hand off and exhausted visitors still start conversations', async ({
@@ -1398,8 +1496,12 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
   await page
     .getByRole('textbox', { name: 'Reply' })
     .fill('Please resend the invitations.');
-  await expect(page.getByLabel('Priority', { exact: true })).toHaveValue('high');
-  await expect(page.getByRole('button', { name: /^Apply .* priority$/ })).toHaveCount(0);
+  await expect(page.getByLabel('Priority', { exact: true })).toHaveValue(
+    'high',
+  );
+  await expect(
+    page.getByRole('button', { name: /^Apply .* priority$/ }),
+  ).toHaveCount(0);
   await page.getByLabel('Priority').selectOption('normal');
   await page.route('**/tickets/1', async (route) => {
     if ((await submittedReviewAction(route.request())) === 'approve') {
@@ -1416,16 +1518,22 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
       .getByText('resolved', { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole('complementary', { name: 'How the AI decided' }).getByText('normal priority', { exact: true }),
+    page
+      .getByRole('complementary', { name: 'How the AI decided' })
+      .getByText('normal priority', { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText('Please resend the invitations.', { exact: true }),
   ).toBeVisible();
   await expect(
-    page.locator('.agent-messages').getByText('Approved reply', { exact: true }),
+    page
+      .locator('.agent-messages')
+      .getByText('Approved reply', { exact: true }),
   ).toBeVisible();
   await expect(page.getByText(/Human approved in-app reply/)).toBeVisible();
-  await page.getByRole('combobox', { name: 'Filter by status' }).selectOption('resolved');
+  await page
+    .getByRole('combobox', { name: 'Filter by status' })
+    .selectOption('resolved');
   await expect(
     page.getByRole('link', { name: /Family invitation keeps failing/ }),
   ).toContainText('resolved');
@@ -1462,8 +1570,12 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
       .getByText('open', { exact: true }),
   ).toBeVisible();
   await expect(page.getByText('Human reopened request')).toBeVisible();
-  await expect(page.getByLabel('Priority', { exact: true })).toHaveValue('high');
-  await expect(page.getByRole('button', { name: /^Apply .* priority$/ })).toHaveCount(0);
+  await expect(page.getByLabel('Priority', { exact: true })).toHaveValue(
+    'high',
+  );
+  await expect(
+    page.getByRole('button', { name: /^Apply .* priority$/ }),
+  ).toHaveCount(0);
   await page
     .getByRole('textbox', { name: 'Reply' })
     .fill('Please check the addresses again.');
@@ -1474,7 +1586,9 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
     page.getByText('Please check the addresses again.', { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole('complementary', { name: 'How the AI decided' }).getByText('high priority', { exact: true }),
+    page
+      .getByRole('complementary', { name: 'How the AI decided' })
+      .getByText('high priority', { exact: true }),
   ).toBeVisible();
   await page.goto('/tickets/5');
   await page.getByRole('button', { name: 'Reopen request' }).click();
@@ -1490,10 +1604,14 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
     }),
   ).toBeVisible();
   await expect(
-    page.locator('.agent-messages').getByText('Automatic reply · no review needed', { exact: true }),
+    page
+      .locator('.agent-messages')
+      .getByText('Automatic reply · no review needed', { exact: true }),
   ).toBeVisible();
   await expect(
-    page.locator('.agent-messages').getByText('Approved reply', { exact: true }),
+    page
+      .locator('.agent-messages')
+      .getByText('Approved reply', { exact: true }),
   ).toBeVisible();
   await expect(
     page
@@ -1547,7 +1665,9 @@ test('review actions stay disabled while approval is in flight', async ({
     releaseRequest();
   }
   await expect(page).toHaveURL(/\/tickets\/2$/);
-  await page.getByRole('combobox', { name: 'Filter by status' }).selectOption('resolved');
+  await page
+    .getByRole('combobox', { name: 'Filter by status' })
+    .selectOption('resolved');
   await expect(
     page.getByRole('link', { name: /Family invitation keeps failing/ }),
   ).toContainText('resolved');
@@ -1626,7 +1746,9 @@ test('a visitor resets only their own demo workspace', async ({
   });
   await approveReply(page, '/tickets/2');
   await page.unroute('**/tickets/1');
-  await page.getByRole('combobox', { name: 'Filter by status' }).selectOption('resolved');
+  await page
+    .getByRole('combobox', { name: 'Filter by status' })
+    .selectOption('resolved');
   await expect(
     page.getByRole('link', { name: /Family invitation keeps failing/ }),
   ).toContainText('resolved');
@@ -1652,7 +1774,9 @@ test('a visitor resets only their own demo workspace', async ({
       .getByRole('link', { name: /Family invitation keeps failing/ })
       .click();
     await approveReply(otherPage, '/tickets/2');
-    await otherPage.getByRole('combobox', { name: 'Filter by status' }).selectOption('resolved');
+    await otherPage
+      .getByRole('combobox', { name: 'Filter by status' })
+      .selectOption('resolved');
     await expect(
       otherPage.getByRole('link', {
         name: /Family invitation keeps failing/,
@@ -1671,7 +1795,9 @@ test('a visitor resets only their own demo workspace', async ({
     const removed = await page.goto(submittedUrl);
     expect(removed?.status()).toBe(404);
     await otherPage.reload();
-    await otherPage.getByRole('combobox', { name: 'Filter by status' }).selectOption('resolved');
+    await otherPage
+      .getByRole('combobox', { name: 'Filter by status' })
+      .selectOption('resolved');
     await expect(
       otherPage.getByRole('link', {
         name: /Family invitation keeps failing/,
