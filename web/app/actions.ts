@@ -11,6 +11,7 @@ import {
   getTickets,
   loginOwner,
   postCustomerMessage,
+  requestCustomerHandOff,
   resetDemo,
   reviewTicket,
   saveHelpArticle,
@@ -217,6 +218,27 @@ export async function sendCustomerMessage(
     await postCustomerMessage(id, sessionId, message);
   } catch {
     return 'Could not send your message. Please try again.';
+  }
+  revalidatePath('/', 'layout');
+  return null;
+}
+
+export async function requestPerson(
+  _previous: string | null,
+  formData: FormData,
+): Promise<string | null> {
+  const jar = await cookies();
+  const sessionId = jar.get('demo_session')?.value;
+  const id = formData.get('id');
+  if (!sessionId || jar.get('demo_seat')?.value === 'agent')
+    return 'Only the Customer seat can ask for a person.';
+  if (typeof id !== 'string' || !/^\d+$/.test(id))
+    return 'Choose a conversation first.';
+  try {
+    const error = await requestCustomerHandOff(id, sessionId);
+    if (error) return error;
+  } catch {
+    return 'Could not hand this conversation to our team. Please try again.';
   }
   revalidatePath('/', 'layout');
   return null;

@@ -10,6 +10,144 @@ import { close, listening, readJson, sendJson } from './helpers.js';
 
 const { pool, baseUrl } = await startInbox();
 
+test('customer can ask for a person after an automatic reply without changing the AI decision', async () => {
+  const session = await fetch(`${baseUrl}/tickets`);
+  const cookie = session.headers.get('set-cookie')!.split(';')[0];
+  const tickets = await session.json();
+  const answered = tickets.find((ticket: { status: string }) => ticket.status === 'resolved');
+  const read = async (sessionCookie?: string) =>
+    (await fetch(`${baseUrl}/tickets/${answered.id}`, {
+      headers: sessionCookie ? { cookie: sessionCookie } : undefined,
+    })).json();
+  const original = await read(cookie);
+  const allowance = await (await fetch(`${baseUrl}/live-ai`, { headers: { cookie } })).json();
+
+  const result = await fetch(`${baseUrl}/tickets/${answered.id}/hand-off`, {
+    method: 'POST',
+    headers: { cookie: `${cookie}; demo_seat=customer` },
+  });
+  assert.equal(result.status, 201);
+
+  const own = await read(cookie);
+  assert.equal(own.status, 'open');
+  assert.equal(own.review_state, 'reopened');
+  assert.equal(own.approved_reply, original.approved_reply);
+  assert.deepEqual(own.decision, original.decision);
+  assert.ok(own.history.some((event: { description: string }) => event.description === 'Customer asked for a person'));
+  assert.ok(own.history.some((event: { description: string }) => event.description === `Automatic in-app reply: ${original.approved_reply}`));
+  const ownList = await (await fetch(`${baseUrl}/tickets`, { headers: { cookie } })).json();
+  assert.equal(ownList.find((ticket: { id: number }) => ticket.id === answered.id).status, 'open');
+  assert.deepEqual(await (await fetch(`${baseUrl}/live-ai`, { headers: { cookie } })).json(), allowance);
+
+  const other = await read();
+  assert.equal(other.status, 'resolved');
+  assert.equal(other.approved_reply, original.approved_reply);
+  assert.deepEqual(other.decision, original.decision);
+  assert.ok(!other.history.some((event: { description: string }) => event.description === 'Customer asked for a person'));
+});
+
+test('customer hand-off is only available for an automatic reply before a person replies', async () => {
+  const cookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
+  const read = async (id: number) =>
+    (await fetch(`${baseUrl}/tickets/${id}?view=customer`, { headers: { cookie } })).json();
+  const handOff = (id: number | string, sessionCookie = cookie) =>
+    fetch(`${baseUrl}/tickets/${id}/hand-off`, {
+      method: 'POST',
+      headers: { cookie: sessionCookie },
+    });
+  assert.equal((await read(5)).can_request_hand_off, true);
+  assert.equal((await read(1)).can_request_hand_off, false);
+  assert.equal((await handOff(1)).status, 409);
+  assert.equal((await handOff('invalid')).status, 404);
+  assert.equal((await handOff(999999)).status, 404);
+  assert.equal((await handOff(5, `${cookie}; demo_seat=agent`)).status, 403);
+
+  const review = (action: string, reply?: string) => fetch(`${baseUrl}/tickets/5/review`, {
+    method: 'POST',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ action, reply, priority: 'normal' }),
+  });
+  assert.equal((await review('reopen')).status, 200);
+  assert.equal((await read(5)).can_request_hand_off, false);
+  assert.equal((await review('approve', 'Our team has checked your downloads.')).status, 200);
+  const approved = await read(5);
+  assert.equal(approved.status, 'resolved');
+  assert.equal(approved.can_request_hand_off, false);
+  assert.equal((await handOff(5)).status, 409);
+  assert.ok(!approved.history.some((event: { description: string }) => event.description === 'Customer asked for a person'));
+});
+
+test('simultaneous customer hand-offs record one request and cannot reopen a team reply', async () => {
+  const cookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
+  const handOff = () => fetch(`${baseUrl}/tickets/5/hand-off`, {
+    method: 'POST',
+    headers: { cookie },
+  });
+  const results = await Promise.all([handOff(), handOff()]);
+  assert.deepEqual(results.map((result) => result.status).sort(), [201, 409]);
+  const read = async () => (await fetch(`${baseUrl}/tickets/5`, { headers: { cookie } })).json();
+  const handedOff = await read();
+  assert.equal(handedOff.can_request_hand_off, false);
+  assert.equal(handedOff.history.filter((event: { description: string }) => event.description === 'Customer asked for a person').length, 1);
+
+  const approval = await fetch(`${baseUrl}/tickets/5/review`, {
+    method: 'POST',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'approve', reply: 'Our team has checked the problem.', priority: 'normal' }),
+  });
+  assert.equal(approval.status, 200);
+  assert.equal((await handOff()).status, 409);
+  const approved = await read();
+  assert.equal(approved.status, 'resolved');
+  assert.equal(approved.review_state, 'approved');
+  assert.equal(approved.approved_reply, 'Our team has checked the problem.');
+  assert.equal(approved.history.filter((event: { description: string }) => event.description === 'Customer asked for a person').length, 1);
+});
+
+test('a customer hands off their newly generated automatic reply without another AI call', async () => {
+  await withProvider(
+    async (request, response) => {
+      const input = await readJson(request);
+      const article = input.articles.find((item: { title: string }) => item.title === 'Offline downloads');
+      sendJson(response, {
+        reply: 'Open a playlist and tap Download. Downloads need a paid plan.',
+        suggested_priority: 'normal',
+        source_ids: [article.id],
+        clearly_covered: true,
+        requires_team: false,
+      });
+    },
+    async () => {
+      const response = await fetch(`${baseUrl}/tickets`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ question: 'How do I download music for offline listening?' }),
+      });
+      assert.equal(response.status, 201);
+      const cookie = response.headers.get('set-cookie')!.split(';')[0];
+      const original = await response.json();
+      assert.equal(original.is_sample, false);
+      assert.equal(original.can_request_hand_off, true);
+      assert.equal(original.decision.kind, 'automatic_reply');
+      const allowance = await (await fetch(`${baseUrl}/live-ai`, { headers: { cookie } })).json();
+      assert.equal(allowance.remaining, 4);
+      const handOff = (sessionCookie?: string) => fetch(`${baseUrl}/tickets/${original.id}/hand-off`, {
+        method: 'POST',
+        headers: sessionCookie ? { cookie: sessionCookie } : undefined,
+      });
+      assert.equal((await handOff()).status, 404);
+      assert.equal((await handOff(cookie)).status, 201);
+      const own = await (await fetch(`${baseUrl}/tickets/${original.id}`, { headers: { cookie } })).json();
+      assert.equal(own.status, 'open');
+      assert.equal(own.can_request_hand_off, false);
+      assert.equal(own.approved_reply, original.approved_reply);
+      assert.deepEqual(own.decision, original.decision);
+      assert.ok(own.history.some((event: { description: string }) => event.description === 'Customer asked for a person'));
+      assert.deepEqual(await (await fetch(`${baseUrl}/live-ai`, { headers: { cookie } })).json(), allowance);
+    },
+  );
+});
+
 test('customer replies stay in their own conversation and reopen an answered request without AI', async () => {
   const session = await fetch(`${baseUrl}/tickets`);
   const cookie = session.headers.get('set-cookie')!.split(';')[0];

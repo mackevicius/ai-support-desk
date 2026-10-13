@@ -185,6 +185,12 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       session_id: ticketSession,
       ...ticketFields
     } = ticket.rows[0];
+    const approvedReply =
+      current?.approved_reply ??
+      (decision?.kind === 'automatic_reply'
+        ? (live.rows[0]?.reply ?? draft.rows[0]?.reply)
+        : null) ??
+      null;
     return {
       ...ticketFields,
       is_sample: ticketSession === null,
@@ -194,17 +200,22 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
           ? originalDecision?.reason_code === 'knowledge_gap' &&
             privateArticles.rows.length > 0
           : Boolean(decision)),
+      can_request_hand_off:
+        decision?.kind === 'automatic_reply' &&
+        Boolean(approvedReply) &&
+        reviewedStatus(ticket.rows[0].status, current?.state) === 'resolved' &&
+        current?.state !== 'approved' &&
+        current?.state !== 'rejected' &&
+        !decision.documents?.some((source: { kind: string }) => source.kind === 'internal_note') &&
+        !events.rows.some((event: { description: string }) =>
+          event.description.startsWith('Human approved in-app reply'),
+        ),
       ...(decision
         ? { decision, live_ai: await liveAllowance(pool, session) }
         : {}),
       status: reviewedStatus(ticket.rows[0].status, current?.state),
       priority: current?.priority ?? ticket.rows[0].priority,
-      approved_reply:
-        current?.approved_reply ??
-        (decision?.kind === 'automatic_reply'
-          ? (live.rows[0]?.reply ?? draft.rows[0]?.reply)
-          : null) ??
-        null,
+      approved_reply: approvedReply,
       review_state: current?.state ?? null,
       draft: live.rows.length
         ? {
@@ -809,6 +820,65 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         return;
       }
       response.json(ticket);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/tickets/:id/hand-off', async (request, response, next) => {
+    if (request.headers.cookie?.match(/(?:^|;\s*)demo_seat=agent(?:;|$)/)) {
+      response.sendStatus(403);
+      return;
+    }
+    try {
+      const ticket = /^\d+$/.test(request.params.id)
+        ? await detail(request.params.id, response.locals.session)
+        : null;
+      if (!ticket) {
+        response.sendStatus(404);
+        return;
+      }
+      if (!ticket.can_request_hand_off) {
+        response.sendStatus(409);
+        return;
+      }
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const reopened = ticket.review_state === null
+          ? await client.query(
+              `INSERT INTO ticket_reviews (session_id, ticket_id, state, priority, approved_reply)
+               VALUES ($1, $2, 'reopened', $3, $4) RETURNING ticket_id`,
+              [response.locals.session, request.params.id, ticket.priority, ticket.approved_reply],
+            )
+          : await client.query(
+              `UPDATE ticket_reviews SET state = 'reopened'
+               WHERE session_id = $1 AND ticket_id = $2 AND state = 'saved' RETURNING ticket_id`,
+              [response.locals.session, request.params.id],
+            );
+        if (!reopened.rows.length) {
+          await client.query('ROLLBACK');
+          response.sendStatus(409);
+          return;
+        }
+        await archiveAutomaticReply(ticket, request.params.id, response.locals.session, client);
+        await client.query(
+          `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
+           VALUES (nextval('ticket_event_ids'), $1, $2, $3, $4)`,
+          [request.params.id, response.locals.session, 'Customer asked for a person', new Date().toISOString()],
+        );
+        await client.query('COMMIT');
+        response.sendStatus(201);
+      } catch (error) {
+        await client.query('ROLLBACK');
+        if ((error as { code?: string }).code === '23505') {
+          response.sendStatus(409);
+          return;
+        }
+        throw error;
+      } finally {
+        client.release();
+      }
     } catch (error) {
       next(error);
     }

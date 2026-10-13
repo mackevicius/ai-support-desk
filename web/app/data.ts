@@ -67,6 +67,7 @@ export async function saveHelpArticle(
 export type Ticket = TicketSummary & {
   is_sample: boolean;
   can_redraft: boolean;
+  can_request_hand_off: boolean;
   decision?: {
     kind: 'automatic_reply' | 'hand_off';
     reason_code?: string;
@@ -233,6 +234,21 @@ export async function postCustomerMessage(id: string, sessionId: string, message
     },
   );
   if (!response.ok) throw new Error('Could not send your message. Please try again.');
+}
+
+export async function requestCustomerHandOff(id: string, sessionId: string): Promise<string | null> {
+  const response = await fetch(
+    `${process.env.API_URL ?? 'http://localhost:3001'}/tickets/${encodeURIComponent(id)}/hand-off`,
+    {
+      method: 'POST',
+      headers: { cookie: `demo_session=${sessionId}; demo_seat=customer` },
+      cache: 'no-store',
+    },
+  );
+  if (response.ok) return null;
+  if (response.status === 409)
+    return 'This conversation is already with our team or has a team reply.';
+  return 'Could not hand this conversation to our team. Please try again.';
 }
 
 export async function resetDemo(sessionId: string) {

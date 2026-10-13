@@ -7,6 +7,7 @@ import { AgentSeatButton } from './agent-seat-button';
 import { ChatBubble } from './chat-bubble';
 import { StatusPill } from './status-pill';
 import { CustomerComposer } from './customer-composer';
+import { CustomerHandOff } from './customer-hand-off';
 import { ConversationUpdates } from './conversation-updates';
 import { ConversationLink } from './conversation-link';
 
@@ -188,6 +189,9 @@ export function SupportChat({
                   {ticket.approved_reply ??
                     'A Tunely team member will reply soon'}
                 </p>
+                {ticket.can_request_hand_off && (
+                  <CustomerHandOff ticketId={ticket.id} />
+                )}
                 {ticket.decision && (
                   <details className="answer-explanation">
                     <summary>How was this answered?</summary>

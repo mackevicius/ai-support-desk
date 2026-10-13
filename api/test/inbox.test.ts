@@ -88,6 +88,7 @@ test('a visitor can inspect a request and its history', async () => {
     id: 1,
     is_sample: true,
     can_redraft: false,
+    can_request_hand_off: false,
     customer_name: 'Maya Chen',
     subject: 'Family invitation keeps failing',
     question:
