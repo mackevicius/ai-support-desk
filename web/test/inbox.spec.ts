@@ -1481,9 +1481,8 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
 }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
-  await page
-    .getByRole('link', { name: /Family invitation keeps failing/ })
-    .click();
+  // Agent seat already lands here; re-clicking the link starts a navigation that swallows the next form action.
+  await expect(page).toHaveURL(/\/tickets\/1$/);
   await expect(page.getByText('Saved AI draft', { exact: true })).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Family plan invitations' }),
@@ -1735,9 +1734,7 @@ test('a visitor resets only their own demo workspace', async ({
 }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
-  await page
-    .getByRole('link', { name: /Family invitation keeps failing/ })
-    .click();
+  await expect(page).toHaveURL(/\/tickets\/1$/);
   await page.route('**/tickets/1', async (route) => {
     if ((await submittedReviewAction(route.request())) === 'approve') {
       await new Promise((resolve) => setTimeout(resolve, 6000));
@@ -1770,9 +1767,7 @@ test('a visitor resets only their own demo workspace', async ({
     const otherPage = await otherVisitor.newPage();
     await otherPage.goto('/');
     await otherPage.getByRole('button', { name: 'Agent', exact: true }).click();
-    await otherPage
-      .getByRole('link', { name: /Family invitation keeps failing/ })
-      .click();
+    await expect(otherPage).toHaveURL(/\/tickets\/1$/);
     await approveReply(otherPage, '/tickets/2');
     await otherPage
       .getByRole('combobox', { name: 'Filter by status' })
