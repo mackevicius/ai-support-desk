@@ -583,6 +583,20 @@ test('agent home opens the shared inbox workspace and seat switches keep the sel
   await page.goto('/');
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await expect(page).toHaveURL(/\/tickets\/1$/, { timeout: 15000 });
+  const inbox = page.getByRole('complementary', { name: 'Support inbox' });
+  const filter = inbox.getByRole('combobox', { name: 'Filter by status' });
+  await expect(filter).toHaveValue('open');
+  const openRequests = await inbox.getByRole('link').count();
+  await expect(inbox.getByRole('link').filter({ hasText: 'resolved' })).toHaveCount(0);
+  await filter.selectOption('all');
+  expect(await inbox.getByRole('link').count()).toBeGreaterThan(openRequests);
+  await filter.selectOption('resolved');
+  await expect(inbox.getByRole('link')).toHaveCount(1);
+  await expect(inbox.getByRole('link')).toContainText('resolved');
+  await filter.selectOption('pending');
+  await expect(inbox.getByText('No requests', { exact: true })).toBeVisible();
+  await filter.selectOption('open');
+  await expect(inbox.getByRole('link')).toHaveCount(openRequests);
   const selected = page.locator('.queue a[aria-current="page"]');
   await expect(selected.locator('[data-slot="avatar"]')).toBeVisible();
   await expect(selected.locator('[data-slot="avatar-fallback"]')).toHaveText(
@@ -654,6 +668,12 @@ test('agent home opens the shared inbox workspace and seat switches keep the sel
       name: 'How do I download music for offline listening?',
     }),
   ).toBeVisible();
+  await expect(
+    page.locator('.agent-messages').getByText('Automatic reply · no review needed', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.locator('.agent-messages').getByText(/Approved.*reply/),
+  ).toHaveCount(0);
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
   await expect(
@@ -797,6 +817,9 @@ test('a reopened conversation shows its new redraft and suggested priority', asy
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
   await page.getByRole('button', { name: 'Reopen request' }).click();
+  await expect(
+    page.locator('.agent-messages').getByText('Automatic reply · no review needed', { exact: true }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Redraft', exact: true }).click();
   await expect(
     page.getByRole('textbox', { name: 'Reply', exact: true }),
@@ -804,6 +827,12 @@ test('a reopened conversation shows its new redraft and suggested priority', asy
   await expect(
     page.getByRole('combobox', { name: 'Priority', exact: true }),
   ).toHaveValue('high');
+  await expect(
+    page.locator('.agent-messages').getByText('Automatic reply · no review needed', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.locator('.agent-messages').getByText('Approved reply', { exact: true }),
+  ).toHaveCount(0);
   await expect(
     page
       .getByRole('complementary', { name: 'How the AI decided' })
@@ -1369,6 +1398,8 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
   await page
     .getByRole('textbox', { name: 'Reply' })
     .fill('Please resend the invitations.');
+  await expect(page.getByLabel('Priority', { exact: true })).toHaveValue('high');
+  await expect(page.getByRole('button', { name: /^Apply .* priority$/ })).toHaveCount(0);
   await page.getByLabel('Priority').selectOption('normal');
   await page.route('**/tickets/1', async (route) => {
     if ((await submittedReviewAction(route.request())) === 'approve') {
@@ -1385,9 +1416,16 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
       .getByText('resolved', { exact: true }),
   ).toBeVisible();
   await expect(
+    page.getByRole('complementary', { name: 'How the AI decided' }).getByText('normal priority', { exact: true }),
+  ).toBeVisible();
+  await expect(
     page.getByText('Please resend the invitations.', { exact: true }),
   ).toBeVisible();
+  await expect(
+    page.locator('.agent-messages').getByText('Approved reply', { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText(/Human approved in-app reply/)).toBeVisible();
+  await page.getByRole('combobox', { name: 'Filter by status' }).selectOption('resolved');
   await expect(
     page.getByRole('link', { name: /Family invitation keeps failing/ }),
   ).toContainText('resolved');
@@ -1424,6 +1462,8 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
       .getByText('open', { exact: true }),
   ).toBeVisible();
   await expect(page.getByText('Human reopened request')).toBeVisible();
+  await expect(page.getByLabel('Priority', { exact: true })).toHaveValue('high');
+  await expect(page.getByRole('button', { name: /^Apply .* priority$/ })).toHaveCount(0);
   await page
     .getByRole('textbox', { name: 'Reply' })
     .fill('Please check the addresses again.');
@@ -1432,6 +1472,9 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
   await page.goto('/tickets/1');
   await expect(
     page.getByText('Please check the addresses again.', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'How the AI decided' }).getByText('high priority', { exact: true }),
   ).toBeVisible();
   await page.goto('/tickets/5');
   await page.getByRole('button', { name: 'Reopen request' }).click();
@@ -1445,6 +1488,12 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
     page.getByText('Downloaded music stays available offline.', {
       exact: true,
     }),
+  ).toBeVisible();
+  await expect(
+    page.locator('.agent-messages').getByText('Automatic reply · no review needed', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.locator('.agent-messages').getByText('Approved reply', { exact: true }),
   ).toBeVisible();
   await expect(
     page
@@ -1497,6 +1546,8 @@ test('review actions stay disabled while approval is in flight', async ({
   } finally {
     releaseRequest();
   }
+  await expect(page).toHaveURL(/\/tickets\/2$/);
+  await page.getByRole('combobox', { name: 'Filter by status' }).selectOption('resolved');
   await expect(
     page.getByRole('link', { name: /Family invitation keeps failing/ }),
   ).toContainText('resolved');
@@ -1575,6 +1626,7 @@ test('a visitor resets only their own demo workspace', async ({
   });
   await approveReply(page, '/tickets/2');
   await page.unroute('**/tickets/1');
+  await page.getByRole('combobox', { name: 'Filter by status' }).selectOption('resolved');
   await expect(
     page.getByRole('link', { name: /Family invitation keeps failing/ }),
   ).toContainText('resolved');
@@ -1600,6 +1652,7 @@ test('a visitor resets only their own demo workspace', async ({
       .getByRole('link', { name: /Family invitation keeps failing/ })
       .click();
     await approveReply(otherPage, '/tickets/2');
+    await otherPage.getByRole('combobox', { name: 'Filter by status' }).selectOption('resolved');
     await expect(
       otherPage.getByRole('link', {
         name: /Family invitation keeps failing/,
@@ -1618,6 +1671,7 @@ test('a visitor resets only their own demo workspace', async ({
     const removed = await page.goto(submittedUrl);
     expect(removed?.status()).toBe(404);
     await otherPage.reload();
+    await otherPage.getByRole('combobox', { name: 'Filter by status' }).selectOption('resolved');
     await expect(
       otherPage.getByRole('link', {
         name: /Family invitation keeps failing/,

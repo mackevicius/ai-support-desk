@@ -15,7 +15,7 @@ export function Queue({
   tickets: TicketSummary[];
   selectedId?: number;
 }) {
-  const [status, setStatus] = useState('all');
+  const [status, setStatus] = useState('open');
   const visible = tickets.filter(
     (ticket) => status === 'all' || ticket.status === status,
   );

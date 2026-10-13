@@ -65,11 +65,12 @@ export default async function TicketPage({
               ? 'AI replied automatically'
               : 'AI handed this conversation to you'}
           </ChatBubble>
-          <ConversationUpdates history={ticket.history} agent reply={ticket.approved_reply && (
-            <ChatBubble from="agent" own label="Approved in-app reply">
-              {ticket.approved_reply}
-            </ChatBubble>
-          )} />
+          <ConversationUpdates
+            history={ticket.history}
+            agent
+            automatic={ticket.decision?.kind === 'automatic_reply'}
+            reply={ticket.approved_reply}
+          />
         </section>
         <div className="agent-composer">
           {generation && (
@@ -96,25 +97,6 @@ export default async function TicketPage({
                   ticket.draft.state,
                 ) && (
                   <div className="review-controls">
-                    {ticket.draft.state === 'saved' &&
-                      ticket.priority !== ticket.draft.suggested_priority && (
-                        <form
-                          action={reviewRequest}
-                          className="priority-approval"
-                        >
-                          <input type="hidden" name="id" value={ticket.id} />
-                          <input type="hidden" name="action" value="priority" />
-                          <input
-                            type="hidden"
-                            name="priority"
-                            value={ticket.draft.suggested_priority}
-                          />
-                          <SubmitButton
-                            label={`Apply ${ticket.draft.suggested_priority} priority`}
-                            pendingLabel="Applying priority..."
-                          />
-                        </form>
-                      )}
                     <ReplyForm
                       key={`${ticket.draft.reply}-${ticket.history.length}`}
                       ticketId={String(ticket.id)}
@@ -132,13 +114,7 @@ export default async function TicketPage({
                       <select
                         id="priority"
                         name="priority"
-                        defaultValue={
-                          ticket.draft.state === 'saved' ||
-                          (ticket.draft.live &&
-                            ticket.draft.state === 'reopened')
-                            ? ticket.draft.suggested_priority
-                            : ticket.priority
-                        }
+                        defaultValue={ticket.draft.suggested_priority}
                       >
                         <option value="low">Low</option>
                         <option value="normal">Normal</option>
