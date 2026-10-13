@@ -17,19 +17,19 @@ async function submittedReviewAction(request: Request) {
   return typeof action === 'string' ? action : null;
 }
 
-async function approveReply(page: Page, nextPath: string) {
-  const approvalResponse = page.waitForResponse(
+async function sendReply(page: Page, ticketPath: string) {
+  const replyResponse = page.waitForResponse(
     async (response) =>
-      (await submittedReviewAction(response.request())) === 'approve',
+      (await submittedReviewAction(response.request())) === 'reply',
   );
-  await page.getByRole('button', { name: 'Approve in-app reply' }).click();
-  const approved = await approvalResponse;
-  expect(approved.status()).toBeLessThan(400);
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  const sent = await replyResponse;
+  expect(sent.status()).toBeLessThan(400);
   expect(
-    approved.headers()['x-action-redirect']?.split(';')[0] ??
-      approved.headers().location,
-  ).toBe(nextPath);
-  await expect(page).toHaveURL(new RegExp(`${nextPath}$`));
+    sent.headers()['x-action-redirect']?.split(';')[0] ??
+      sent.headers().location,
+  ).toBe(ticketPath);
+  await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
 }
 
 async function switchToCustomer(page: Page) {
@@ -409,7 +409,7 @@ test('How it works starts with the customer story before technical details', asy
     /The customer asks.*question/s,
     /The AI finds relevant help articles/s,
     /It replies or hands off.*automatic reply.*support agent/s,
-    /A support agent reviews.*edits.*asks for details.*approves/s,
+    /A support agent replies.*draft.*edits.*own reply/s,
   ]);
   const handOff = content.getByRole('region', {
     name: 'When a person steps in',
@@ -745,7 +745,7 @@ test('agent home opens the shared inbox workspace and seat switches keep the sel
   await expect(page).toHaveURL(/\/tickets\/1$/);
 });
 
-test('an agent edits a risky draft, asks for details and delivers a team reply', async ({
+test('an agent sends replies from one box and the customer is left to answer', async ({
   page,
 }) => {
   await page.goto('/');
@@ -764,22 +764,41 @@ test('an agent edits a risky draft, asks for details and delivers a team reply',
   await expect(
     trail.getByRole('heading', { name: 'Handed off to a person', exact: true }),
   ).toBeVisible();
+  const detail = page.getByRole('article', { name: 'Request detail' });
+  await expect(detail.getByRole('textbox', { name: 'Reply' })).toHaveCount(1);
+  await expect(
+    detail.getByRole('textbox', { name: 'Reply', exact: true }),
+  ).toHaveValue(/\S/);
+  for (const removed of [
+    'Approve in-app reply',
+    'Ask for details',
+    'Reject suggestion',
+  ])
+    await expect(page.getByRole('button', { name: removed })).toHaveCount(0);
+  await page.getByRole('textbox', { name: 'Reply', exact: true }).fill('   ');
+  await expect(
+    page.getByRole('button', { name: 'Send', exact: true }),
+  ).toBeDisabled();
   await page
     .getByRole('textbox', { name: 'Reply', exact: true })
     .fill('Which dates were the two charges taken?');
-  await page
-    .getByRole('button', { name: 'Ask for details', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
   await expect(
-    page.getByRole('article', { name: 'Team question' }),
+    page.getByRole('article', { name: 'Agent reply' }),
   ).toContainText('Which dates were the two charges taken?');
+  await expect(
+    page.getByRole('textbox', { name: 'Reply', exact: true }),
+  ).toHaveValue('');
   await page.getByRole('button', { name: 'Redraft', exact: true }).click();
   await expect(
     page
       .getByRole('banner')
       .getByText('3 live AI answers left today', { exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByRole('textbox', { name: 'Reply', exact: true }),
+  ).toHaveValue(/\S/);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.screenshot({
     path: 'test-results/agent-desktop.png',
@@ -800,21 +819,12 @@ test('an agent edits a risky draft, asks for details and delivers a team reply',
     .fill(
       'Our team checked the charges and will contact you about the duplicate.',
     );
-  await page
-    .getByRole('button', { name: 'Approve in-app reply', exact: true })
-    .click();
-  await expect(page).not.toHaveURL(new RegExp(`${ticketPath}$`));
-  await page
-    .getByRole('combobox', { name: 'Filter by status' })
-    .selectOption('resolved');
-  await expect(
-    page.getByRole('link', {
-      name: /I was charged twice for offline downloads/,
-    }),
-  ).toContainText('resolved');
-  await expect(
-    page.getByRole('link', { name: /Family invitation keeps failing/ }),
-  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.getByRole('article', { name: 'Agent reply' })).toHaveCount(
+    2,
+  );
+  await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
+  await expect(trail.getByText('open', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
   await expect(
     page.getByRole('region', { name: 'Support chat' }),
@@ -825,16 +835,20 @@ test('an agent edits a risky draft, asks for details and delivers a team reply',
   await page.goto(ticketPath);
   const chat = page.getByRole('region', { name: 'Support chat' });
   await expect(
-    chat.getByText('Replied by our team', { exact: true }),
+    chat.locator('header').getByText('With our team', { exact: true }),
   ).toBeVisible();
-  await expect(
-    chat.getByRole('article', { name: 'Team question' }),
-  ).toContainText('Which dates were the two charges taken?');
-  await expect(
-    chat.getByRole('article', { name: 'Tunely reply' }),
-  ).toContainText('Our team checked the charges');
+  const replies = chat.getByRole('article', { name: 'Agent reply' });
+  await expect(replies.first()).toContainText(
+    'Which dates were the two charges taken?',
+  );
+  await expect(replies.last()).toContainText('Our team checked the charges');
   await chat.getByText('Ticket history', { exact: true }).click();
-  await expect(chat.getByText(/Human approved in-app reply/)).toBeVisible();
+  await expect(
+    chat.getByText(
+      'Agent replied: Our team checked the charges and will contact you about the duplicate.',
+      { exact: true },
+    ),
+  ).toBeVisible();
   const handOffs = chat.getByText(
     'Hand-off: A team member needs to check something that has gone wrong with your money or account security.',
     { exact: true },
@@ -1132,20 +1146,22 @@ test('a customer asks for a person after a sample automatic reply and the agent 
     await page
       .getByRole('textbox', { name: 'Reply', exact: true })
       .fill('Our team has checked your downloads. Please try again.');
-    await approveReply(page, '/tickets/1');
-    await page.goto('/tickets/5');
-    await page.getByRole('button', { name: 'Customer', exact: true }).click();
+    await sendReply(page, '/tickets/5');
     await expect(
-      chat.getByText('Replied by our team', { exact: true }),
+      page.getByRole('article', { name: 'Agent reply' }),
+    ).toContainText('Our team has checked your downloads.');
+    await page.getByRole('button', { name: 'Customer', exact: true }).click();
+    await expect(page).toHaveURL(/\/tickets\/5$/);
+    await expect(
+      chat.locator('header').getByText('With our team', { exact: true }),
     ).toBeVisible();
+    await expect(
+      chat.getByRole('article', { name: 'Agent reply' }),
+    ).toContainText('Our team has checked your downloads.');
     await expect(
       chat.getByRole('button', { name: label, exact: true }),
     ).toHaveCount(0);
-    await expect(
-      chat
-        .locator('.conversation-messages > article')
-        .getByText(originalReply, { exact: true }),
-    ).toBeVisible();
+    await expect(reply.locator(':scope > div > p')).toHaveText(originalReply);
     await expect(
       page.getByRole('banner').getByText('5 live AI answers left today'),
     ).toBeVisible();
@@ -1212,11 +1228,9 @@ test('customers reply in the same conversation and the team sees their messages'
   await page
     .getByRole('textbox', { name: 'Reply', exact: true })
     .fill('Which phone are you using?');
-  await page
-    .getByRole('button', { name: 'Ask for details', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(
-    conversation.getByRole('article', { name: 'Team question' }),
+    conversation.getByRole('article', { name: 'Agent reply' }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
   await expect(input).toBeVisible();
@@ -1477,7 +1491,7 @@ test('owner manages help articles while visitors cannot open the editor', async 
   ).toBeVisible();
 });
 
-test('internal notes stay private while an agent checks, edits and approves a draft', async ({
+test('internal notes stay private while an agent checks, edits and sends a draft', async ({
   page,
 }) => {
   const title = 'Staff playback incident';
@@ -1525,23 +1539,11 @@ test('internal notes stay private while an agent checks, edits and approves a dr
     page.getByRole('alert').filter({ hasText: 'Internal text copied' }),
   ).toBeVisible();
   await expect(page.locator('.internal-copy-warning mark')).toHaveText(phrase);
-  const blockedApproval = page.waitForResponse(
-    async (response) =>
-      (await submittedReviewAction(response.request())) === 'approve',
-  );
-  // The blocked approval remounts the editor, which rechecks the returned draft.
-  const recheck = page.waitForResponse(
-    (response) =>
-      response.url().endsWith(`${ticketPath}/check`) &&
-      (response.request().postData() ?? '').includes(phrase),
-  );
-  await page
-    .getByRole('button', { name: 'Approve in-app reply', exact: true })
-    .click();
-  await blockedApproval;
-  await recheck;
-  await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
-  await expect(page.locator('.internal-copy-warning mark')).toHaveText(phrase);
+  await expect(
+    page.getByRole('button', { name: 'Send anyway', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Send', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.screenshot({
     path: 'test-results/internal-note-desktop.png',
@@ -1561,20 +1563,61 @@ test('internal notes stay private while an agent checks, edits and approves a dr
     .getByRole('textbox', { name: 'Reply', exact: true })
     .fill('Please restart Tunely and try playback again.');
   await expect(page.locator('.internal-copy-warning')).toHaveCount(0);
-  await page
-    .getByRole('button', { name: 'Approve in-app reply', exact: true })
-    .click();
-  await expect(page).not.toHaveURL(new RegExp(`${ticketPath}$`));
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(
+    page.getByRole('article', { name: 'Agent reply' }),
+  ).toContainText('Please restart Tunely');
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
   await expect(
     page.getByRole('region', { name: 'Support chat' }),
   ).toBeVisible();
   await page.goto(ticketPath);
   await expect(
-    chat.getByRole('article', { name: 'Tunely reply' }),
+    chat.getByRole('article', { name: 'Agent reply' }),
   ).toContainText('Please restart Tunely');
   expect(await page.content()).not.toContain(title);
   expect(await page.content()).not.toContain(phrase);
+
+  await page.getByRole('button', { name: 'Agent', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
+  await page.getByRole('textbox', { name: 'Reply', exact: true }).fill(phrase);
+  await expect(
+    page.getByRole('button', { name: 'Send anyway', exact: true }),
+  ).toBeVisible();
+  let releaseCheck: () => void = () => {};
+  const heldCheck = new Promise<void>((resolve) => {
+    releaseCheck = resolve;
+  });
+  const holdCheck = async (route: import('@playwright/test').Route) => {
+    await heldCheck;
+    await route.continue().catch(() => {});
+  };
+  await page.route(`**${ticketPath}/check`, holdCheck);
+  await page
+    .getByRole('textbox', { name: 'Reply', exact: true })
+    .fill(`Note: ${phrase}`);
+  const blocked = page.waitForResponse(
+    async (response) =>
+      (await submittedReviewAction(response.request())) === 'reply',
+  );
+  await page.getByRole('button', { name: 'Send anyway', exact: true }).click();
+  await blocked;
+  releaseCheck();
+  await page.unroute(`**${ticketPath}/check`, holdCheck);
+  await expect(page.locator('.internal-copy-warning mark')).toHaveText(phrase);
+  await expect(
+    page.getByRole('textbox', { name: 'Reply', exact: true }),
+  ).toHaveValue(`Note: ${phrase}`);
+  await expect(page.getByRole('article', { name: 'Agent reply' })).toHaveCount(
+    1,
+  );
+  await page.getByRole('button', { name: 'Send anyway', exact: true }).click();
+  await expect(page.getByRole('article', { name: 'Agent reply' })).toHaveCount(
+    2,
+  );
+  await expect(
+    page.getByRole('article', { name: 'Agent reply' }).last(),
+  ).toContainText(phrase);
 });
 
 test('only a signed-in owner sees live generation', async ({ page }) => {
@@ -1698,7 +1741,7 @@ test('a visitor submits a request that another session cannot see', async ({
   }
 });
 
-test('a visitor reviews a saved draft, reopens, and moves to the next request', async ({
+test('a visitor sends a saved draft, reopens an automatic reply, and moves to the next request', async ({
   page,
 }) => {
   await page.goto('/');
@@ -1714,6 +1757,9 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
       .getByRole('complementary', { name: 'How the AI decided' })
       .getByText('Help', { exact: true }),
   ).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Reply' })).toHaveValue(
+    /create a new invitation from Settings > Plan > Family/,
+  );
   await page
     .getByRole('textbox', { name: 'Reply' })
     .fill('Please resend the invitations.');
@@ -1723,137 +1769,63 @@ test('a visitor reviews a saved draft, reopens, and moves to the next request', 
   await expect(
     page.getByRole('button', { name: /^Apply .* priority$/ }),
   ).toHaveCount(0);
-  await page.getByLabel('Priority').selectOption('normal');
   await page.route('**/tickets/1', async (route) => {
-    if ((await submittedReviewAction(route.request())) === 'approve') {
+    if ((await submittedReviewAction(route.request())) === 'reply') {
       await new Promise((resolve) => setTimeout(resolve, 6000));
     }
     await route.continue();
   });
-  await approveReply(page, '/tickets/2');
+  await sendReply(page, '/tickets/1');
   await page.unroute('**/tickets/1');
-  await page.goto('/tickets/1');
+  const trail = page.getByRole('complementary', { name: 'How the AI decided' });
+  await expect(trail.getByText('open', { exact: true })).toBeVisible();
   await expect(
-    page
-      .getByRole('complementary', { name: 'How the AI decided' })
-      .getByText('resolved', { exact: true }),
+    trail.getByText('high priority', { exact: true }),
   ).toBeVisible();
   await expect(
-    page
-      .getByRole('complementary', { name: 'How the AI decided' })
-      .getByText('normal priority', { exact: true }),
-  ).toBeVisible();
+    page.getByRole('article', { name: 'Agent reply' }),
+  ).toContainText('Please resend the invitations.');
   await expect(
-    page.getByText('Please resend the invitations.', { exact: true }),
+    trail.getByText('Agent replied: Please resend the invitations.', {
+      exact: true,
+    }),
   ).toBeVisible();
-  await expect(
-    page
-      .locator('.agent-messages')
-      .getByText('Approved reply', { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText(/Human approved in-app reply/)).toBeVisible();
-  await page
-    .getByRole('combobox', { name: 'Filter by status' })
-    .selectOption('resolved');
-  await expect(
-    page.getByRole('link', { name: /Family invitation keeps failing/ }),
-  ).toContainText('resolved');
-  await page
-    .getByRole('link', { name: /Family invitation keeps failing/ })
-    .click();
   await page.getByRole('link', { name: 'Next request' }).click();
   await expect(
     page.getByRole('heading', {
       name: 'Music stops after Bluetooth reconnects',
     }),
   ).toBeVisible();
-  await page.getByRole('textbox', { name: 'Reply' }).fill('');
-  await page.getByRole('button', { name: 'Reject suggestion' }).click();
-  await expect(
-    page.getByText('Human rejected saved AI draft and priority suggestion'),
-  ).toBeVisible();
-  await page
-    .getByRole('textbox', { name: 'Reply' })
-    .fill('I checked the invoice myself.');
-  await page.getByRole('button', { name: 'Approve in-app reply' }).click();
-  await expect(page).toHaveURL(/\/tickets\/3$/);
-  await page.goto('/tickets/2');
-  await expect(
-    page
-      .getByRole('complementary', { name: 'How the AI decided' })
-      .getByText('resolved', { exact: true }),
-  ).toBeVisible();
-  await page.goto('/tickets/1');
-  await page.getByRole('button', { name: 'Reopen request' }).click();
-  await expect(
-    page
-      .getByRole('complementary', { name: 'How the AI decided' })
-      .getByText('open', { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText('Human reopened request')).toBeVisible();
-  await expect(page.getByLabel('Priority', { exact: true })).toHaveValue(
-    'high',
-  );
-  await expect(
-    page.getByRole('button', { name: /^Apply .* priority$/ }),
-  ).toHaveCount(0);
-  await page
-    .getByRole('textbox', { name: 'Reply' })
-    .fill('Please check the addresses again.');
-  await page.getByRole('button', { name: 'Approve in-app reply' }).click();
-  await expect(page).toHaveURL(/\/tickets\/3$/);
-  await page.goto('/tickets/1');
-  await expect(
-    page.getByText('Please check the addresses again.', { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page
-      .getByRole('complementary', { name: 'How the AI decided' })
-      .getByText('high priority', { exact: true }),
-  ).toBeVisible();
   await page.goto('/tickets/5');
   await page.getByRole('button', { name: 'Reopen request' }).click();
+  await expect(trail.getByText('open', { exact: true })).toBeVisible();
+  await expect(page.getByText('Human reopened request')).toBeVisible();
   await page
     .getByRole('textbox', { name: 'Reply' })
     .fill('Downloaded music stays available offline.');
-  await page.getByRole('button', { name: 'Approve in-app reply' }).click();
-  await expect(page).toHaveURL(/\/tickets\/3$/);
-  await page.goto('/tickets/5');
+  await sendReply(page, '/tickets/5');
   await expect(
-    page.getByText('Downloaded music stays available offline.', {
-      exact: true,
-    }),
-  ).toBeVisible();
+    page.getByRole('article', { name: 'Agent reply' }),
+  ).toContainText('Downloaded music stays available offline.');
   await expect(
     page
       .locator('.agent-messages')
       .getByText('Automatic reply · no review needed', { exact: true }),
   ).toBeVisible();
-  await expect(
-    page
-      .locator('.agent-messages')
-      .getByText('Approved reply', { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page
-      .getByRole('complementary', { name: 'How the AI decided' })
-      .getByText('resolved', { exact: true }),
-  ).toBeVisible();
+  await expect(trail.getByText('open', { exact: true })).toBeVisible();
 });
 
-test('review actions stay disabled while approval is in flight', async ({
-  page,
-}) => {
+test('Send stays disabled while a reply is in flight', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
+  await expect(page).toHaveURL(/\/tickets\/1$/);
   let releaseRequest: () => void = () => {};
   const heldRequest = new Promise<void>((resolve) => {
     releaseRequest = resolve;
   });
   let requests = 0;
   await page.route('**/tickets/1', async (route) => {
-    const action = await submittedReviewAction(route.request());
-    if (action && ['approve', 'reject', 'ask'].includes(action)) {
+    if ((await submittedReviewAction(route.request())) === 'reply') {
       requests += 1;
       await heldRequest;
     }
@@ -1862,36 +1834,25 @@ test('review actions stay disabled while approval is in flight', async ({
 
   try {
     await page
-      .getByRole('button', { name: 'Approve in-app reply' })
+      .getByRole('button', { name: 'Send', exact: true })
       .click({ noWaitAfter: true });
     await expect.poll(() => requests).toBe(1);
     await expect(
-      page.getByRole('button', { name: /Approving/ }),
-    ).toBeDisabled();
-    await expect(
-      page.getByRole('button', { name: 'Reject suggestion' }),
+      page.getByRole('button', { name: 'Sending...' }),
     ).toBeDisabled();
     await page.evaluate(() => {
       (
         document.querySelector('.review-form button') as HTMLButtonElement
-      ).click();
-      (
-        document.querySelector(
-          '.review-controls form:last-child button',
-        ) as HTMLButtonElement
       ).click();
     });
     expect(requests).toBe(1);
   } finally {
     releaseRequest();
   }
-  await expect(page).toHaveURL(/\/tickets\/2$/);
-  await page
-    .getByRole('combobox', { name: 'Filter by status' })
-    .selectOption('resolved');
-  await expect(
-    page.getByRole('link', { name: /Family invitation keeps failing/ }),
-  ).toContainText('resolved');
+  await expect(page.getByRole('article', { name: 'Agent reply' })).toHaveCount(
+    1,
+  );
+  await expect(page).toHaveURL(/\/tickets\/1$/);
   expect(requests).toBe(1);
 });
 
@@ -1958,19 +1919,16 @@ test('a visitor resets only their own demo workspace', async ({
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await expect(page).toHaveURL(/\/tickets\/1$/);
   await page.route('**/tickets/1', async (route) => {
-    if ((await submittedReviewAction(route.request())) === 'approve') {
+    if ((await submittedReviewAction(route.request())) === 'reply') {
       await new Promise((resolve) => setTimeout(resolve, 6000));
     }
     await route.continue();
   });
-  await approveReply(page, '/tickets/2');
+  await sendReply(page, '/tickets/1');
   await page.unroute('**/tickets/1');
-  await page
-    .getByRole('combobox', { name: 'Filter by status' })
-    .selectOption('resolved');
-  await expect(
-    page.getByRole('link', { name: /Family invitation keeps failing/ }),
-  ).toContainText('resolved');
+  await expect(page.getByRole('article', { name: 'Agent reply' })).toHaveCount(
+    1,
+  );
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
   await page
     .getByRole('link', { name: 'New conversation', exact: true })
@@ -1990,15 +1948,10 @@ test('a visitor resets only their own demo workspace', async ({
     await otherPage.goto('/');
     await otherPage.getByRole('button', { name: 'Agent', exact: true }).click();
     await expect(otherPage).toHaveURL(/\/tickets\/1$/);
-    await approveReply(otherPage, '/tickets/2');
-    await otherPage
-      .getByRole('combobox', { name: 'Filter by status' })
-      .selectOption('resolved');
+    await sendReply(otherPage, '/tickets/1');
     await expect(
-      otherPage.getByRole('link', {
-        name: /Family invitation keeps failing/,
-      }),
-    ).toContainText('resolved');
+      otherPage.getByRole('article', { name: 'Agent reply' }),
+    ).toHaveCount(1);
 
     await page.getByRole('button', { name: 'Reset demo' }).click();
     await expect(
@@ -2011,15 +1964,17 @@ test('a visitor resets only their own demo workspace', async ({
     ).toHaveText('open');
     const removed = await page.goto(submittedUrl);
     expect(removed?.status()).toBe(404);
-    await otherPage.reload();
-    await otherPage
-      .getByRole('combobox', { name: 'Filter by status' })
-      .selectOption('resolved');
+    await page.goto('/tickets/1');
     await expect(
-      otherPage.getByRole('link', {
-        name: /Family invitation keeps failing/,
-      }),
-    ).toContainText('resolved');
+      page.getByRole('article', { name: 'Request detail' }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('article', { name: 'Agent reply' }),
+    ).toHaveCount(0);
+    await otherPage.reload();
+    await expect(
+      otherPage.getByRole('article', { name: 'Agent reply' }),
+    ).toHaveCount(1);
   } finally {
     await otherVisitor.close();
   }

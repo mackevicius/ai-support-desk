@@ -78,9 +78,8 @@ test('an uncited internal phrase prevents automatic delivery and warns the agent
           method: 'POST',
           headers: { cookie, 'content-type': 'application/json' },
           body: JSON.stringify({
-            action: 'approve',
+            action: 'reply',
             reply: phrase,
-            priority: 'normal',
           }),
         });
         assert.equal(blocked.status, 409);
@@ -91,9 +90,8 @@ test('an uncited internal phrase prevents automatic delivery and warns the agent
           method: 'POST',
           headers: { cookie, 'content-type': 'application/json' },
           body: JSON.stringify({
-            action: 'approve',
+            action: 'reply',
             reply: phrase,
-            priority: 'normal',
             internal_confirmed: phrase,
           }),
         });

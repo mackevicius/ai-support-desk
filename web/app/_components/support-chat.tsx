@@ -21,11 +21,7 @@ function CustomerStatus({
   const answered = ticket.status === 'resolved';
   return (
     <StatusPill tone={answered ? 'ok' : 'team'} className={className}>
-      {answered
-        ? ticket.review_state === 'approved'
-          ? 'Replied by our team'
-          : 'Answered'
-        : 'With our team'}
+      {answered ? 'Answered' : 'With our team'}
     </StatusPill>
   );
 }

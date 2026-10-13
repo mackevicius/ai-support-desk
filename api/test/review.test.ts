@@ -4,6 +4,53 @@ import { readJson, sendJson, startInbox, withProvider } from './helpers.js';
 
 const { pool, baseUrl } = await startInbox();
 
+test('an agent reply is sent and leaves the ticket waiting on the customer', async () => {
+  const cookie = (await fetch(`${baseUrl}/tickets`)).headers
+    .get('set-cookie')!
+    .split(';')[0];
+  const review = (body: object) =>
+    fetch(`${baseUrl}/tickets/1/review`, {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  for (const action of ['approve', 'ask', 'reject'])
+    assert.equal(
+      (await review({ action, reply: 'Old action', priority: 'low' })).status,
+      409,
+    );
+  for (const reply of [undefined, '', '   ', 'x'.repeat(5001)])
+    assert.equal((await review({ action: 'reply', reply })).status, 400);
+
+  const sent = await review({
+    action: 'reply',
+    reply: '  Please create a new invitation.  ',
+    priority: 'low',
+  });
+  assert.equal(sent.status, 200);
+  const ticket = await sent.json();
+  assert.equal(ticket.status, 'open');
+  assert.equal(ticket.priority, 'high');
+  assert.equal(ticket.approved_reply, null);
+  assert.equal(
+    ticket.history.at(-1).description,
+    'Agent replied: Please create a new invitation.',
+  );
+  const again = await (
+    await review({ action: 'reply', reply: 'Did the new link work?' })
+  ).json();
+  assert.equal(again.status, 'open');
+  assert.deepEqual(
+    again.history
+      .map((event: { description: string }) => event.description)
+      .filter((description: string) => description.startsWith('Agent replied: ')),
+    [
+      'Agent replied: Please create a new invitation.',
+      'Agent replied: Did the new link work?',
+    ],
+  );
+});
+
 test('a risky live draft can be reviewed by the visitor acting as a support agent', async () => {
   await withProvider(
     async (request, response) => {
@@ -41,7 +88,7 @@ test('a risky live draft can be reviewed by the visitor acting as a support agen
         method: 'POST',
         headers: { cookie, 'content-type': 'application/json' },
         body: JSON.stringify({
-          action: 'ask',
+          action: 'reply',
           reply: 'Which dates were the two charges taken?',
         }),
       });
@@ -52,7 +99,7 @@ test('a risky live draft can be reviewed by the visitor acting as a support agen
         waiting.history.some(
           (event: { description: string }) =>
             event.description ===
-            'Team asked for details: Which dates were the two charges taken?',
+            'Agent replied: Which dates were the two charges taken?',
         ),
       );
       for (let remaining = 3; remaining >= 0; remaining--) {
@@ -75,27 +122,26 @@ test('a risky live draft can be reviewed by the visitor acting as a support agen
         ).status,
         429,
       );
-      const approved = await fetch(`${baseUrl}/tickets/${ticket.id}/review`, {
+      const replied = await fetch(`${baseUrl}/tickets/${ticket.id}/review`, {
         method: 'POST',
         headers: { cookie, 'content-type': 'application/json' },
         body: JSON.stringify({
-          action: 'approve',
+          action: 'reply',
           reply: 'Our team will check the two charges.',
-          priority: 'high',
         }),
       });
-      assert.equal(approved.status, 200);
-      const delivered = await approved.json();
-      assert.equal(delivered.status, 'resolved');
+      assert.equal(replied.status, 200);
+      const delivered = await replied.json();
+      assert.equal(delivered.status, 'open');
       assert.equal(
-        delivered.approved_reply,
-        'Our team will check the two charges.',
+        delivered.history.at(-1).description,
+        'Agent replied: Our team will check the two charges.',
       );
     },
   );
 });
 
-test('redrafting a reopened automatic reply stays open and cannot overwrite approval', async () => {
+test('redrafting a reopened automatic reply stays open and keeps an agent reply sent meanwhile', async () => {
   let calls = 0;
   let holdRequests = false;
   let announceGeneration: () => void = () => {};
@@ -181,24 +227,28 @@ test('redrafting a reopened automatic reply stays open and cannot overwrite appr
           headers,
         });
         await started;
-        const approved = await fetch(`${baseUrl}/tickets/${ticket.id}/review`, {
+        const replied = await fetch(`${baseUrl}/tickets/${ticket.id}/review`, {
           method: 'POST',
           headers,
           body: JSON.stringify({
-            action: 'approve',
+            action: 'reply',
             reply: 'An agent checked this reply.',
-            priority: 'normal',
           }),
         });
-        assert.equal(approved.status, 200);
+        assert.equal(replied.status, 200);
         releaseGeneration();
-        assert.equal((await pending).status, 409);
+        assert.equal((await pending).status, 200);
         const saved = await (
           await fetch(`${baseUrl}/tickets/${ticket.id}`, { headers })
         ).json();
-        assert.equal(saved.status, 'resolved');
-        assert.equal(saved.approved_reply, 'An agent checked this reply.');
-        assert.equal(saved.draft.reply, updated.draft.reply);
+        assert.equal(saved.status, 'open');
+        assert.equal(saved.approved_reply, ticket.approved_reply);
+        assert.ok(
+          saved.history.some(
+            (event: { description: string }) =>
+              event.description === 'Agent replied: An agent checked this reply.',
+          ),
+        );
       } finally {
         releaseGeneration();
       }
@@ -206,7 +256,7 @@ test('redrafting a reopened automatic reply stays open and cannot overwrite appr
   );
 });
 
-test('a saved draft requires approval and review stays in the visitor session', async () => {
+test('an agent reply stays in the visitor session', async () => {
   const first = await fetch(`${baseUrl}/tickets`);
   const firstCookie = first.headers.get('set-cookie')!.split(';')[0];
   const second = await fetch(`${baseUrl}/tickets`);
@@ -222,24 +272,19 @@ test('a saved draft requires approval and review stays in the visitor session', 
   assert.ok(initial.draft.reply.includes('invitation'));
   assert.ok(initial.draft.sources[0].body.includes('invitation'));
 
-  const approved = await fetch(`${baseUrl}/tickets/1/review`, {
+  const replied = await fetch(`${baseUrl}/tickets/1/review`, {
     method: 'POST',
     headers: { cookie: firstCookie, 'content-type': 'application/json' },
     body: JSON.stringify({
-      action: 'approve',
+      action: 'reply',
       reply: 'Please resend the invitations.',
-      priority: 'normal',
     }),
   });
-  assert.equal(approved.status, 200);
-  const reviewed = await approved.json();
-  assert.equal(reviewed.status, 'resolved');
-  assert.equal(reviewed.priority, 'normal');
-  assert.equal(reviewed.approved_reply, 'Please resend the invitations.');
-  assert.ok(
-    reviewed.history.some((event: { description: string }) =>
-      event.description.includes('approved'),
-    ),
+  assert.equal(replied.status, 200);
+  const reviewed = await replied.json();
+  assert.equal(
+    reviewed.history.at(-1).description,
+    'Agent replied: Please resend the invitations.',
   );
 
   const other = await (
@@ -252,12 +297,12 @@ test('a saved draft requires approval and review stays in the visitor session', 
   assert.equal(other.approved_reply, null);
   assert.ok(
     !other.history.some((event: { description: string }) =>
-      event.description.includes('approved'),
+      event.description.startsWith('Agent replied: '),
     ),
   );
 });
 
-test('rejection and reopening require explicit human actions', async () => {
+test('reopening requires an explicit human action and a reply needs no draft', async () => {
   await pool.query('DELETE FROM saved_drafts WHERE ticket_id = 5');
   const inbox = await fetch(`${baseUrl}/tickets`);
   const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
@@ -267,24 +312,9 @@ test('rejection and reopening require explicit human actions', async () => {
       headers: { cookie, 'content-type': 'application/json' },
       body: JSON.stringify(body),
     });
-  assert.equal(
-    (await review(2, { action: 'approve', reply: '', priority: 'high' }))
-      .status,
-    400,
-  );
-  assert.equal(
-    (await review(2, { action: 'approve', reply: 'Unapproved' })).status,
-    400,
-  );
   assert.equal((await review(2, { action: 'reopen' })).status, 409);
   assert.equal(
-    (
-      await review(5, {
-        action: 'approve',
-        reply: 'No draft',
-        priority: 'high',
-      })
-    ).status,
+    (await review(5, { action: 'reply', reply: 'No draft' })).status,
     409,
   );
   const unchanged = await (
@@ -294,93 +324,45 @@ test('rejection and reopening require explicit human actions', async () => {
   assert.equal(unchanged.priority, 'normal');
   assert.equal(unchanged.history.length, 2);
 
-  const rejected = await (await review(2, { action: 'reject' })).json();
-  assert.equal(rejected.draft.state, 'rejected');
-  assert.equal(rejected.status, 'open');
-  assert.equal(rejected.approved_reply, null);
-  assert.ok(rejected.history.at(-1).description.includes('rejected'));
-  const replaced = await (
-    await review(2, {
-      action: 'approve',
-      reply: 'I checked the invoice myself.',
-      priority: 'high',
-    })
-  ).json();
-  assert.equal(replaced.status, 'resolved');
-  assert.equal(replaced.approved_reply, 'I checked the invoice myself.');
-
-  const approved = await (
-    await review(3, {
-      action: 'approve',
-      reply: 'Please share the reporting period.',
-      priority: 'normal',
-    })
-  ).json();
-  assert.equal(approved.status, 'resolved');
-  const reopened = await (await review(3, { action: 'reopen' })).json();
-  assert.equal(reopened.status, 'open');
-  assert.equal(reopened.priority, 'normal');
-  assert.equal(reopened.approved_reply, 'Please share the reporting period.');
-  assert.ok(reopened.history.at(-1).description.includes('reopened'));
-  assert.equal((await review(3, { action: 'reopen' })).status, 409);
-  const corrected = await (
-    await review(3, {
-      action: 'approve',
-      reply: 'Please share the dates and timezone.',
-      priority: 'high',
-    })
-  ).json();
-  assert.equal(corrected.status, 'resolved');
-  assert.equal(
-    corrected.approved_reply,
-    'Please share the dates and timezone.',
-  );
-  assert.equal(
-    corrected.history.filter((event: { description: string }) =>
-      event.description.includes('approved'),
-    ).length,
-    2,
-  );
-
   const oldResolved = await (await review(5, { action: 'reopen' })).json();
   assert.equal(oldResolved.status, 'open');
   assert.equal(oldResolved.draft, null);
   assert.ok(oldResolved.history.at(-1).description.includes('reopened'));
+  assert.equal((await review(5, { action: 'reopen' })).status, 409);
   const manual = await (
     await review(5, {
-      action: 'approve',
+      action: 'reply',
       reply: 'Downloaded music is available offline.',
-      priority: 'low',
     })
   ).json();
-  assert.equal(manual.status, 'resolved');
-  assert.equal(manual.approved_reply, 'Downloaded music is available offline.');
+  assert.equal(manual.status, 'open');
+  assert.equal(
+    manual.history.at(-1).description,
+    'Agent replied: Downloaded music is available offline.',
+  );
 });
 
 test('only one simultaneous review action changes a request', async () => {
   const inbox = await fetch(`${baseUrl}/tickets`);
   const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
   const submit = () =>
-    fetch(`${baseUrl}/tickets/2/review`, {
+    fetch(`${baseUrl}/tickets/5/review`, {
       method: 'POST',
       headers: { cookie, 'content-type': 'application/json' },
-      body: JSON.stringify({
-        action: 'approve',
-        reply: 'Download the invoice from Billing.',
-        priority: 'normal',
-      }),
+      body: JSON.stringify({ action: 'reopen' }),
     });
   const responses = await Promise.all([submit(), submit()]);
   const ticket = await (
-    await fetch(`${baseUrl}/tickets/2`, { headers: { cookie } })
+    await fetch(`${baseUrl}/tickets/5`, { headers: { cookie } })
   ).json();
   assert.deepEqual(
     responses.map((response) => response.status).sort(),
     [200, 409],
   );
   assert.equal(
-    ticket.history.filter((event: { description: string }) =>
-      event.description.includes('approved'),
+    ticket.history.filter(
+      (event: { description: string }) =>
+        event.description === 'Human reopened request',
     ).length,
     1,
   );

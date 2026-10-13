@@ -98,7 +98,6 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     ]);
   }
   function reviewedStatus(status: string, state?: string) {
-    if (state === 'approved') return 'resolved';
     if (state === 'reopened') return 'open';
     return status;
   }
@@ -204,11 +203,9 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         decision?.kind === 'automatic_reply' &&
         Boolean(approvedReply) &&
         reviewedStatus(ticket.rows[0].status, current?.state) === 'resolved' &&
-        current?.state !== 'approved' &&
-        current?.state !== 'rejected' &&
         !decision.documents?.some((source: { kind: string }) => source.kind === 'internal_note') &&
         !events.rows.some((event: { description: string }) =>
-          event.description.startsWith('Human approved in-app reply'),
+          event.description.startsWith('Agent replied: '),
         ),
       ...(decision
         ? { decision, live_ai: await liveAllowance(pool, session) }
@@ -257,8 +254,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       !ticket.approved_reply ||
       ticket.decision.documents?.some((source: { kind: string }) => source.kind === 'internal_note') ||
       ticket.history.some((event: { description: string }) =>
-        event.description.startsWith('Automatic in-app reply: ') ||
-        event.description.startsWith('Human approved in-app reply'),
+        event.description.startsWith('Automatic in-app reply: '),
       )
     ) return;
     const deliveredAt = ticket.history.find((event: { description: string }) =>
@@ -908,8 +904,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         await client.query(
           `INSERT INTO ticket_reviews (session_id, ticket_id, state, priority, approved_reply)
            VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT (session_id, ticket_id) DO UPDATE SET state =
-             CASE WHEN ticket_reviews.state = 'approved' THEN 'reopened' ELSE ticket_reviews.state END`,
+           ON CONFLICT (session_id, ticket_id) DO NOTHING`,
           [
             response.locals.session,
             request.params.id,
@@ -980,32 +975,11 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         response.sendStatus(404);
         return;
       }
-      if (
-        !ticket.draft &&
-        !(
-          ['approve', 'ask'].includes(request.body?.action) &&
-          ticket.status === 'open'
-        ) &&
-        !(request.body?.action === 'reopen' && ticket.status === 'resolved') &&
-        !(
-          request.body?.action === 'approve' &&
-          ticket.review_state === 'reopened'
-        )
-      ) {
-        response.status(409).json({ error: 'No saved draft to review' });
-        return;
-      }
       const { action, reply, priority } = request.body ?? {};
       const state = ticket.review_state ?? ticket.draft?.state ?? 'saved';
       if (
         !(
-          (action === 'approve' &&
-            ticket.status !== 'resolved' &&
-            ['saved', 'rejected', 'reopened'].includes(state ?? '')) ||
-          (action === 'reject' && state === 'saved') ||
-          (action === 'ask' &&
-            ticket.status === 'open' &&
-            ['saved', 'rejected', 'reopened'].includes(state)) ||
+          (action === 'reply' && ticket.status !== 'resolved') ||
           (action === 'priority' &&
             state === 'saved' &&
             ticket.draft &&
@@ -1018,48 +992,29 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         return;
       }
       if (
-        ['approve', 'ask'].includes(action) &&
-        (typeof reply !== 'string' ||
-          !reply.trim() ||
-          reply.length > 5000 ||
-          (action === 'approve' &&
-            !['low', 'normal', 'high'].includes(priority)))
+        action === 'reply' &&
+        (typeof reply !== 'string' || !reply.trim() || reply.length > 5000)
       ) {
-        response
-          .status(400)
-          .json({ error: 'Enter a reply and choose a priority' });
+        response.status(400).json({ error: 'Enter a reply' });
         return;
       }
       const newState =
-        action === 'approve'
-          ? 'approved'
-          : action === 'reject'
-            ? 'rejected'
-            : action === 'ask'
-              ? state
-              : action === 'priority'
-                ? 'saved'
-                : 'reopened';
-      const newPriority =
-        action === 'approve' || action === 'priority'
-          ? priority
-          : ticket.priority;
-      const approvedReply =
-        action === 'approve' ? reply.trim() : ticket.approved_reply;
+        action === 'reply'
+          ? state
+          : action === 'priority'
+            ? 'saved'
+            : 'reopened';
+      const newPriority = action === 'priority' ? priority : ticket.priority;
       const description =
-        action === 'approve'
-          ? `Human approved in-app reply and set ${priority} priority: ${approvedReply}`
-          : action === 'reject'
-            ? 'Human rejected saved AI draft and priority suggestion'
-            : action === 'ask'
-              ? `Team asked for details: ${reply.trim()}`
-              : action === 'priority'
-                ? `Human approved ${priority} priority suggestion`
-                : 'Human reopened request';
+        action === 'reply'
+          ? `Agent replied: ${reply.trim()}`
+          : action === 'priority'
+            ? `Human approved ${priority} priority suggestion`
+            : 'Human reopened request';
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        if (action === 'approve' || action === 'ask') {
+        if (action === 'reply') {
           const copies = await checkedCopies(
             reply.trim(),
             ticket.draft?.sources ?? [],
@@ -1089,7 +1044,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
                   request.params.id,
                   newState,
                   newPriority,
-                  approvedReply,
+                  ticket.approved_reply,
                 ],
               )
             : await client.query(
@@ -1100,7 +1055,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
                   request.params.id,
                   newState,
                   newPriority,
-                  approvedReply,
+                  ticket.approved_reply,
                   ticket.review_state,
                 ],
               );

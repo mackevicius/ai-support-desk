@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState, type ReactNode } from 'react';
 import { reviewCheckedRequest } from '../actions';
 import type { InternalCopy } from '../data';
 import { Textarea } from '../../components/ui/textarea';
+import { SendButton } from './submit-button';
 
 export function ReplyForm({
   ticketId,
@@ -25,9 +26,10 @@ export function ReplyForm({
         ticketId={ticketId}
         defaultValue={state?.reply ?? defaultValue}
         initialCopies={state?.copies ?? initialCopies}
-      />
-      {state?.error && <p role="alert">{state.error}</p>}
-      {children}
+        error={state?.error}
+      >
+        {children}
+      </ReplyEditor>
     </form>
   );
 }
@@ -36,15 +38,21 @@ function ReplyEditor({
   ticketId,
   defaultValue,
   initialCopies,
+  error: submitError,
+  children,
 }: {
   ticketId: string;
   defaultValue: string;
   initialCopies: InternalCopy[];
+  error?: string;
+  children: ReactNode;
 }) {
   const [reply, setReply] = useState(defaultValue);
-  const [copies, setCopies] = useState(initialCopies);
+  const [checked, setChecked] = useState({
+    reply: defaultValue,
+    copies: initialCopies,
+  });
   const [error, setError] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -61,7 +69,7 @@ function ReplyEditor({
         })
         .then((result) => {
           if (controller.signal.aborted) return;
-          setCopies(result);
+          setChecked({ reply, copies: result });
           setError(false);
         })
         .catch(() => {
@@ -76,39 +84,31 @@ function ReplyEditor({
 
   const fragments = [];
   let position = 0;
-  for (const copy of copies) {
-    fragments.push(reply.slice(position, copy.start));
+  for (const copy of checked.copies) {
+    fragments.push(checked.reply.slice(position, copy.start));
     fragments.push(
-      <mark key={copy.start}>{reply.slice(copy.start, copy.end)}</mark>,
+      <mark key={copy.start}>{checked.reply.slice(copy.start, copy.end)}</mark>,
     );
     position = copy.end;
   }
-  fragments.push(reply.slice(position));
+  fragments.push(checked.reply.slice(position));
 
   return (
     <>
       <label htmlFor="reply">AI draft · edit before sending</label>
-      {!!copies.length && (
+      {!!checked.copies.length && (
         <div role="alert" className="internal-copy-warning">
           <strong>
             Internal text copied. This reply may expose staff-only information.
           </strong>
           <p>{fragments}</p>
-          <label>
-            <input
-              type="checkbox"
-              name="internal_confirmed"
-              value={reply}
-              checked={confirmed}
-              onChange={(event) => setConfirmed(event.target.checked)}
-            />{' '}
-            Approve despite copied internal text
-          </label>
+          {/* Only confirms the highlighted text; the API rejects any other reply. */}
+          <input type="hidden" name="internal_confirmed" value={checked.reply} />
         </div>
       )}
       {error && (
         <p role="alert">
-          Internal text check is unavailable. Approval has not been sent.
+          Internal text check is unavailable. Nothing has been sent.
         </p>
       )}
       <Textarea
@@ -116,13 +116,16 @@ function ReplyEditor({
         name="reply"
         aria-label="Reply"
         value={reply}
-        onChange={(event) => {
-          setReply(event.target.value);
-          setConfirmed(false);
-        }}
+        onChange={(event) => setReply(event.target.value)}
         required
         maxLength={5000}
         rows={5}
+      />
+      {submitError && <p role="alert">{submitError}</p>}
+      {children}
+      <SendButton
+        hasInternalCopies={checked.copies.length > 0}
+        empty={!reply.trim()}
       />
     </>
   );

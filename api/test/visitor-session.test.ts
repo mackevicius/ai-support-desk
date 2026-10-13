@@ -69,15 +69,15 @@ test('customer hand-off is only available for an automatic reply before a person
   });
   assert.equal((await review('reopen')).status, 200);
   assert.equal((await read(5)).can_request_hand_off, false);
-  assert.equal((await review('approve', 'Our team has checked your downloads.')).status, 200);
-  const approved = await read(5);
-  assert.equal(approved.status, 'resolved');
-  assert.equal(approved.can_request_hand_off, false);
+  assert.equal((await review('reply', 'Our team has checked your downloads.')).status, 200);
+  const replied = await read(5);
+  assert.equal(replied.status, 'open');
+  assert.equal(replied.can_request_hand_off, false);
   assert.equal((await handOff(5)).status, 409);
-  assert.ok(!approved.history.some((event: { description: string }) => event.description === 'Customer asked for a person'));
+  assert.ok(!replied.history.some((event: { description: string }) => event.description === 'Customer asked for a person'));
 });
 
-test('simultaneous customer hand-offs record one request and cannot reopen a team reply', async () => {
+test('simultaneous customer hand-offs record one request and an agent reply does not offer another', async () => {
   const cookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
   const handOff = () => fetch(`${baseUrl}/tickets/5/hand-off`, {
     method: 'POST',
@@ -90,18 +90,19 @@ test('simultaneous customer hand-offs record one request and cannot reopen a tea
   assert.equal(handedOff.can_request_hand_off, false);
   assert.equal(handedOff.history.filter((event: { description: string }) => event.description === 'Customer asked for a person').length, 1);
 
-  const approval = await fetch(`${baseUrl}/tickets/5/review`, {
+  const reply = await fetch(`${baseUrl}/tickets/5/review`, {
     method: 'POST',
     headers: { cookie, 'content-type': 'application/json' },
-    body: JSON.stringify({ action: 'approve', reply: 'Our team has checked the problem.', priority: 'normal' }),
+    body: JSON.stringify({ action: 'reply', reply: 'Our team has checked the problem.' }),
   });
-  assert.equal(approval.status, 200);
+  assert.equal(reply.status, 200);
   assert.equal((await handOff()).status, 409);
-  const approved = await read();
-  assert.equal(approved.status, 'resolved');
-  assert.equal(approved.review_state, 'approved');
-  assert.equal(approved.approved_reply, 'Our team has checked the problem.');
-  assert.equal(approved.history.filter((event: { description: string }) => event.description === 'Customer asked for a person').length, 1);
+  const replied = await read();
+  assert.equal(replied.status, 'open');
+  assert.equal(replied.review_state, 'reopened');
+  assert.equal(replied.approved_reply, handedOff.approved_reply);
+  assert.equal(replied.history.at(-1).description, 'Agent replied: Our team has checked the problem.');
+  assert.equal(replied.history.filter((event: { description: string }) => event.description === 'Customer asked for a person').length, 1);
 });
 
 test('a customer hands off their newly generated automatic reply without another AI call', async () => {
@@ -183,7 +184,7 @@ test('customer replies stay in their own conversation and reopen an answered req
   assert.ok(refreshed.history.some((event: { description: string }) => event.description.startsWith('Automatic in-app reply: ')));
 });
 
-test('the original automatic reply survives agent reopening, questions and replacement replies', async () => {
+test('the original automatic reply survives agent reopening and agent replies', async () => {
   const cookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
   const read = async () => (await fetch(`${baseUrl}/tickets/5`, { headers: { cookie } })).json();
   const original = (await read()).approved_reply;
@@ -193,23 +194,25 @@ test('the original automatic reply survives agent reopening, questions and repla
     body: JSON.stringify({ action, reply, priority: 'normal' }),
   });
   assert.equal((await review('reopen')).status, 200);
-  assert.equal((await review('ask', 'Which device are you using?')).status, 200);
+  assert.equal((await review('reply', 'Which device are you using?')).status, 200);
   const send = await fetch(`${baseUrl}/tickets/5/messages`, {
     method: 'POST',
     headers: { cookie, 'content-type': 'application/json' },
     body: JSON.stringify({ message: 'An iPhone.' }),
   });
   assert.equal(send.status, 201);
-  const beforeApproval = await read();
-  const descriptions = beforeApproval.history.map((event: { description: string }) => event.description);
-  assert.ok(descriptions.indexOf(`Automatic in-app reply: ${original}`) < descriptions.indexOf('Team asked for details: Which device are you using?'));
-  assert.equal((await review('approve', 'Restart your phone and try the download again.')).status, 200);
-  const afterApproval = await read();
-  assert.equal(afterApproval.approved_reply, 'Restart your phone and try the download again.');
-  assert.ok(afterApproval.history.some((event: { description: string }) => event.description === `Automatic in-app reply: ${original}`));
+  const beforeReply = await read();
+  const descriptions = beforeReply.history.map((event: { description: string }) => event.description);
+  assert.ok(descriptions.indexOf(`Automatic in-app reply: ${original}`) < descriptions.indexOf('Agent replied: Which device are you using?'));
+  assert.ok(descriptions.indexOf('Agent replied: Which device are you using?') < descriptions.indexOf('Customer replied: An iPhone.'));
+  assert.equal((await review('reply', 'Restart your phone and try the download again.')).status, 200);
+  const afterReply = await read();
+  assert.equal(afterReply.approved_reply, original);
+  assert.equal(afterReply.history.at(-1).description, 'Agent replied: Restart your phone and try the download again.');
+  assert.equal(afterReply.history.filter((event: { description: string }) => event.description === `Automatic in-app reply: ${original}`).length, 1);
 
   const otherCookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
-  for (const action of ['reopen', 'approve']) {
+  for (const action of ['reopen', 'reply']) {
     assert.equal((await fetch(`${baseUrl}/tickets/5/review`, {
       method: 'POST',
       headers: { cookie: otherCookie, 'content-type': 'application/json' },
@@ -220,7 +223,7 @@ test('the original automatic reply survives agent reopening, questions and repla
   assert.ok(replaced.history.some((event: { description: string }) => event.description === `Automatic in-app reply: ${original}`));
 });
 
-test('simultaneous customer replies preserve one original answer and do not undo an agent rejection', async () => {
+test('simultaneous customer replies preserve one original answer and an agent reply sent meanwhile', async () => {
   const cookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
   const send = (id: number, message: string) => fetch(`${baseUrl}/tickets/${id}/messages`, {
     method: 'POST',
@@ -233,18 +236,20 @@ test('simultaneous customer replies preserve one original answer and do not undo
   assert.equal(answered.history.filter((event: { description: string }) => event.description.startsWith('Automatic in-app reply: ')).length, 1);
   assert.equal(answered.history.filter((event: { description: string }) => event.description.startsWith('Customer replied: ')).length, 2);
   assert.equal((await send(1, 'Initial details')).status, 201);
-  const [message, rejection] = await Promise.all([
+  const [message, agentReply] = await Promise.all([
     send(1, 'More details for the team'),
     fetch(`${baseUrl}/tickets/1/review`, {
       method: 'POST',
       headers: { cookie, 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'reject' }),
+      body: JSON.stringify({ action: 'reply', reply: 'Thanks, checking now.' }),
     }),
   ]);
   assert.equal(message.status, 201);
-  assert.equal(rejection.status, 200);
-  const rejected = await (await fetch(`${baseUrl}/tickets/1`, { headers: { cookie } })).json();
-  assert.equal(rejected.review_state, 'rejected');
+  assert.equal(agentReply.status, 200);
+  const both = await (await fetch(`${baseUrl}/tickets/1`, { headers: { cookie } })).json();
+  const descriptions = both.history.map((event: { description: string }) => event.description);
+  assert.ok(descriptions.includes('Customer replied: More details for the team'));
+  assert.ok(descriptions.includes('Agent replied: Thanks, checking now.'));
 });
 
 test(
@@ -519,16 +524,16 @@ test('expired visitor reviews and their events are removed from the demo inbox',
   const inbox = await fetch(`${baseUrl}/tickets`);
   const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
   const sessionId = cookie.split('=')[1];
-  const approval = await fetch(`${baseUrl}/tickets/1/review`, {
+  const sentReply = await fetch(`${baseUrl}/tickets/1/review`, {
     method: 'POST',
     headers: { cookie, 'content-type': 'application/json' },
     body: JSON.stringify({
-      action: 'approve',
+      action: 'reply',
       reply: 'Please resend the invitations.',
-      priority: 'normal',
     }),
   });
-  assert.equal(approval.status, 200);
+  assert.equal(sentReply.status, 200);
+  assert.equal((await sentReply.json()).review_state, 'saved');
   await pool.query(
     "UPDATE ticket_reviews SET created_at = '2020-01-01T00:00:00Z' WHERE session_id = $1",
     [sessionId],
@@ -628,9 +633,8 @@ test('reset restores fictional tickets without changing another visitor session'
       method: 'POST',
       headers: { cookie, 'content-type': 'application/json' },
       body: JSON.stringify({
-        action: 'approve',
+        action: 'reply',
         reply: 'Please resend the invitations.',
-        priority: 'normal',
       }),
     });
   assert.equal((await review(firstCookie)).status, 200);
@@ -664,7 +668,8 @@ test('reset restores fictional tickets without changing another visitor session'
   const other = await (
     await fetch(`${baseUrl}/tickets/1`, { headers: { cookie: secondCookie } })
   ).json();
-  assert.equal(other.status, 'resolved');
+  assert.equal(other.status, 'open');
+  assert.equal(other.review_state, 'saved');
   assert.equal(other.history.length, 3);
   assert.equal(
     (

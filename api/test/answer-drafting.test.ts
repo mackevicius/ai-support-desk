@@ -652,20 +652,6 @@ test('an owner generates a cited draft through Python without approving it', asy
           })
         ).json();
         assert.equal(signedOut.draft.reply, ticket.draft.reply);
-        assert.equal(
-          (
-            await fetch(`${baseUrl}/tickets/${id}/review`, {
-              method: 'POST',
-              headers: { cookie, 'content-type': 'application/json' },
-              body: JSON.stringify({
-                action: 'approve',
-                reply: ticket.draft.reply,
-                priority: 'invalid',
-              }),
-            })
-          ).status,
-          400,
-        );
         const prioritized = await fetch(`${baseUrl}/tickets/${id}/review`, {
           method: 'POST',
           headers,
@@ -677,26 +663,13 @@ test('an owner generates a cited draft through Python without approving it', asy
         assert.equal(priorityOnly.priority, 'high');
         assert.equal(priorityOnly.approved_reply, null);
         assert.equal(priorityOnly.draft.state, 'saved');
-        const approved = await fetch(`${baseUrl}/tickets/${id}/review`, {
+        const replied = await fetch(`${baseUrl}/tickets/${id}/review`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({
-            action: 'approve',
-            reply: ticket.draft.reply,
-            priority: 'high',
-          }),
+          body: JSON.stringify({ action: 'reply', reply: ticket.draft.reply }),
         });
-        assert.equal(approved.status, 200);
-        assert.equal((await approved.json()).status, 'resolved');
-        assert.equal(
-          (
-            await fetch(`${baseUrl}/tickets/${id}/generate`, {
-              method: 'POST',
-              headers,
-            })
-          ).status,
-          409,
-        );
+        assert.equal(replied.status, 200);
+        assert.equal((await replied.json()).status, 'open');
         assert.equal(calls.length, 2);
         await pool.query(
           'UPDATE generation_usage SET requests = 200 WHERE day = $1',
@@ -727,7 +700,19 @@ test('an owner generates a cited draft through Python without approving it', asy
           headers: { cookie, 'content-type': 'application/json' },
           body: JSON.stringify({ question: 'How do I listen offline?' }),
         });
-        assert.equal((await covered.json()).decision.kind, 'automatic_reply');
+        const coveredTicket = await covered.json();
+        assert.equal(coveredTicket.decision.kind, 'automatic_reply');
+        const callsBeforeResolved = calls.length;
+        assert.equal(
+          (
+            await fetch(`${baseUrl}/tickets/${coveredTicket.id}/generate`, {
+              method: 'POST',
+              headers,
+            })
+          ).status,
+          409,
+        );
+        assert.equal(calls.length, callsBeforeResolved);
         providerStatus = 429;
         const paused = await fetch(`${baseUrl}/tickets`, {
           method: 'POST',

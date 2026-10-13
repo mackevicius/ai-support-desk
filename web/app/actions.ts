@@ -254,7 +254,7 @@ async function performReview(formData: FormData): Promise<DraftReviewState> {
     typeof id !== 'string' ||
     !/^\d+$/.test(id) ||
     typeof action !== 'string' ||
-    !['approve', 'reject', 'reopen', 'priority', 'ask'].includes(action) ||
+    !['reply', 'reopen', 'priority'].includes(action) ||
     !sessionId
   ) {
     throw new Error('Invalid review request');
@@ -269,14 +269,5 @@ async function performReview(formData: FormData): Promise<DraftReviewState> {
     formData.get('internal_confirmed')?.toString(),
   );
   if (copies) return { reply: formData.get('reply')?.toString() ?? '', copies };
-  if (
-    action === 'approve' &&
-    (await cookies()).get('demo_seat')?.value === 'agent'
-  ) {
-    const next = (await getTickets(sessionId)).find(
-      (ticket) => ticket.status === 'open',
-    );
-    redirect(next ? `/tickets/${next.id}` : '/');
-  }
   redirect(`/tickets/${id}`);
 }

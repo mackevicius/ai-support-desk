@@ -5,7 +5,7 @@ export type TicketSummary = {
   status: string;
   priority: string;
   created_at: string;
-  review_state?: 'saved' | 'approved' | 'rejected' | 'reopened' | null;
+  review_state?: 'saved' | 'reopened' | null;
 };
 
 export function agentHomeTicket(tickets: TicketSummary[]) {
@@ -83,10 +83,10 @@ export type Ticket = TicketSummary & {
   live_ai?: { remaining: number; paused: boolean };
   question: string;
   approved_reply: string | null;
-  review_state: 'saved' | 'approved' | 'rejected' | 'reopened' | null;
+  review_state: 'saved' | 'reopened' | null;
   draft: null | {
     live?: boolean;
-    state: 'saved' | 'approved' | 'rejected' | 'reopened';
+    state: 'saved' | 'reopened';
     reply: string;
     suggested_priority: 'low' | 'normal' | 'high';
     sources: { id: number; title: string; body: string; kind?: string }[];

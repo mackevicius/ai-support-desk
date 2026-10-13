@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { Button } from '../../components/ui/button';
 
@@ -30,57 +29,26 @@ export function SubmitButton({
   );
 }
 
-export function ReviewButtons({
-  showReject,
-  showAsk = false,
+export function SendButton({
+  hasInternalCopies,
+  empty,
 }: {
-  showReject: boolean;
-  showAsk?: boolean;
+  hasInternalCopies: boolean;
+  empty: boolean;
 }) {
   const { pending } = useFormStatus();
-  const [active, setActive] = useState<'approve' | 'reject' | 'ask'>('approve');
 
   return (
     <div className="review-actions">
-      <input type="hidden" name="action" value={active} />
+      <input type="hidden" name="action" value="reply" />
       <Button
         type="submit"
         className="bg-foreground text-background hover:bg-foreground/90"
-        onClick={() => setActive('approve')}
-        disabled={pending}
-        aria-busy={pending && active === 'approve'}
+        disabled={pending || empty}
+        aria-busy={pending}
       >
-        {pending && active === 'approve'
-          ? 'Approving reply...'
-          : 'Approve in-app reply'}
+        {pending ? 'Sending...' : hasInternalCopies ? 'Send anyway' : 'Send'}
       </Button>
-      {showAsk && (
-        <Button
-          type="submit"
-          variant="secondary"
-          onClick={() => setActive('ask')}
-          disabled={pending}
-          aria-busy={pending && active === 'ask'}
-        >
-          {pending && active === 'ask'
-            ? 'Sending question...'
-            : 'Ask for details'}
-        </Button>
-      )}
-      {showReject && (
-        <Button
-          type="submit"
-          formNoValidate
-          variant="secondary"
-          onClick={() => setActive('reject')}
-          disabled={pending}
-          aria-busy={pending && active === 'reject'}
-        >
-          {pending && active === 'reject'
-            ? 'Rejecting suggestion...'
-            : 'Reject suggestion'}
-        </Button>
-      )}
     </div>
   );
 }

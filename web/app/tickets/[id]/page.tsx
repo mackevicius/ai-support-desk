@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { generateRequest, reviewRequest } from '../../actions';
 import { getConversation } from '../../data';
-import { ReviewButtons, SubmitButton } from '../../_components/submit-button';
+import { SubmitButton } from '../../_components/submit-button';
 import { ReplyForm } from '../../_components/reply-editor';
 import { SupportChat } from '../../_components/support-chat';
 import { Queue } from '../../queue';
@@ -52,6 +52,13 @@ export default async function TicketPage({
   const next = [...queue.slice(position + 1), ...queue.slice(0, position)].find(
     (item) => item.id !== ticket.id && item.status === 'open',
   );
+  const draftAnswered =
+    ticket.history.findLastIndex((event) =>
+      event.description.startsWith('Agent replied: '),
+    ) >
+    ticket.history.findLastIndex(
+      (event) => event.description === 'Agent requested a new answer draft',
+    );
 
   return (
     <main className="workspace focus-view agent-workspace">
@@ -68,7 +75,6 @@ export default async function TicketPage({
           <ConversationUpdates
             history={ticket.history}
             agent
-            automatic={ticket.decision?.kind === 'automatic_reply'}
             reply={ticket.approved_reply}
           />
         </section>
@@ -92,46 +98,28 @@ export default async function TicketPage({
           )}
           {ticket.draft && (
             <section className="draft" aria-label="Answer draft">
-              {ticket.status !== 'resolved' &&
-                ['saved', 'rejected', 'reopened'].includes(
-                  ticket.draft.state,
-                ) && (
-                  <div className="review-controls">
-                    <ReplyForm
-                      key={`${ticket.draft.reply}-${ticket.history.length}`}
-                      ticketId={String(ticket.id)}
-                      initialCopies={ticket.draft.internal_copies ?? []}
-                      defaultValue={
-                        ticket.draft.state === 'saved' ||
-                        (ticket.draft.live && ticket.draft.state === 'reopened')
-                          ? ticket.draft.reply
-                          : ticket.draft.state === 'reopened'
-                            ? (ticket.approved_reply ?? '')
-                            : ''
-                      }
+              {ticket.status !== 'resolved' && (
+                <div className="review-controls">
+                  <ReplyForm
+                    key={`${ticket.draft.reply}-${ticket.history.length}`}
+                    ticketId={String(ticket.id)}
+                    initialCopies={
+                      draftAnswered ? [] : (ticket.draft.internal_copies ?? [])
+                    }
+                    defaultValue={draftAnswered ? '' : ticket.draft.reply}
+                  >
+                    <label htmlFor="priority">Priority</label>
+                    <select
+                      id="priority"
+                      name="priority"
+                      defaultValue={ticket.draft.suggested_priority}
                     >
-                      <label htmlFor="priority">Priority</label>
-                      <select
-                        id="priority"
-                        name="priority"
-                        defaultValue={ticket.draft.suggested_priority}
-                      >
-                        <option value="low">Low</option>
-                        <option value="normal">Normal</option>
-                        <option value="high">High</option>
-                      </select>
-                      <ReviewButtons
-                        showReject={ticket.draft.state === 'saved'}
-                        showAsk={ticket.status === 'open'}
-                      />
-                    </ReplyForm>
-                  </div>
-                )}
-              {ticket.draft.state === 'rejected' && (
-                <p>
-                  Suggestion rejected. No reply was delivered. Write your own
-                  reply to resolve the request.
-                </p>
+                      <option value="low">Low</option>
+                      <option value="normal">Normal</option>
+                      <option value="high">High</option>
+                    </select>
+                  </ReplyForm>
+                </div>
               )}
               {ticket.status === 'resolved' && (
                 <form action={reviewRequest}>
@@ -175,10 +163,6 @@ export default async function TicketPage({
                   <option value="normal">Normal</option>
                   <option value="high">High</option>
                 </select>
-                <ReviewButtons
-                  showReject={false}
-                  showAsk={ticket.status === 'open'}
-                />
               </ReplyForm>
             </section>
           )}

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createServer } from 'node:http';
 import { createApp } from '../src/app.js';
-import { close, listening, startInbox, withEnv } from './helpers.js';
+import { close, listening, readJson, sendJson, startInbox, withEnv, withProvider } from './helpers.js';
 import { getConversation } from '../../web/app/data.js';
 
 const { pool, baseUrl } = await startInbox();
@@ -125,41 +125,52 @@ test('a visitor can inspect a request and its history', async () => {
 });
 
 test('the inbox sorts reviewed tickets after open tickets and filters by status', async () => {
-  const cookie = (await fetch(`${baseUrl}/tickets`)).headers
-    .get('set-cookie')!
-    .split(';')[0];
-  const approval = await fetch(`${baseUrl}/tickets/1/review`, {
-    method: 'POST',
-    headers: { cookie, 'content-type': 'application/json' },
-    body: JSON.stringify({
-      action: 'approve',
-      reply: 'Please resend the invitation.',
-      priority: 'normal',
-    }),
-  });
-  assert.equal(approval.status, 200);
+  const submitted = await withProvider(
+    async (request, response) => {
+      const input = await readJson(request);
+      const article = input.articles.find(
+        (item: { title: string }) => item.title === 'Offline downloads',
+      );
+      sendJson(response, {
+        reply: 'Open a playlist and tap Download.',
+        suggested_priority: 'normal',
+        source_ids: [article.id],
+        clearly_covered: true,
+        requires_team: false,
+      });
+    },
+    () =>
+      fetch(`${baseUrl}/tickets`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ question: 'How do I download music?' }),
+      }),
+  );
+  const cookie = submitted.headers.get('set-cookie')!.split(';')[0];
+  const { id, status } = await submitted.json();
+  assert.equal(status, 'resolved');
   const tickets = await (
     await fetch(`${baseUrl}/tickets`, { headers: { cookie } })
   ).json();
   assert.deepEqual(
     tickets.map((ticket: { id: number }) => ticket.id),
-    [2, 3, 4, 1, 5],
+    [1, 2, 3, 4, id, 5],
   );
   const open = await (
     await fetch(`${baseUrl}/tickets?status=open`, { headers: { cookie } })
   ).json();
   assert.deepEqual(
     open.map((ticket: { id: number }) => ticket.id),
-    [2, 3, 4],
+    [1, 2, 3, 4],
   );
   const resolved = await (
     await fetch(`${baseUrl}/tickets?status=resolved`, { headers: { cookie } })
   ).json();
   assert.deepEqual(
     resolved.map((ticket: { id: number }) => ticket.id),
-    [1, 5],
+    [id, 5],
   );
-  const reopened = await fetch(`${baseUrl}/tickets/5/review`, {
+  const reopened = await fetch(`${baseUrl}/tickets/${id}/review`, {
     method: 'POST',
     headers: { cookie, 'content-type': 'application/json' },
     body: JSON.stringify({ action: 'reopen' }),
@@ -170,6 +181,6 @@ test('the inbox sorts reviewed tickets after open tickets and filters by status'
   ).json();
   assert.deepEqual(
     reordered.map((ticket: { id: number }) => ticket.id),
-    [2, 3, 4, 5, 1],
+    [id, 1, 2, 3, 4, 5],
   );
 });

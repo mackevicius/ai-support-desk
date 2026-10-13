@@ -13,7 +13,7 @@ export default function HowItWorks() {
             <li><strong>The customer asks.</strong> They send a question about Tunely.</li>
             <li><strong>The AI finds relevant help articles.</strong> It looks for information that covers the question.</li>
             <li><strong>It replies or hands off.</strong> A clear answer from help articles can become an automatic reply. Otherwise, the question goes to a support agent.</li>
-            <li><strong>A support agent reviews.</strong> The agent edits the draft, asks for details, or approves a reply.</li>
+            <li><strong>A support agent replies.</strong> The agent sends the draft as-is, edits it, or writes their own reply.</li>
           </ol>
         </section>
         <Separator />

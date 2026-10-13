@@ -27,7 +27,7 @@ _Avoid_: Ticket (when it could mean a GitHub issue)
 A person using Tunely's app who submits a support ticket.
 
 **Support agent**:
-A Tunely staff member who works handed-off support tickets: editing answer drafts, asking the customer for details, filling knowledge gaps, and delivering approved replies.
+A Tunely staff member who works handed-off support tickets: sending agent replies and filling knowledge gaps. A support agent never closes a support ticket.
 _Avoid_: Operator, admin
 
 **Visitor**:
@@ -39,10 +39,18 @@ The author of the demo, who alone can change internal notes and run live evaluat
 _Avoid_: Admin
 
 **Answer draft**:
-An AI-suggested response to a support ticket, with references to the knowledge base documents it relied on. It has not been approved for delivery.
+An AI-suggested response to a support ticket, with references to the knowledge base documents it relied on. It has not been sent.
 
-**Approved reply**:
-An answer draft reviewed and accepted by a support agent for delivery to the customer.
+**Agent reply**:
+A message a support agent sends to the customer: the answer draft as-is, an edited version of it, or their own text. Answering and asking for details are the same act.
+_Avoid_: Approved reply
+
+**Waiting on customer**:
+A support ticket where Tunely has replied and the next move is the customer's.
+
+**Solved**:
+A support ticket the customer has marked as fixed. Only the customer can mark a support ticket solved. A solved ticket is final; the customer starts a new one for anything else.
+_Avoid_: Resolved, Closed (for this meaning)
 
 **Automatic reply**:
 An answer draft delivered to the customer without review, because a help article clearly covers the question and the ticket is not risky.
