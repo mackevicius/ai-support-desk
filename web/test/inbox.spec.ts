@@ -392,6 +392,55 @@ test('visitors inspect saved quality results and known failures without signing 
   }
 });
 
+test('How it works starts with the customer story before technical details', async ({
+  page,
+}) => {
+  await page.goto('/how-it-works');
+  const content = page.getByRole('article');
+  await expect(content.getByRole('heading', { level: 2 })).toHaveText([
+    'From question to reply',
+    'When a person steps in',
+    'Architecture',
+    'Deployment',
+    'Evidence and decisions',
+  ]);
+  const story = content.getByRole('region', { name: 'From question to reply' });
+  await expect(story.getByRole('listitem')).toHaveText([
+    /The customer asks.*question/s,
+    /The AI finds relevant help articles/s,
+    /It replies or hands off.*automatic reply.*support agent/s,
+    /A support agent reviews.*edits.*asks for details.*approves/s,
+  ]);
+  const handOff = content.getByRole('region', {
+    name: 'When a person steps in',
+  });
+  await expect(handOff).toContainText(
+    /refunds.*double charges.*hacked or locked accounts.*fraud/s,
+  );
+  await expect(handOff).toContainText(
+    'Cancelling a plan, updating a card, and changing a password',
+  );
+  await expect(handOff).toContainText(
+    'After an automatic reply, the customer can ask for a person',
+  );
+  await expect(content.getByRole('link', { name: 'Back to inbox' })).toHaveCount(0);
+  for (const viewport of [
+    { width: 1440, height: 1000 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: `test-results/how-it-works-${viewport.width}.png`,
+      fullPage: true,
+    });
+  }
+});
+
 test('an agent fills the saved knowledge gap with a private help article and redrafts with its citation', async ({
   page,
   browser,
