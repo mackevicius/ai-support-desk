@@ -8,7 +8,7 @@ I want a deployable portfolio product that demonstrates full-stack ownership and
 
 Build the service desk of Tunely, a fictional music streaming company. Visitors land on Tunely's homepage, where it is obvious what Tunely is and what problems a customer might have. Each visitor gets a private copy of the demo and switches between two seats: customer and support agent.
 
-As a customer, the visitor submits a problem and the AI drafts an answer from Tunely's knowledge base of help articles and internal notes. When a help article clearly covers the question and the ticket is not risky, the customer gets an automatic reply. Otherwise the ticket is handed off. As a support agent, the visitor sees why the AI decided what it did, edits the draft, asks for details, or fills a knowledge gap by writing a help article, then delivers an approved reply. A public quality page shows measured results, including where the AI fails.
+As a customer, the visitor submits a problem and the AI drafts an answer from Tunely's knowledge base of help articles and internal notes. When a help article clearly covers the question and the ticket is not risky, the customer gets an automatic reply. Otherwise the ticket is handed off. As a support agent, the visitor sees why the AI decided what it did, fills a knowledge gap by writing a help article if needed, and sends an agent reply: the answer draft as-is, an edited version, or their own text. A public quality page shows measured results, including where the AI fails.
 
 ## User Stories
 
@@ -28,13 +28,13 @@ As a customer, the visitor submits a problem and the AI drafts an answer from Tu
 14. As a support agent, I want the inbox to hold handed-off tickets, filterable by status, so I can find work that needs me.
 15. As a support agent, I want to see why the AI replied or handed off, and which help articles and internal notes it used, so I can check its judgment.
 16. As a support agent, I want to read a ticket's history so I can understand what has happened.
-17. As a support agent, I want to edit or reject an answer draft, or ask the customer for details, so I remain responsible for the outcome.
+17. As a support agent, I want to send the answer draft as-is, edit it, or write my own reply, so I remain responsible for the outcome.
 18. As a support agent, I want a warning when a draft copies text from an internal note so I do not leak it to the customer.
 19. As a support agent, I want to write a help article for a knowledge gap and redraft so the answer can cite it.
 20. As a support agent, I want a suggested priority so I can assess urgency.
-21. As a support agent, I want to approve a reply and deliver it inside the app so the customer sees it.
+21. As a support agent, I want to send a reply inside the app with one button so the customer sees it, whether I am answering or asking for details.
 22. As a support agent, I want to reopen a ticket so a premature resolution can be corrected.
-23. As a support agent, I want to move to the next ticket after resolving one so I can keep working without returning to the queue.
+23. As a support agent, I want to move to the next open ticket so I can keep working without returning to the queue.
 24. As the owner, I want to sign in to change internal notes and run live evaluations so visitors cannot.
 25. As the owner, I want per-visitor and daily limits on live AI, plus logs, so the deployed demo cannot exceed a small, known cost.
 26. As the owner, I want the AI to ignore instructions in customer text, visitor-written help articles, and retrieved documents so untrusted text cannot control the workflow.
@@ -54,7 +54,7 @@ As a customer, the visitor submits a problem and the AI drafts an answer from Tu
 - Conversation links show an accessible loading state immediately. The conversation, list, and daily allowance are fetched concurrently. Keyboard use and the 390px phone layout remain supported.
 - A thin strip on every page reads "Portfolio demo · How it works" and links to one page describing the architecture and the quality results.
 - A top-bar switch, "Viewing as: Customer | Agent", changes seats. After a customer submits a ticket that is handed off, the chat suggests switching to the agent seat.
-- The agent view has three columns: the inbox as a conversation list, the selected ticket as a chat thread with the editable answer draft in the reply box, and a numbered "How the AI decided" trail (topic and priority, documents found, rule applied, decision). After resolution the agent moves directly to the next ticket.
+- The agent view has three columns: the inbox as a conversation list, the selected ticket as a chat thread with the editable answer draft in the reply box, and a numbered "How the AI decided" trail (topic and priority, documents found, rule applied, decision). The reply box is prefilled with the answer draft (empty if there is none, or once it has been sent) and has one **Send** button; sending leaves the ticket waiting on the customer. A "Next request" link moves to the next open ticket.
 - Styling uses Tailwind CSS with shadcn/ui components; Tunely's colours and fonts are defined once as theme tokens. The HTML prototype is a visual reference only and is rewritten as React components, not copied.
 
 ### Services
@@ -77,11 +77,11 @@ As a customer, the visitor submits a problem and the AI drafts an answer from Tu
 - An automatic reply is delivered only when a help article clearly supports the draft, the ticket is not risky, and the draft relies on no internal note. Everything else is handed off. See [ADR 0001](adr/0001-automatic-replies-with-hand-off.md).
 - On hand-off, the customer immediately sees "A Tunely team member will reply soon" and the status "With our team".
 - Every ticket shows a "Why" box in plain words: the decision, the reason, and the documents used, each labelled Help or Internal. The customer side links to it as "How was this answered?".
-- Before a support agent approves a draft, code checks it for long phrases copied from internal notes and warns the agent if it finds any.
+- Before a support agent's reply is sent, code checks it for long phrases copied from internal notes. The copied text is highlighted and the button reads **Send anyway**; the API refuses copied text the agent was not shown.
 - Answers lacking adequate support request clarification or hand off rather than invent facts.
 - AI output cannot deliver a handed-off reply or change priority without a human action.
 - Replies are delivered and tracked inside the application. No real email is sent.
-- Customers can reply within any conversation. Follow-ups are private to the visitor, appear in the customer and agent threads in history order, and reopen answered requests for the team without generating another AI answer. Previous automatic and approved replies remain visible, and failed sends keep the customer's text for retrying.
+- Customers can reply within any conversation. Follow-ups are private to the visitor, appear in the customer and agent threads in history order, and reopen answered requests for the team without generating another AI answer. Previous automatic replies and agent replies remain visible, and failed sends keep the customer's text for retrying.
 
 ### Visitors, roles, and cost
 
@@ -103,8 +103,8 @@ As a customer, the visitor submits a problem and the AI drafts an answer from Tu
 ## Testing Decisions
 
 - Test observable behavior rather than prompt wording or private implementation details.
-- End-to-end tests cover three paths: a covered question gets an automatic reply on the customer side; a risky ticket is handed off, edited, approved, and appears on the customer side with the right status and history; a knowledge gap is filled with a new help article and the redraft cites it.
-- API tests cover demo isolation, per-visitor and daily limits, the paused state when the provider refuses, hand-off rules overriding the AI, agent-only help article writes, owner-only internal notes and live evaluation, and rejection of unapproved actions.
+- End-to-end tests cover three paths: a covered question gets an automatic reply on the customer side; a risky ticket is handed off, the agent edits and sends a reply, and it appears on the customer side with the right status and history; a knowledge gap is filled with a new help article and the redraft cites it.
+- API tests cover demo isolation, per-visitor and daily limits, the paused state when the provider refuses, hand-off rules overriding the AI, agent-only help article writes, owner-only internal notes and live evaluation, and rejection of review actions that are not allowed.
 - Python evaluation cases cover expected sources, unsupported claims, priority, hand-off decisions, internal-note leak attempts, prompt injection (including visitor-written help articles), and word matching versus embeddings retrieval.
 - Deterministic tests use saved responses or fakes and run in CI without paid calls. A separate, explicitly invoked live evaluation measures the actual provider and records model, dataset version, outcomes, latency, and cost.
 - Document known failures alongside results; a public sample draft must be clearly labeled as saved output.
