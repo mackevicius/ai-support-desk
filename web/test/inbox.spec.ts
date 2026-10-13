@@ -1202,6 +1202,12 @@ test('customers reply in the same conversation and the team sees their messages'
   await page.goto('/tickets/1');
   const chat = page.getByRole('region', { name: 'Support chat' });
   const input = chat.getByRole('textbox', { name: 'Reply to Tunely' });
+  const box = (await chat.locator('.customer-composer .reply-row').boundingBox())!;
+  const send = (await chat
+    .getByRole('button', { name: 'Send', exact: true })
+    .boundingBox())!;
+  expect(send.x + send.width).toBeLessThanOrEqual(box.x + box.width);
+  expect(send.y + send.height).toBeLessThanOrEqual(box.y + box.height);
   await input.fill(' ');
   await chat.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(chat.getByRole('alert')).toHaveText(

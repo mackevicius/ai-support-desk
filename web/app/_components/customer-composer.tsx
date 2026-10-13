@@ -16,19 +16,21 @@ export function CustomerComposer({ ticketId }: { ticketId: number }) {
     <form action={action} className="customer-composer">
       <input type="hidden" name="id" value={ticketId} />
       <label htmlFor="customer-message" className="sr-only">Reply to Tunely</label>
-      <Textarea
-        id="customer-message"
-        name="message"
-        required
-        maxLength={5000}
-        rows={2}
-        value={message}
-        onChange={(event) => setMessage(event.target.value)}
-        readOnly={pending}
-        placeholder="Reply to Tunely..."
-        aria-describedby={error ? 'customer-message-error' : undefined}
-      />
-      <SubmitButton label="Send" pendingLabel="Sending..." />
+      <div className="reply-row">
+        <Textarea
+          id="customer-message"
+          name="message"
+          required
+          maxLength={5000}
+          rows={2}
+          value={message}
+          onChange={(event) => setMessage(event.target.value)}
+          readOnly={pending}
+          placeholder="Reply to Tunely..."
+          aria-describedby={error ? 'customer-message-error' : undefined}
+        />
+        <SubmitButton label="Send" pendingLabel="Sending..." />
+      </div>
       {error && <p id="customer-message-error" role="alert">{error}</p>}
     </form>
   );
