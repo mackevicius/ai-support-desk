@@ -7,14 +7,15 @@ import { SubmitButton } from './submit-button';
 export function CustomerSolve({ ticketId }: { ticketId: number }) {
   const [error, action] = useActionState(markConversationSolved, null);
   return (
-    <form action={action}>
+    <form action={action} className="solve-prompt">
       <input type="hidden" name="id" value={ticketId} />
-      <SubmitButton
-        label="Solved"
-        pendingLabel="Solving..."
-        className="min-w-28"
-      />
-      {error && <p role="alert" className="mt-2 text-sm">{error}</p>}
+      <span>Did this fix it?</span>
+      <SubmitButton label="Solved" pendingLabel="Solving..." />
+      {error && (
+        <p role="alert" className="basis-full text-sm">
+          {error}
+        </p>
+      )}
     </form>
   );
 }
@@ -30,7 +31,11 @@ export function CustomerHandOff({ ticketId }: { ticketId: number }) {
         variant="secondary"
         className="h-auto min-h-9 whitespace-normal text-left"
       />
-      {error && <p role="alert" className="mt-2 text-sm">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-2 text-sm">
+          {error}
+        </p>
+      )}
     </form>
   );
 }

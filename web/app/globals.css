@@ -301,7 +301,7 @@
   @apply mt-auto pt-3;
 }
 .conversations > form button {
-  @apply w-full;
+  @apply w-full border border-[#d9c7b3] bg-white font-bold hover:border-[#c4a88a] hover:bg-[#e4d3c0];
 }
 .conversations nav > p {
   @apply mt-1 block text-xs text-muted-foreground;
@@ -344,6 +344,12 @@
 }
 .conversation-messages [data-from='system'] button {
   @apply h-auto border-0 bg-transparent p-0 text-[13px] font-extrabold text-link underline shadow-none whitespace-normal hover:bg-transparent;
+}
+.solve-prompt {
+  @apply flex flex-wrap items-center gap-2 text-sm text-muted-foreground;
+}
+.solve-prompt button {
+  @apply h-8 rounded-full border border-primary bg-white px-4 text-[13px] font-bold text-[#a4430a] hover:bg-[#fff1e6];
 }
 .chat-examples {
   @apply flex flex-wrap gap-1.5;

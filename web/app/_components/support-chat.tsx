@@ -237,9 +237,7 @@ export function SupportChat({
                 </ChatBubble>
               )}
               {ticket.status === 'waiting_on_customer' && (
-                <div className="mt-3 flex justify-end">
-                  <CustomerSolve ticketId={ticket.id} />
-                </div>
+                <CustomerSolve ticketId={ticket.id} />
               )}
             </div>
           ) : (
