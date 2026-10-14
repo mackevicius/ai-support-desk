@@ -1,7 +1,7 @@
 import { resetWorkspace, submitRequest } from '../actions';
 import type { Ticket, TicketSummary } from '../data';
-import { Textarea } from '../../components/ui/textarea';
 import { Input } from '../../components/ui/input';
+import { ChatTextarea } from './chat-textarea';
 import { SubmitButton } from './submit-button';
 import { AgentSeatButton } from './agent-seat-button';
 import { ChatBubble } from './chat-bubble';
@@ -270,7 +270,7 @@ export function SupportChat({
                 New support request
               </label>
               <div className="reply-row">
-                <Textarea
+                <ChatTextarea
                   id="question"
                   name="question"
                   required

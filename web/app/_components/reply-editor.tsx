@@ -3,8 +3,8 @@
 import { useActionState, useEffect, useState } from 'react';
 import { reviewCheckedRequest } from '../actions';
 import type { InternalCopy } from '../data';
-import { Textarea } from '../../components/ui/textarea';
 import { SendButton } from './submit-button';
+import { ChatTextarea } from './chat-textarea';
 
 export function ReplyForm({
   ticketId,
@@ -110,7 +110,7 @@ function ReplyEditor({
         </p>
       )}
       <div className="reply-row">
-        <Textarea
+        <ChatTextarea
           id="reply"
           name="reply"
           aria-label="Reply"
