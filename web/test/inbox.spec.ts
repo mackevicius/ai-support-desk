@@ -430,7 +430,9 @@ test('How it works starts with the customer story before technical details', asy
   await expect(handOff).toContainText(
     'After an automatic reply, the customer can ask for a person',
   );
-  await expect(content.getByRole('link', { name: 'Back to inbox' })).toHaveCount(0);
+  await expect(
+    content.getByRole('link', { name: 'Back to inbox' }),
+  ).toHaveCount(0);
   for (const viewport of [
     { width: 1440, height: 1000 },
     { width: 390, height: 844 },
@@ -643,7 +645,10 @@ test('agent home opens the shared inbox workspace and seat switches keep the sel
   await expect(
     inbox.getByRole('combobox', { name: 'Filter by status' }),
   ).toHaveCount(0);
-  const needsReply = inbox.getByRole('tab', { name: 'Needs reply', exact: true });
+  const needsReply = inbox.getByRole('tab', {
+    name: 'Needs reply',
+    exact: true,
+  });
   const allTab = inbox.getByRole('tab', { name: 'All', exact: true });
   await expect(needsReply).toHaveAttribute('aria-selected', 'true');
   await expect(allTab).toHaveAttribute('aria-selected', 'false');
@@ -855,7 +860,9 @@ test('an agent sends replies from one box and the customer is left to answer', a
     2,
   );
   await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
-  await expect(trail.getByText('Waiting on customer', { exact: true })).toBeVisible();
+  await expect(
+    trail.getByText('Waiting on customer', { exact: true }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
   await expect(
     page.getByRole('region', { name: 'Support chat' }),
@@ -873,9 +880,15 @@ test('an agent sends replies from one box and the customer is left to answer', a
     'Which dates were the two charges taken?',
   );
   await expect(replies.last()).toContainText('Our team checked the charges');
-  await expect(chat.getByText('Ticket history', { exact: true })).toHaveCount(0);
-  await expect(chat.getByRole('button', { name: 'Solved', exact: true })).toBeVisible();
-  await expect(chat.getByRole('textbox', { name: 'Reply to Tunely' })).toBeVisible();
+  await expect(chat.getByText('Ticket history', { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(
+    chat.getByRole('button', { name: 'Solved', exact: true }),
+  ).toBeVisible();
+  await expect(
+    chat.getByRole('textbox', { name: 'Reply to Tunely' }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
   await expect(
@@ -884,17 +897,23 @@ test('an agent sends replies from one box and the customer is left to answer', a
   await expect(page.getByRole('region', { name: 'Support chat' })).toHaveCount(
     0,
   );
-  const replyEntry = trail.locator('.history').getByText(
-    'Agent replied: Our team checked the charges and will contact you about the duplicate.',
-    { exact: true },
-  );
+  const replyEntry = trail
+    .locator('.history')
+    .getByText(
+      'Agent replied: Our team checked the charges and will contact you about the duplicate.',
+      { exact: true },
+    );
   await expect(replyEntry).toBeHidden();
   await openHistory(page);
   await expect(replyEntry).toBeVisible();
-  await expect(trail.locator('.history').getByText(
-    'Hand-off: A team member needs to check something that has gone wrong with your money or account security.',
-    { exact: true },
-  )).toHaveCount(2);
+  await expect(
+    trail
+      .locator('.history')
+      .getByText(
+        'Hand-off: A team member needs to check something that has gone wrong with your money or account security.',
+        { exact: true },
+      ),
+  ).toHaveCount(2);
 });
 
 test('a handed-off conversation shows its new redraft and suggested priority', async ({
@@ -910,11 +929,16 @@ test('a handed-off conversation shows its new redraft and suggested priority', a
   await expect(
     page
       .getByRole('region', { name: 'Support chat' })
-        .getByText('Waiting on customer', { exact: true }),
+      .getByText('Waiting on customer', { exact: true }),
   ).toBeVisible();
   const ticketPath = new URL(page.url()).pathname;
-      await page.getByRole('button', { name: /Talk to a person/ }).click();
-      await expect(page.getByRole('region', { name: 'Support chat' }).locator('header').getByText('With our team', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /Talk to a person/ }).click();
+  await expect(
+    page
+      .getByRole('region', { name: 'Support chat' })
+      .locator('header')
+      .getByText('With our team', { exact: true }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
   await expect(
@@ -987,7 +1011,9 @@ test('a customer gets a covered answer by keyboard and an example answer on a ph
     .getByRole('article', { name: 'Tunely reply' })
     .boundingBox();
   expect(customerBubble!.x).toBeGreaterThan(tunelyBubble!.x);
-  await expect(chat.getByText('Waiting on customer', { exact: true })).toBeVisible();
+  await expect(
+    chat.getByText('Waiting on customer', { exact: true }),
+  ).toBeVisible();
   await expect(
     chat
       .getByRole('article', { name: 'Tunely reply' })
@@ -1042,45 +1068,94 @@ test('a customer gets a covered answer by keyboard and an example answer on a ph
   });
 });
 
-test('only the customer marks a conversation solved and starts a new one', async ({ page }) => {
+test('only the customer marks a conversation solved and starts a new one', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/conversations/new');
-  await page.getByRole('textbox', { name: 'New support request' }).fill('How do I download music for offline listening?');
+  await page
+    .getByRole('textbox', { name: 'New support request' })
+    .fill('How do I download music for offline listening?');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
   const ticketPath = new URL(page.url()).pathname;
   const chat = page.getByRole('region', { name: 'Support chat' });
-  await expect(chat.locator('header').getByText('Waiting on customer', { exact: true })).toBeVisible();
-  await expect(chat.getByRole('button', { name: 'Solved', exact: true })).toBeVisible();
-  await expect(chat.getByRole('button', { name: /Talk to a person/ })).toBeVisible();
-  await expect(chat.getByText('Ticket history', { exact: true })).toHaveCount(0);
-  await page.screenshot({ path: 'test-results/customer-waiting-desktop.png', fullPage: true });
+  await expect(
+    chat.locator('header').getByText('Waiting on customer', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    chat.getByRole('button', { name: 'Solved', exact: true }),
+  ).toBeVisible();
+  await expect(
+    chat.getByRole('button', { name: /Talk to a person/ }),
+  ).toBeVisible();
+  await expect(chat.getByText('Ticket history', { exact: true })).toHaveCount(
+    0,
+  );
+  await page.screenshot({
+    path: 'test-results/customer-waiting-desktop.png',
+    fullPage: true,
+  });
   await page.setViewportSize({ width: 390, height: 844 });
   await chat.getByRole('button', { name: 'Solved', exact: true }).click();
-  await expect(chat.locator('header').getByText('Solved', { exact: true })).toBeVisible();
-  await expect(chat.getByRole('textbox', { name: 'Reply to Tunely' })).toHaveCount(0);
-  await expect(chat.getByRole('button', { name: /Talk to a person/ })).toHaveCount(0);
-  await expect(chat.getByRole('button', { name: 'Solved', exact: true })).toHaveCount(0);
-  await expect(chat.getByRole('link', { name: 'Start a new conversation', exact: true })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/customer-solved-phone.png', fullPage: true });
+  await expect(
+    chat.locator('header').getByText('Solved', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    chat.getByRole('textbox', { name: 'Reply to Tunely' }),
+  ).toHaveCount(0);
+  await expect(
+    chat.getByRole('button', { name: /Talk to a person/ }),
+  ).toHaveCount(0);
+  await expect(
+    chat.getByRole('button', { name: 'Solved', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    chat.getByRole('link', { name: 'Start a new conversation', exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: 'test-results/customer-solved-phone.png',
+    fullPage: true,
+  });
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.screenshot({ path: 'test-results/customer-solved-desktop.png', fullPage: true });
+  await page.screenshot({
+    path: 'test-results/customer-solved-desktop.png',
+    fullPage: true,
+  });
   await page.reload();
-  await expect(chat.locator('header').getByText('Solved', { exact: true })).toBeVisible();
+  await expect(
+    chat.locator('header').getByText('Solved', { exact: true }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
   const detail = page.getByRole('article', { name: 'Request detail' });
-  await expect(detail.getByRole('textbox', { name: 'Reply', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Reopen request' })).toHaveCount(0);
+  await expect(
+    detail.getByRole('textbox', { name: 'Reply', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Reopen request' }),
+  ).toHaveCount(0);
   const trail = page.getByRole('complementary', { name: 'How the AI decided' });
   await openHistory(page);
-  await expect(trail.getByText('Customer marked conversation solved', { exact: true })).toBeVisible();
+  await expect(
+    trail.getByText('Customer marked conversation solved', { exact: true }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
-  await expect(chat.getByRole('link', { name: 'Start a new conversation', exact: true })).toBeVisible();
-  await chat.getByRole('link', { name: 'Start a new conversation', exact: true }).click();
+  await expect(
+    chat.getByRole('link', { name: 'Start a new conversation', exact: true }),
+  ).toBeVisible();
+  await chat
+    .getByRole('link', { name: 'Start a new conversation', exact: true })
+    .click();
   await expect(page).toHaveURL(/\/conversations\/new$/);
-  await expect(chat.getByRole('textbox', { name: 'New support request' })).toBeVisible();
+  await expect(
+    chat.getByRole('textbox', { name: 'New support request' }),
+  ).toBeVisible();
 });
 
 test('conversation links immediately announce loading while the next screen is delayed', async ({
@@ -1143,13 +1218,17 @@ test('a customer asks for a person after an automatic reply and the agent answer
   ).toHaveCount(0);
 
   await page.goto('/conversations/new');
-  await page.getByRole('button', { name: 'Offline downloads', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Offline downloads', exact: true })
+    .click();
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
   const ticketPath = new URL(page.url()).pathname;
   const reply = chat.getByRole('article', { name: 'Tunely reply' });
   const handOff = reply.getByRole('button', { name: label, exact: true });
   await expect(handOff).toBeVisible();
-  await expect(chat.getByText('Waiting on customer', { exact: true })).toBeVisible();
+  await expect(
+    chat.getByText('Waiting on customer', { exact: true }),
+  ).toBeVisible();
   const originalReply = await reply.locator(':scope > div > p').innerText();
   await expect(
     page.getByRole('banner').getByText('4 live AI answers left today'),
@@ -1178,7 +1257,11 @@ test('a customer asks for a person after an automatic reply and the agent answer
     await expect(
       other.getByRole('button', { name: label, exact: true }),
     ).toHaveCount(0);
-    await expect(other.getByRole('region', { name: 'Support chat' }).getByText('Solved', { exact: true })).toBeVisible();
+    await expect(
+      other
+        .getByRole('region', { name: 'Support chat' })
+        .getByText('Solved', { exact: true }),
+    ).toBeVisible();
     await handOff.click();
     await expect(
       chat.getByText('With our team', { exact: true }),
@@ -1187,7 +1270,9 @@ test('a customer asks for a person after an automatic reply and the agent answer
       chat.getByRole('button', { name: label, exact: true }),
     ).toHaveCount(0);
     await expect(reply.locator(':scope > div > p')).toHaveText(originalReply);
-    await expect(chat.getByText('Ticket history', { exact: true })).toHaveCount(0);
+    await expect(chat.getByText('Ticket history', { exact: true })).toHaveCount(
+      0,
+    );
     await expect(
       page.getByRole('banner').getByText('4 live AI answers left today'),
     ).toBeVisible();
@@ -1238,20 +1323,22 @@ test('a customer asks for a person after an automatic reply and the agent answer
       chat.getByRole('button', { name: label, exact: true }),
     ).toHaveCount(0);
     await expect(reply.locator(':scope > div > p')).toHaveText(originalReply);
-    await expect(chat.getByRole('button', { name: 'Solved', exact: true })).toBeVisible();
+    await expect(
+      chat.getByRole('button', { name: 'Solved', exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByRole('banner').getByText('4 live AI answers left today'),
     ).toBeVisible();
 
     await other.reload();
     const otherChat = other.getByRole('region', { name: 'Support chat' });
-    await expect(
-      otherChat.getByText('Solved', { exact: true }),
-    ).toBeVisible();
+    await expect(otherChat.getByText('Solved', { exact: true })).toBeVisible();
     await expect(
       otherChat.getByRole('button', { name: label, exact: true }),
     ).toHaveCount(0);
-    await expect(otherChat.getByText('Ticket history', { exact: true })).toHaveCount(0);
+    await expect(
+      otherChat.getByText('Ticket history', { exact: true }),
+    ).toHaveCount(0);
     expect((await other.goto(ticketPath))?.status()).toBe(404);
   } finally {
     await other.close();
@@ -1266,7 +1353,9 @@ test('customers reply in the same conversation and the team sees their messages'
   await page.goto('/tickets/1');
   const chat = page.getByRole('region', { name: 'Support chat' });
   const input = chat.getByRole('textbox', { name: 'Reply to Tunely' });
-  const box = (await chat.locator('.customer-composer .reply-row').boundingBox())!;
+  const box = (await chat
+    .locator('.customer-composer .reply-row')
+    .boundingBox())!;
   const send = (await chat
     .getByRole('button', { name: 'Send', exact: true })
     .boundingBox())!;
@@ -1386,7 +1475,9 @@ test('new conversations stay beside the customer conversation list', async ({
   await chat.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page).toHaveURL(/\/tickets\/\d+$/);
   await expect(conversations.getByRole('link')).toHaveCount(6);
-  await expect(chat.getByText('Waiting on customer', { exact: true })).toBeVisible();
+  await expect(
+    chat.getByText('Waiting on customer', { exact: true }),
+  ).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -1623,7 +1714,9 @@ test('internal notes stay private while an agent checks, edits and sends a draft
   await expect(
     page.getByRole('button', { name: 'Send anyway', exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Send', exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Send', exact: true }),
+  ).toHaveCount(0);
   await expect(page.getByRole('checkbox')).toHaveCount(0);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.screenshot({
@@ -1831,7 +1924,9 @@ test('a visitor sends a saved draft, inspects a solved sample, and moves to the 
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   // Agent seat already lands here; re-clicking the link starts a navigation that swallows the next form action.
   await expect(page).toHaveURL(/\/tickets\/1$/);
-  await expect(page.getByText('Saved AI draft', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Saved AI draft', { exact: true })).toHaveCount(
+    0,
+  );
   await expect(
     page.getByRole('heading', { name: 'Family plan invitations' }),
   ).toBeVisible();
@@ -1866,10 +1961,10 @@ test('a visitor sends a saved draft, inspects a solved sample, and moves to the 
   await sendReply(page, '/tickets/1');
   await page.unroute('**/tickets/1');
   const trail = page.getByRole('complementary', { name: 'How the AI decided' });
-  await expect(trail.getByText('Waiting on customer', { exact: true })).toBeVisible();
   await expect(
-    trail.getByText('high priority', { exact: true }),
+    trail.getByText('Waiting on customer', { exact: true }),
   ).toBeVisible();
+  await expect(trail.getByText('high priority', { exact: true })).toBeVisible();
   await expect(
     page.getByRole('article', { name: 'Agent reply' }),
   ).toContainText('Please resend the invitations.');
@@ -1887,9 +1982,13 @@ test('a visitor sends a saved draft, inspects a solved sample, and moves to the 
   ).toBeVisible();
   await page.goto('/tickets/5');
   await expect(trail.getByText('Solved', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Reopen request' })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Reopen request' }),
+  ).toHaveCount(0);
   await expect(page.getByRole('textbox', { name: 'Reply' })).toHaveCount(0);
-  await expect(page.getByRole('article', { name: 'Agent reply' })).toHaveCount(0);
+  await expect(page.getByRole('article', { name: 'Agent reply' })).toHaveCount(
+    0,
+  );
   await expect(
     page
       .locator('.agent-messages')
@@ -2043,7 +2142,7 @@ test('a visitor resets only their own demo workspace', async ({
       page
         .getByRole('complementary', { name: 'How the AI decided' })
         .getByText('Open', { exact: true }),
-      ).toHaveText('Open');
+    ).toHaveText('Open');
     const removed = await page.goto(submittedUrl);
     expect(removed?.status()).toBe(404);
     await page.goto('/tickets/1');

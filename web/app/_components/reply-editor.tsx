@@ -97,7 +97,11 @@ function ReplyEditor({
           </strong>
           <p>{fragments}</p>
           {/* Only confirms the highlighted text; the API rejects any other reply. */}
-          <input type="hidden" name="internal_confirmed" value={checked.reply} />
+          <input
+            type="hidden"
+            name="internal_confirmed"
+            value={checked.reply}
+          />
         </div>
       )}
       {error && (

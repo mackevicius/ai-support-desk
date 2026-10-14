@@ -212,7 +212,9 @@ export default async function TicketPage({
                 'This sample draft is waiting for agent review.'}
             </p>
           </li>
-          {ticket.history.some((event) => event.description === 'Customer asked for a person') && (
+          {ticket.history.some(
+            (event) => event.description === 'Customer asked for a person',
+          ) && (
             <li>
               <h3>Handed off to a person</h3>
               <p>Customer asked for a person</p>
