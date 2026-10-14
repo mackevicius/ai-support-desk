@@ -6,6 +6,8 @@ const port = Number(process.env.PLAYWRIGHT_PORT ?? 3100);
 export default defineConfig({
   testDir: './test',
   testMatch: '*.spec.ts',
+  // All files share one demo server whose articles, quality runs and daily cap are global.
+  workers: 1,
   // Late tests take ~22s locally against next dev + pg-mem; CI runs ~1.7x slower.
   timeout: 90_000,
   use: {
@@ -13,6 +15,15 @@ export default defineConfig({
     browserName: 'chromium',
     trace: 'retain-on-failure',
   },
+  projects: [
+    { name: 'main', testIgnore: 'quality-live-run.spec.ts' },
+    {
+      // Replaces the fixture scores that quality.spec.ts asserts, so it runs last.
+      name: 'quality-live-run',
+      testMatch: 'quality-live-run.spec.ts',
+      dependencies: ['main'],
+    },
+  ],
   webServer: deploymentUrl
     ? undefined
     : [
