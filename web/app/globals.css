@@ -345,26 +345,11 @@
 .conversation-messages [data-from='system'] button {
   @apply h-auto border-0 bg-transparent p-0 text-[13px] font-extrabold text-link underline shadow-none whitespace-normal hover:bg-transparent;
 }
-.chat-welcome h3 {
-  @apply mb-5 text-xl font-bold;
-}
-.chat-request {
-  @apply grid gap-3;
-}
-.chat-request label {
-  @apply text-sm font-bold;
-}
-.chat-request button {
-  @apply justify-self-end;
-}
 .chat-examples {
-  @apply mt-6 grid grid-cols-1 gap-2 border-t border-border pt-5 sm:grid-cols-2;
-}
-.chat-empty {
-  @apply gap-0;
+  @apply flex flex-wrap gap-1.5;
 }
 .chat-examples button {
-  @apply h-full min-h-12 w-full justify-start whitespace-normal text-left;
+  @apply h-auto min-h-8 rounded-full border border-primary bg-white px-3 py-1.5 text-left text-[13px] text-[#a4430a] whitespace-normal hover:bg-[#fff1e6];
 }
 .support-steps {
   @apply min-[901px]:col-span-2;

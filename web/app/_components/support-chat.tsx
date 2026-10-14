@@ -42,7 +42,8 @@ function ConversationTime({ value }: { value: string }) {
         hour: '2-digit',
         minute: '2-digit',
         timeZone: 'UTC',
-      })} UTC
+      })}{' '}
+      UTC
     </time>
   );
 }
@@ -67,9 +68,7 @@ export function SupportChat({
       >
         <header>
           <h2>Tunely Support</h2>
-          <p>
-            AI assistant · a person steps in when it matters
-          </p>
+          <p>AI assistant · a person steps in when it matters</p>
         </header>
         <div className="home-chat-messages">
           <ChatBubble from="tunely">
@@ -174,48 +173,56 @@ export function SupportChat({
               <ChatBubble from="customer" own aria-label="Your message">
                 {ticket.question}
               </ChatBubble>
-              <ConversationUpdates history={ticket.history} reply={
-              <ChatBubble
-                from="tunely"
-                label="Tunely"
-                aria-label="Tunely reply"
-              >
-                <p>
-                  {ticket.approved_reply ??
-                    'A Tunely team member will reply soon'}
-                </p>
-                {ticket.can_request_hand_off && (
-                  <CustomerHandOff ticketId={ticket.id} />
-                )}
-                {ticket.decision && (
-                  <details className="answer-explanation">
-                    <summary>How was this answered?</summary>
-                    <p className="font-bold">
-                      {ticket.decision.kind === 'automatic_reply'
-                        ? 'Automatic reply'
-                        : 'Hand-off'}
+              <ConversationUpdates
+                history={ticket.history}
+                reply={
+                  <ChatBubble
+                    from="tunely"
+                    label="Tunely"
+                    aria-label="Tunely reply"
+                  >
+                    <p>
+                      {ticket.approved_reply ??
+                        'A Tunely team member will reply soon'}
                     </p>
-                    <p>{ticket.decision.reason}</p>
-                    {!!ticket.decision.internal_count && (
-                      <p>
-                        {ticket.decision.internal_count} internal document
-                        {ticket.decision.internal_count === 1 ? '' : 's'} used.
-                      </p>
+                    {ticket.can_request_hand_off && (
+                      <CustomerHandOff ticketId={ticket.id} />
                     )}
-                    {ticket.decision.sources.map((source) => (
-                      <article key={source.id}>
-                        <span className="text-xs font-bold">Help article</span>
-                        <h3>{source.title}</h3>
-                        <p>{source.body}</p>
-                      </article>
-                    ))}
-                    {!ticket.decision.sources.length && (
-                      <p>No help articles were used.</p>
+                    {ticket.decision && (
+                      <details className="answer-explanation">
+                        <summary>How was this answered?</summary>
+                        <p className="font-bold">
+                          {ticket.decision.kind === 'automatic_reply'
+                            ? 'Automatic reply'
+                            : 'Hand-off'}
+                        </p>
+                        <p>{ticket.decision.reason}</p>
+                        {!!ticket.decision.internal_count && (
+                          <p>
+                            {ticket.decision.internal_count} internal document
+                            {ticket.decision.internal_count === 1
+                              ? ''
+                              : 's'}{' '}
+                            used.
+                          </p>
+                        )}
+                        {ticket.decision.sources.map((source) => (
+                          <article key={source.id}>
+                            <span className="text-xs font-bold">
+                              Help article
+                            </span>
+                            <h3>{source.title}</h3>
+                            <p>{source.body}</p>
+                          </article>
+                        ))}
+                        {!ticket.decision.sources.length && (
+                          <p>No help articles were used.</p>
+                        )}
+                      </details>
                     )}
-                  </details>
-                )}
-              </ChatBubble>
-              } />
+                  </ChatBubble>
+                }
+              />
               {ticket.status === 'open' && (
                 <ChatBubble from="system">
                   <p>
@@ -236,32 +243,15 @@ export function SupportChat({
               )}
             </div>
           ) : (
-            <div className="conversation-messages chat-empty">
-              <div className="chat-welcome">
-                <ChatBubble from="tunely">
-                  Hi! I'm Tunely Support. What's going wrong?
-                </ChatBubble>
-              </div>
+            <div className="conversation-messages">
+              <ChatBubble from="tunely">
+                Hi! I'm Tunely Support. What's going wrong?
+              </ChatBubble>
               {allowance.paused && (
-                <p role="status" className="paused-notice">
+                <ChatBubble from="system" role="status">
                   Live AI is paused for today
-                </p>
+                </ChatBubble>
               )}
-              <form className="chat-request" action={submitRequest}>
-                <label htmlFor="question">New support request</label>
-                <Textarea
-                  id="question"
-                  name="question"
-                  required
-                  maxLength={5000}
-                  rows={3}
-                  placeholder="Ask about your Tunely plan, music, or downloads"
-                />
-                <SubmitButton
-                  label="Send"
-                  pendingLabel="Sending..."
-                />
-              </form>
               <div className="chat-examples">
                 {examples.map(([label, question]) => (
                   <form action={submitRequest} key={label}>
@@ -276,18 +266,39 @@ export function SupportChat({
               </div>
             </div>
           )}
-          {ticket && (ticket.status === 'solved' ? (
-            <div className="customer-composer">
-              <ConversationLink
-                href="/conversations/new"
-                className="new-conversation"
-                label="Start a new conversation"
-                current={false}
-              >
-                Start a new conversation
-              </ConversationLink>
-            </div>
-          ) : <CustomerComposer key={ticket.id} ticketId={ticket.id} />)}
+          {!ticket && (
+            <form className="customer-composer" action={submitRequest}>
+              <label htmlFor="question" className="sr-only">
+                New support request
+              </label>
+              <div className="reply-row">
+                <Textarea
+                  id="question"
+                  name="question"
+                  required
+                  maxLength={5000}
+                  rows={2}
+                  placeholder="Describe what's going wrong..."
+                />
+                <SubmitButton label="Send" pendingLabel="Sending..." />
+              </div>
+            </form>
+          )}
+          {ticket &&
+            (ticket.status === 'solved' ? (
+              <div className="customer-composer">
+                <ConversationLink
+                  href="/conversations/new"
+                  className="new-conversation"
+                  label="Start a new conversation"
+                  current={false}
+                >
+                  Start a new conversation
+                </ConversationLink>
+              </div>
+            ) : (
+              <CustomerComposer key={ticket.id} ticketId={ticket.id} />
+            ))}
         </section>
       </div>
     </section>
