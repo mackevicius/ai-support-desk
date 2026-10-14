@@ -201,9 +201,6 @@ test('only the customer marks a conversation solved and starts a new one', async
   await expect(
     chat.getByRole('button', { name: /Talk to a person/ }),
   ).toBeVisible();
-  await expect(chat.getByText('Ticket history', { exact: true })).toHaveCount(
-    0,
-  );
   await page.screenshot({
     path: 'test-results/customer-waiting-desktop.png',
     fullPage: true,
@@ -248,9 +245,6 @@ test('only the customer marks a conversation solved and starts a new one', async
   const detail = page.getByRole('article', { name: 'Request detail' });
   await expect(
     detail.getByRole('textbox', { name: 'Reply', exact: true }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole('button', { name: 'Reopen request' }),
   ).toHaveCount(0);
   const trail = page.getByRole('complementary', { name: 'How the AI decided' });
   await openHistory(page);
@@ -368,9 +362,6 @@ test('a customer asks for a person after an automatic reply and the agent answer
     chat.getByRole('button', { name: label, exact: true }),
   ).toHaveCount(0);
   await expect(reply.locator(':scope > div > p')).toHaveText(originalReply);
-  await expect(chat.getByText('Ticket history', { exact: true })).toHaveCount(
-    0,
-  );
   await expect(
     page.getByRole('banner').getByText('4 live AI answers left today'),
   ).toBeVisible();

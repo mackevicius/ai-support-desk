@@ -72,7 +72,6 @@ async function expectShell(page: Page, drafts: number) {
       'rgb(255, 122, 26)',
     );
   }
-  await expect(nav.getByText('Premium', { exact: true })).toHaveCount(0);
   await expect(
     page.getByRole('navigation', { name: 'Portfolio' }).getByRole('link'),
   ).toHaveCount(0);

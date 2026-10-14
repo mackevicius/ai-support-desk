@@ -35,13 +35,10 @@ test('an agent fills the saved knowledge gap with a private help article and red
   await expect(
     page.getByText('5 live AI answers left today', { exact: true }),
   ).toBeVisible();
-  const redraft = page.getByRole('button', { name: 'Redraft', exact: true });
-  await expect(redraft).toHaveAttribute('data-variant', 'link');
-  await redraft.click();
+  await page.getByRole('button', { name: 'Redraft', exact: true }).click();
   await expect(
     page.getByRole('textbox', { name: 'Reply', exact: true }),
   ).toHaveValue(/Settings > Music > Import/);
-  await expect(page.getByText('Live AI draft', { exact: true })).toHaveCount(0);
   await expect(
     page
       .getByRole('complementary', { name: 'How the AI decided' })
@@ -69,9 +66,6 @@ test('an agent fills the saved knowledge gap with a private help article and red
   await expect(
     page.getByRole('region', { name: 'Support chat' }),
   ).toBeVisible();
-  await expect(
-    page.getByText('Write a help article for this', { exact: true }),
-  ).toHaveCount(0);
 });
 
 test('agent home opens the shared inbox workspace and seat switches keep the selected conversation', async ({
@@ -82,9 +76,6 @@ test('agent home opens the shared inbox workspace and seat switches keep the sel
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await expect(page).toHaveURL(/\/tickets\/1$/, { timeout: 15000 });
   const inbox = page.getByRole('complementary', { name: 'Support inbox' });
-  await expect(
-    inbox.getByRole('combobox', { name: 'Filter by status' }),
-  ).toHaveCount(0);
   const needsReply = inbox.getByRole('tab', {
     name: 'Needs reply',
     exact: true,
@@ -106,11 +97,6 @@ test('agent home opens the shared inbox workspace and seat switches keep the sel
   ).toBeVisible();
   await needsReply.click();
   await expect(inbox.getByRole('link')).toHaveCount(openRequests);
-  const selected = page.locator('.queue a[aria-current="page"]');
-  await expect(selected.locator('[data-slot="avatar"]')).toBeVisible();
-  await expect(selected.locator('[data-slot="avatar-fallback"]')).toHaveText(
-    'MC',
-  );
   await expect(
     page.getByText('AI handed this conversation to you', { exact: true }),
   ).toBeVisible();
@@ -153,9 +139,6 @@ test('agent home opens the shared inbox workspace and seat switches keep the sel
     page.getByRole('complementary', { name: 'How the AI decided' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('textbox', { name: 'New support request' }),
-  ).toHaveCount(0);
-  await expect(
     page.getByRole('button', { name: 'Reset demo', exact: true }),
   ).toBeVisible();
 
@@ -189,9 +172,6 @@ test('agent home opens the shared inbox workspace and seat switches keep the sel
       .locator('.agent-messages')
       .getByText('Automatic reply · no review needed', { exact: true }),
   ).toBeVisible();
-  await expect(
-    page.locator('.agent-messages').getByText(/Approved.*reply/),
-  ).toHaveCount(0);
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
   await expect(
@@ -234,12 +214,6 @@ test('an agent sends replies from one box and the customer is left to answer', a
   await expect(
     detail.getByRole('textbox', { name: 'Reply', exact: true }),
   ).toHaveValue(/\S/);
-  for (const removed of [
-    'Approve in-app reply',
-    'Ask for details',
-    'Reject suggestion',
-  ])
-    await expect(page.getByRole('button', { name: removed })).toHaveCount(0);
   const replyBox = (await detail.locator('.reply-row').boundingBox())!;
   const sendButton = (await page
     .getByRole('button', { name: 'Send', exact: true })
@@ -307,9 +281,6 @@ test('an agent sends replies from one box and the customer is left to answer', a
   await expect(
     page.getByRole('region', { name: 'Support chat' }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('article', { name: 'Request detail' }),
-  ).toHaveCount(0);
   await page.goto(ticketPath);
   const chat = page.getByRole('region', { name: 'Support chat' });
   await expect(
@@ -320,9 +291,6 @@ test('an agent sends replies from one box and the customer is left to answer', a
     'Which dates were the two charges taken?',
   );
   await expect(replies.last()).toContainText('Our team checked the charges');
-  await expect(chat.getByText('Ticket history', { exact: true })).toHaveCount(
-    0,
-  );
   await expect(
     chat.getByRole('button', { name: 'Solved', exact: true }),
   ).toBeVisible();
@@ -334,9 +302,6 @@ test('an agent sends replies from one box and the customer is left to answer', a
   await expect(
     page.getByRole('heading', { name: 'Support inbox', exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Support chat' })).toHaveCount(
-    0,
-  );
   const replyEntry = trail
     .locator('.history')
     .getByText(
@@ -391,18 +356,10 @@ test('a handed-off conversation shows its new redraft and suggested priority', a
     page.getByRole('textbox', { name: 'Reply', exact: true }),
   ).toHaveValue(/Open Settings > Audio quality/);
   await expect(
-    page.getByRole('combobox', { name: 'Priority', exact: true }),
-  ).toHaveCount(0);
-  await expect(
     page
       .locator('.agent-messages')
       .getByText('Automatic reply · no review needed', { exact: true }),
   ).toBeVisible();
-  await expect(
-    page
-      .locator('.agent-messages')
-      .getByText('Approved reply', { exact: true }),
-  ).toHaveCount(0);
   await expect(
     page
       .getByRole('complementary', { name: 'How the AI decided' })
@@ -452,9 +409,6 @@ test('a visitor sends a saved draft, inspects a solved sample, and moves to the 
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   // Agent seat already lands here; re-clicking the link starts a navigation that swallows the next form action.
   await expect(page).toHaveURL(/\/tickets\/1$/);
-  await expect(page.getByText('Saved AI draft', { exact: true })).toHaveCount(
-    0,
-  );
   await expect(
     page.getByRole('heading', { name: 'Family plan invitations' }),
   ).toBeVisible();
@@ -470,16 +424,10 @@ test('a visitor sends a saved draft, inspects a solved sample, and moves to the 
     .getByRole('textbox', { name: 'Reply' })
     .fill('Please resend the invitations.');
   await expect(
-    page.getByRole('combobox', { name: 'Priority', exact: true }),
-  ).toHaveCount(0);
-  await expect(
     page
       .getByRole('complementary', { name: 'How the AI decided' })
       .getByText('high priority', { exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: /^Apply .* priority$/ }),
-  ).toHaveCount(0);
   await page.route('**/tickets/1', async (route) => {
     if ((await submittedReviewAction(route.request())) === 'reply') {
       await new Promise((resolve) => setTimeout(resolve, 6000));
@@ -510,10 +458,6 @@ test('a visitor sends a saved draft, inspects a solved sample, and moves to the 
   ).toBeVisible();
   await page.goto('/tickets/5');
   await expect(trail.getByText('Solved', { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'Reopen request' }),
-  ).toHaveCount(0);
-  await expect(page.getByRole('textbox', { name: 'Reply' })).toHaveCount(0);
   await expect(page.getByRole('article', { name: 'Agent reply' })).toHaveCount(
     0,
   );

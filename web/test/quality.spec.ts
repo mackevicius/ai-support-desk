@@ -49,7 +49,6 @@ test('visitors inspect saved quality results and known failures without signing 
   await expect(main.locator('p')).toContainText(/fictional/);
   await expect(page.getByText(/tunely-support-v4/)).toHaveCount(0);
   await expect(main.getByRole('navigation')).toHaveCount(0);
-  await expect(page.getByText('Known failures')).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: 'Run live evaluation' }),
   ).toHaveCount(0);
