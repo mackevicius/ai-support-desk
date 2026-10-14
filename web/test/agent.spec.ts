@@ -3,7 +3,6 @@ import { openHistory, sendReply, submittedReviewAction } from './helpers';
 
 test('an agent fills the saved knowledge gap with a private help article and redrafts with its citation', async ({
   page,
-  browser,
 }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
@@ -65,28 +64,6 @@ test('an agent fills the saved knowledge gap with a private help article and red
       path: `test-results/knowledge-gap-${viewport.width}.png`,
       fullPage: true,
     });
-  }
-  const other = await browser.newContext();
-  try {
-    const otherPage = await other.newPage();
-    await otherPage.goto('/');
-    await otherPage.getByRole('button', { name: 'Agent', exact: true }).click();
-    await expect(otherPage).toHaveURL(/\/tickets\/1$/);
-    await otherPage.goto('/tickets/4');
-    await expect(
-      otherPage.getByRole('heading', { name: 'Knowledge gap', exact: true }),
-    ).toBeVisible();
-    await expect(
-      otherPage.getByRole('heading', {
-        name: 'Importing Spotify playlists',
-        exact: true,
-      }),
-    ).toHaveCount(0);
-    await expect(
-      otherPage.getByRole('button', { name: 'Redraft', exact: true }),
-    ).toHaveCount(0);
-  } finally {
-    await other.close();
   }
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
   await expect(

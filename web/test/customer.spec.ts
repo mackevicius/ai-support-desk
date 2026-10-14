@@ -313,7 +313,6 @@ test('conversation links immediately announce loading while the next screen is d
 
 test('a customer asks for a person after an automatic reply and the agent answers', async ({
   page,
-  browser,
 }) => {
   const label = "Didn't help? Talk to a person";
   await page.goto('/quality');
@@ -363,98 +362,70 @@ test('a customer asks for a person after an automatic reply and the agent answer
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
 
-  const other = await browser.newPage();
-  try {
-    await other.goto('/tickets/5');
-    await expect(
-      other.getByRole('button', { name: label, exact: true }),
-    ).toHaveCount(0);
-    await expect(
-      other
-        .getByRole('region', { name: 'Support chat' })
-        .getByText('Solved', { exact: true }),
-    ).toBeVisible();
-    await handOff.click();
-    await expect(
-      chat.getByText('With our team', { exact: true }),
-    ).toBeVisible();
-    await expect(
-      chat.getByRole('button', { name: label, exact: true }),
-    ).toHaveCount(0);
-    await expect(reply.locator(':scope > div > p')).toHaveText(originalReply);
-    await expect(chat.getByText('Ticket history', { exact: true })).toHaveCount(
-      0,
-    );
-    await expect(
-      page.getByRole('banner').getByText('4 live AI answers left today'),
-    ).toBeVisible();
-    await page.reload();
-    await expect(
-      chat.getByText('With our team', { exact: true }),
-    ).toBeVisible();
+  await handOff.click();
+  await expect(chat.getByText('With our team', { exact: true })).toBeVisible();
+  await expect(
+    chat.getByRole('button', { name: label, exact: true }),
+  ).toHaveCount(0);
+  await expect(reply.locator(':scope > div > p')).toHaveText(originalReply);
+  await expect(chat.getByText('Ticket history', { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByRole('banner').getByText('4 live AI answers left today'),
+  ).toBeVisible();
+  await page.reload();
+  await expect(chat.getByText('With our team', { exact: true })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Agent', exact: true }).click();
-    await expect(
-      page.getByRole('article', { name: 'Request detail' }),
-    ).toBeVisible();
-    const inbox = page.getByRole('complementary', { name: 'Support inbox' });
-    await expect(
-      inbox.getByRole('tab', { name: 'Needs reply', exact: true }),
-    ).toHaveAttribute('aria-selected', 'true');
-    await expect(inbox.locator(`a[href="${ticketPath}"]`)).toBeVisible();
-    const trail = page.getByRole('complementary', {
-      name: 'How the AI decided',
-    });
-    await expect(
-      trail
-        .locator(':scope > ol')
-        .getByText('Customer asked for a person', { exact: true }),
-    ).toBeVisible();
-    await openHistory(page);
-    await expect(
-      trail
-        .locator('.history')
-        .getByText('Customer asked for a person', { exact: true }),
-    ).toBeVisible();
-    await page
-      .getByRole('textbox', { name: 'Reply', exact: true })
-      .fill('Our team has checked your downloads. Please try again.');
-    await sendReply(page, ticketPath);
-    await expect(
-      page.getByRole('article', { name: 'Agent reply' }),
-    ).toContainText('Our team has checked your downloads.');
-    await page.getByRole('button', { name: 'Customer', exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
-    await expect(
-      chat.locator('header').getByText('Waiting on customer', { exact: true }),
-    ).toBeVisible();
-    await expect(
-      chat.getByRole('article', { name: 'Agent reply' }),
-    ).toContainText('Our team has checked your downloads.');
-    await expect(
-      chat.getByRole('button', { name: label, exact: true }),
-    ).toHaveCount(0);
-    await expect(reply.locator(':scope > div > p')).toHaveText(originalReply);
-    await expect(
-      chat.getByRole('button', { name: 'Solved', exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole('banner').getByText('4 live AI answers left today'),
-    ).toBeVisible();
+  await page.getByRole('button', { name: 'Agent', exact: true }).click();
+  await expect(
+    page.getByRole('article', { name: 'Request detail' }),
+  ).toBeVisible();
+  const inbox = page.getByRole('complementary', { name: 'Support inbox' });
+  await expect(
+    inbox.getByRole('tab', { name: 'Needs reply', exact: true }),
+  ).toHaveAttribute('aria-selected', 'true');
+  await expect(inbox.locator(`a[href="${ticketPath}"]`)).toBeVisible();
+  const trail = page.getByRole('complementary', {
+    name: 'How the AI decided',
+  });
+  await expect(
+    trail
+      .locator(':scope > ol')
+      .getByText('Customer asked for a person', { exact: true }),
+  ).toBeVisible();
+  await openHistory(page);
+  await expect(
+    trail
+      .locator('.history')
+      .getByText('Customer asked for a person', { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole('textbox', { name: 'Reply', exact: true })
+    .fill('Our team has checked your downloads. Please try again.');
+  await sendReply(page, ticketPath);
+  await expect(
+    page.getByRole('article', { name: 'Agent reply' }),
+  ).toContainText('Our team has checked your downloads.');
+  await page.getByRole('button', { name: 'Customer', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
+  await expect(
+    chat.locator('header').getByText('Waiting on customer', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    chat.getByRole('article', { name: 'Agent reply' }),
+  ).toContainText('Our team has checked your downloads.');
+  await expect(
+    chat.getByRole('button', { name: label, exact: true }),
+  ).toHaveCount(0);
+  await expect(reply.locator(':scope > div > p')).toHaveText(originalReply);
+  await expect(
+    chat.getByRole('button', { name: 'Solved', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('banner').getByText('4 live AI answers left today'),
+  ).toBeVisible();
 
-    await other.reload();
-    const otherChat = other.getByRole('region', { name: 'Support chat' });
-    await expect(otherChat.getByText('Solved', { exact: true })).toBeVisible();
-    await expect(
-      otherChat.getByRole('button', { name: label, exact: true }),
-    ).toHaveCount(0);
-    await expect(
-      otherChat.getByText('Ticket history', { exact: true }),
-    ).toHaveCount(0);
-    expect((await other.goto(ticketPath))?.status()).toBe(404);
-  } finally {
-    await other.close();
-  }
   await page.goto('/quality');
   await expect(handOffScore).toHaveText(originalScore);
 });

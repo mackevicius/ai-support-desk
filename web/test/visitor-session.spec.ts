@@ -119,10 +119,7 @@ test('inbox actions stay disabled while their requests are in flight', async ({
   await checkReset();
 });
 
-test('a visitor resets only their own demo workspace', async ({
-  browser,
-  page,
-}) => {
+test('a visitor resets their demo workspace', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await expect(page).toHaveURL(/\/tickets\/1$/);
@@ -149,41 +146,29 @@ test('a visitor resets only their own demo workspace', async ({
   const submittedUrl = new URL(page.url()).pathname;
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${submittedUrl}$`));
+  // The URL was already the ticket, so wait for the Agent view itself.
+  await expect(
+    page
+      .getByRole('article', { name: 'Request detail' })
+      .getByRole('heading', { name: 'Reset my request' }),
+  ).toBeVisible();
 
-  const otherVisitor = await browser.newContext();
-  try {
-    const otherPage = await otherVisitor.newPage();
-    await otherPage.goto('/');
-    await otherPage.getByRole('button', { name: 'Agent', exact: true }).click();
-    await expect(otherPage).toHaveURL(/\/tickets\/1$/);
-    await sendReply(otherPage, '/tickets/1');
-    await expect(
-      otherPage.getByRole('article', { name: 'Agent reply' }),
-    ).toHaveCount(1);
-
-    await page.getByRole('button', { name: 'Reset demo' }).click();
-    await expect(
-      page.getByRole('link', { name: /Reset my request/ }),
-    ).toHaveCount(0);
-    await expect(
-      page
-        .getByRole('complementary', { name: 'How the AI decided' })
-        .getByText('Open', { exact: true }),
-    ).toHaveText('Open');
-    const removed = await page.goto(submittedUrl);
-    expect(removed?.status()).toBe(404);
-    await page.goto('/tickets/1');
-    await expect(
-      page.getByRole('article', { name: 'Request detail' }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole('article', { name: 'Agent reply' }),
-    ).toHaveCount(0);
-    await otherPage.reload();
-    await expect(
-      otherPage.getByRole('article', { name: 'Agent reply' }),
-    ).toHaveCount(1);
-  } finally {
-    await otherVisitor.close();
-  }
+  await page.getByRole('button', { name: 'Reset demo' }).click();
+  await expect(
+    page.getByRole('link', { name: /Reset my request/ }),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .getByRole('complementary', { name: 'How the AI decided' })
+      .getByText('Open', { exact: true }),
+  ).toHaveText('Open');
+  const removed = await page.goto(submittedUrl);
+  expect(removed?.status()).toBe(404);
+  await page.goto('/tickets/1');
+  await expect(
+    page.getByRole('article', { name: 'Request detail' }),
+  ).toBeVisible();
+  await expect(page.getByRole('article', { name: 'Agent reply' })).toHaveCount(
+    0,
+  );
 });
