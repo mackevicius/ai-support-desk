@@ -6,7 +6,13 @@ import Link from 'next/link';
 import type { TicketSummary } from './data';
 import { resetWorkspace } from './actions';
 import { SubmitButton } from './_components/submit-button';
+import { StatusPill, ticketLabel, ticketTone } from './_components/status-pill';
 import { Avatar, AvatarFallback } from '../components/ui/avatar';
+
+const tabs = [
+  { id: 'needs-reply', label: 'Needs reply' },
+  { id: 'all', label: 'All' },
+] as const;
 
 export function Queue({
   tickets,
@@ -15,9 +21,9 @@ export function Queue({
   tickets: TicketSummary[];
   selectedId?: number;
 }) {
-  const [status, setStatus] = useState('open');
+  const [tab, setTab] = useState<(typeof tabs)[number]['id']>('needs-reply');
   const visible = tickets.filter(
-    (ticket) => status === 'all' || ticket.status === status,
+    (ticket) => tab === 'all' || ticket.status === 'open',
   );
   return (
     <aside className="queue" aria-label="Support inbox">
@@ -25,58 +31,81 @@ export function Queue({
         <h2>Support inbox</h2>
         <strong>{tickets.length}</strong>
       </div>
-      <label className="queue-filter">
-        Status
-        <select
-          aria-label="Filter by status"
-          value={status}
-          onChange={(event) => setStatus(event.target.value)}
-        >
-          <option value="all">All</option>
-          <option value="open">Open</option>
-          <option value="waiting_on_customer">Waiting on customer</option>
-          <option value="solved">Solved</option>
-        </select>
-      </label>
-      <nav aria-label="Requests">
-        {visible.map((ticket) => (
-          <Link
-            key={ticket.id}
-            href={`/tickets/${ticket.id}`}
-            className="request"
-            aria-current={selectedId === ticket.id ? 'page' : undefined}
+      <div
+        role="tablist"
+        aria-label="Filter requests"
+        className="queue-tabs"
+        onKeyDown={(event) => {
+          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+          const next = tabs.find((item) => item.id !== tab)!;
+          setTab(next.id);
+          document.getElementById(`queue-tab-${next.id}`)?.focus();
+        }}
+      >
+        {tabs.map((item) => (
+          <button
+            key={item.id}
+            id={`queue-tab-${item.id}`}
+            type="button"
+            role="tab"
+            aria-selected={tab === item.id}
+            aria-controls="queue-requests"
+            tabIndex={tab === item.id ? 0 : -1}
+            onClick={() => setTab(item.id)}
           >
-            <Avatar className="size-9" aria-hidden="true">
-              <AvatarFallback className="bg-[#ffd9bd] text-[13px] font-extrabold text-[#8a3500]">
-                {ticket.customer_name
-                  .trim()
-                  .split(/\s+/)
-                  .map((part) => part[0])
-                  .slice(0, 2)
-                  .join('')
-                  .toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <span className="request-copy">
-              <span className="request-top">
-                <strong>{ticket.customer_name}</strong>
-                <small>
-                  {' · '}
-                  {ticket.status === 'solved'
-                    ? 'Solved'
-                    : new Date(ticket.created_at).toLocaleTimeString('en-US', {
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <div
+        role="tabpanel"
+        id="queue-requests"
+        aria-labelledby={`queue-tab-${tab}`}
+      >
+        <nav aria-label="Requests">
+          {visible.map((ticket) => (
+            <Link
+              key={ticket.id}
+              href={`/tickets/${ticket.id}`}
+              className="request"
+              aria-current={selectedId === ticket.id ? 'page' : undefined}
+            >
+              <Avatar className="size-9" aria-hidden="true">
+                <AvatarFallback className="bg-[#ffd9bd] text-[13px] font-extrabold text-[#8a3500]">
+                  {ticket.customer_name
+                    .trim()
+                    .split(/\s+/)
+                    .map((part) => part[0])
+                    .slice(0, 2)
+                    .join('')
+                    .toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <span className="request-copy">
+                <span className="request-top">
+                  <strong>{ticket.customer_name}</strong>
+                  {ticket.status === 'open' ? (
+                    <small>
+                      {' · '}
+                      {new Date(ticket.created_at).toLocaleTimeString('en-US', {
                         hour: 'numeric',
                         minute: '2-digit',
                         timeZone: 'UTC',
                       })}
-                </small>
+                    </small>
+                  ) : (
+                    <StatusPill tone={ticketTone(ticket.status)}>
+                      {ticketLabel(ticket.status)}
+                    </StatusPill>
+                  )}
+                </span>
+                <span className="subject">{ticket.subject}</span>
               </span>
-              <span className="subject">{ticket.subject}</span>
-            </span>
-          </Link>
-        ))}
-        {!visible.length && <p className="queue-empty">No requests</p>}
-      </nav>
+            </Link>
+          ))}
+          {!visible.length && <p className="queue-empty">No requests</p>}
+        </nav>
+      </div>
       <form action={resetWorkspace} className="queue-reset">
         <SubmitButton
           label="Reset demo"

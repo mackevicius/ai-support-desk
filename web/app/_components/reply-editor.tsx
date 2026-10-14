@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useState, type ReactNode } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { reviewCheckedRequest } from '../actions';
 import type { InternalCopy } from '../data';
 import { Textarea } from '../../components/ui/textarea';
@@ -10,12 +10,10 @@ export function ReplyForm({
   ticketId,
   defaultValue,
   initialCopies,
-  children,
 }: {
   ticketId: string;
   defaultValue: string;
   initialCopies: InternalCopy[];
-  children: ReactNode;
 }) {
   const [state, action] = useActionState(reviewCheckedRequest, null);
   return (
@@ -27,9 +25,7 @@ export function ReplyForm({
         defaultValue={state?.reply ?? defaultValue}
         initialCopies={state?.copies ?? initialCopies}
         error={state?.error}
-      >
-        {children}
-      </ReplyEditor>
+      />
     </form>
   );
 }
@@ -39,13 +35,11 @@ function ReplyEditor({
   defaultValue,
   initialCopies,
   error: submitError,
-  children,
 }: {
   ticketId: string;
   defaultValue: string;
   initialCopies: InternalCopy[];
   error?: string;
-  children: ReactNode;
 }) {
   const [reply, setReply] = useState(defaultValue);
   const [checked, setChecked] = useState({
@@ -128,7 +122,6 @@ function ReplyEditor({
         />
       </div>
       {submitError && <p role="alert">{submitError}</p>}
-      {children}
     </>
   );
 }

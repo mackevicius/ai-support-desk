@@ -519,14 +519,6 @@
 .agent-composer .review-form {
   @apply m-0 max-w-none;
 }
-.agent-composer .review-form {
-  @apply grid-cols-[auto_minmax(0,1fr)] items-center;
-}
-.agent-composer .review-form > label[for='reply'],
-.agent-composer .review-form > .reply-row,
-.agent-composer .review-form > [role='alert'] {
-  @apply col-span-2;
-}
 .reply-row {
   @apply flex flex-col rounded-lg border border-border bg-[#fffaf5] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50;
 }
@@ -557,11 +549,17 @@
 .agent-workspace .detail-heading {
   @apply gap-3 pb-5;
 }
-.queue-filter {
-  @apply flex items-center justify-between gap-3 border-b border-border px-5 py-3 text-xs font-bold;
+.queue-tabs {
+  @apply flex gap-1 border-b border-border px-3.5 py-2 text-xs font-bold;
 }
-.queue-filter select {
-  @apply min-w-0 rounded-md border border-border bg-background px-2 py-1;
+.queue-tabs [role='tab'] {
+  @apply rounded-md px-3 py-1.5 text-muted-foreground hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none;
+}
+.queue-tabs [role='tab'][aria-selected='true'] {
+  @apply bg-secondary text-foreground;
+}
+.request-top [data-slot='badge'] {
+  @apply ml-1.5 align-middle;
 }
 .queue-empty {
   @apply p-5 text-sm text-muted-foreground;
@@ -609,12 +607,8 @@
 .knowledge-gap > details > summary {
   @apply rounded-lg border border-dashed border-primary bg-accent px-3 py-2.5 text-sm font-extrabold;
 }
-.knowledge-gap form,
-.agent-draft-meta {
+.knowledge-gap form {
   @apply mt-5;
-}
-.agent-draft-meta h2 {
-  @apply mb-2 text-xs normal-case;
 }
 .agent-workspace .queue nav {
   @apply max-h-56 overflow-y-auto lg:max-h-none;
@@ -626,8 +620,7 @@
   @apply flex shrink-0 items-start gap-2 capitalize;
 }
 .back,
-.next-request,
-.source-links a {
+.next-request {
   @apply inline-block text-sm font-bold text-link underline-offset-2 hover:underline;
 }
 .back {
@@ -644,14 +637,10 @@
 .draft p {
   @apply leading-relaxed;
 }
-.draft-label,
 .quality-meta,
 .quality-checks,
 .quality-case small {
   @apply text-sm text-muted-foreground;
-}
-.source-links a {
-  @apply mr-2 underline;
 }
 .sources {
   @apply my-6 max-w-3xl border-l-4 border-primary py-1 pl-5;
@@ -675,9 +664,6 @@
 .review-form textarea {
   @apply resize-y;
 }
-.review-form select {
-  @apply w-44;
-}
 .review-form button,
 .draft button,
 .draft-notice button {
@@ -692,8 +678,11 @@
 .next-request {
   @apply mt-6;
 }
+.history > summary {
+  @apply text-sm font-bold text-foreground;
+}
 .history ul {
-  @apply m-0 list-none border-l border-border pl-6;
+  @apply mt-4 mb-0 list-none border-l border-border pl-6;
 }
 .history li {
   @apply relative pb-6 last:pb-0;

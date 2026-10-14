@@ -32,6 +32,13 @@ async function sendReply(page: Page, ticketPath: string) {
   await expect(page).toHaveURL(new RegExp(`${ticketPath}$`));
 }
 
+async function openHistory(page: Page) {
+  await page
+    .getByRole('complementary', { name: 'How the AI decided' })
+    .getByText('History', { exact: true })
+    .click();
+}
+
 async function switchToCustomer(page: Page) {
   const pathname = new URL(page.url()).pathname;
   const seatResponse = page.waitForResponse((response) => {
@@ -476,18 +483,18 @@ test('an agent fills the saved knowledge gap with a private help article and red
   await expect(
     page.getByText('5 live AI answers left today', { exact: true }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Redraft', exact: true }).click();
-  await expect(
-    page.getByRole('heading', { name: 'Live AI draft', exact: true }),
-  ).toBeVisible();
-  await expect(
-    page
-      .locator('.source-links')
-      .getByRole('link', { name: 'Importing Spotify playlists' }),
-  ).toBeVisible();
+  const redraft = page.getByRole('button', { name: 'Redraft', exact: true });
+  await expect(redraft).toHaveAttribute('data-variant', 'link');
+  await redraft.click();
   await expect(
     page.getByRole('textbox', { name: 'Reply', exact: true }),
   ).toHaveValue(/Settings > Music > Import/);
+  await expect(page.getByText('Live AI draft', { exact: true })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole('complementary', { name: 'How the AI decided' })
+      .getByRole('heading', { name: 'Importing Spotify playlists' }),
+  ).toBeVisible();
   await expect(
     page.getByText('4 live AI answers left today', { exact: true }),
   ).toBeVisible();
@@ -633,20 +640,26 @@ test('agent home opens the shared inbox workspace and seat switches keep the sel
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await expect(page).toHaveURL(/\/tickets\/1$/, { timeout: 15000 });
   const inbox = page.getByRole('complementary', { name: 'Support inbox' });
-  const filter = inbox.getByRole('combobox', { name: 'Filter by status' });
-  await expect(filter).toHaveValue('open');
+  await expect(
+    inbox.getByRole('combobox', { name: 'Filter by status' }),
+  ).toHaveCount(0);
+  const needsReply = inbox.getByRole('tab', { name: 'Needs reply', exact: true });
+  const allTab = inbox.getByRole('tab', { name: 'All', exact: true });
+  await expect(needsReply).toHaveAttribute('aria-selected', 'true');
+  await expect(allTab).toHaveAttribute('aria-selected', 'false');
   const openRequests = await inbox.getByRole('link').count();
   await expect(
     inbox.getByRole('link').filter({ hasText: 'Solved' }),
   ).toHaveCount(0);
-  await filter.selectOption('all');
+  await allTab.click();
+  await expect(allTab).toHaveAttribute('aria-selected', 'true');
   expect(await inbox.getByRole('link').count()).toBeGreaterThan(openRequests);
-  await filter.selectOption('solved');
-  await expect(inbox.getByRole('link')).toHaveCount(1);
-  await expect(inbox.getByRole('link')).toContainText('Solved');
-  await filter.selectOption('waiting_on_customer');
-  await expect(inbox.getByText('No requests', { exact: true })).toBeVisible();
-  await filter.selectOption('open');
+  await expect(
+    inbox
+      .getByRole('link', { name: /Listen to music offline/ })
+      .getByText('Solved', { exact: true }),
+  ).toBeVisible();
+  await needsReply.click();
   await expect(inbox.getByRole('link')).toHaveCount(openRequests);
   const selected = page.locator('.queue a[aria-current="page"]');
   await expect(selected.locator('[data-slot="avatar"]')).toBeVisible();
@@ -719,8 +732,13 @@ test('agent home opens the shared inbox workspace and seat switches keep the sel
       name: 'How do I download music for offline listening?',
     }),
   ).toBeVisible();
-  await filter.selectOption('waiting_on_customer');
-  await expect(inbox.locator('a[aria-current="page"]')).toBeVisible();
+  await expect(inbox.locator('a[aria-current="page"]')).toHaveCount(0);
+  await allTab.click();
+  await expect(
+    inbox
+      .locator('a[aria-current="page"]')
+      .getByText('Waiting on customer', { exact: true }),
+  ).toBeVisible();
   await expect(
     page
       .locator('.agent-messages')
@@ -866,10 +884,13 @@ test('an agent sends replies from one box and the customer is left to answer', a
   await expect(page.getByRole('region', { name: 'Support chat' })).toHaveCount(
     0,
   );
-  await expect(trail.locator('.history').getByText(
+  const replyEntry = trail.locator('.history').getByText(
     'Agent replied: Our team checked the charges and will contact you about the duplicate.',
     { exact: true },
-  )).toBeVisible();
+  );
+  await expect(replyEntry).toBeHidden();
+  await openHistory(page);
+  await expect(replyEntry).toBeVisible();
   await expect(trail.locator('.history').getByText(
     'Hand-off: A team member needs to check something that has gone wrong with your money or account security.',
     { exact: true },
@@ -907,7 +928,7 @@ test('a handed-off conversation shows its new redraft and suggested priority', a
   ).toHaveValue(/Open Settings > Audio quality/);
   await expect(
     page.getByRole('combobox', { name: 'Priority', exact: true }),
-  ).toHaveValue('high');
+  ).toHaveCount(0);
   await expect(
     page
       .locator('.agent-messages')
@@ -1053,7 +1074,7 @@ test('only the customer marks a conversation solved and starts a new one', async
   await expect(detail.getByRole('textbox', { name: 'Reply', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Reopen request' })).toHaveCount(0);
   const trail = page.getByRole('complementary', { name: 'How the AI decided' });
-  await expect(trail.getByRole('heading', { name: 'History', exact: true })).toBeVisible();
+  await openHistory(page);
   await expect(trail.getByText('Customer marked conversation solved', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Customer', exact: true }).click();
   await expect(chat.getByRole('link', { name: 'Start a new conversation', exact: true })).toBeVisible();
@@ -1181,8 +1202,8 @@ test('a customer asks for a person after an automatic reply and the agent answer
     ).toBeVisible();
     const inbox = page.getByRole('complementary', { name: 'Support inbox' });
     await expect(
-      inbox.getByRole('combobox', { name: 'Filter by status' }),
-    ).toHaveValue('open');
+      inbox.getByRole('tab', { name: 'Needs reply', exact: true }),
+    ).toHaveAttribute('aria-selected', 'true');
     await expect(inbox.locator(`a[href="${ticketPath}"]`)).toBeVisible();
     const trail = page.getByRole('complementary', {
       name: 'How the AI decided',
@@ -1192,6 +1213,7 @@ test('a customer asks for a person after an automatic reply and the agent answer
         .locator(':scope > ol')
         .getByText('Customer asked for a person', { exact: true }),
     ).toBeVisible();
+    await openHistory(page);
     await expect(
       trail
         .locator('.history')
@@ -1701,8 +1723,8 @@ test('only a signed-in owner sees live generation', async ({ page }) => {
     'Live generation is unavailable. Please try again later.',
   );
   await expect(
-    page.getByRole('heading', { name: 'Saved AI draft' }),
-  ).toBeVisible();
+    page.getByRole('textbox', { name: 'Reply', exact: true }),
+  ).toHaveValue(/create a new invitation from Settings > Plan > Family/);
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('link', { name: 'Owner sign in' })).toBeVisible();
   await page.goto('/tickets/1');
@@ -1751,6 +1773,7 @@ test('a visitor submits a request that another session cannot see', async ({
   await page
     .getByRole('link', { name: /Family invitation keeps failing/ })
     .click();
+  await openHistory(page);
   await expect(
     page.getByText(
       'Hand-off: There is not enough clear help article coverage to answer automatically.',
@@ -1777,6 +1800,7 @@ test('a visitor submits a request that another session cannot see', async ({
       .getByRole('complementary', { name: 'How the AI decided' })
       .getByText('Open', { exact: true }),
   ).toBeVisible();
+  await openHistory(page);
   await expect(page.getByText('Request received')).toBeVisible();
   await expect(
     page.getByRole('textbox', { name: 'Reply', exact: true }),
@@ -1807,7 +1831,7 @@ test('a visitor sends a saved draft, inspects a solved sample, and moves to the 
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   // Agent seat already lands here; re-clicking the link starts a navigation that swallows the next form action.
   await expect(page).toHaveURL(/\/tickets\/1$/);
-  await expect(page.getByText('Saved AI draft', { exact: true })).toBeVisible();
+  await expect(page.getByText('Saved AI draft', { exact: true })).toHaveCount(0);
   await expect(
     page.getByRole('heading', { name: 'Family plan invitations' }),
   ).toBeVisible();
@@ -1822,9 +1846,14 @@ test('a visitor sends a saved draft, inspects a solved sample, and moves to the 
   await page
     .getByRole('textbox', { name: 'Reply' })
     .fill('Please resend the invitations.');
-  await expect(page.getByLabel('Priority', { exact: true })).toHaveValue(
-    'high',
-  );
+  await expect(
+    page.getByRole('combobox', { name: 'Priority', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .getByRole('complementary', { name: 'How the AI decided' })
+      .getByText('high priority', { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole('button', { name: /^Apply .* priority$/ }),
   ).toHaveCount(0);
@@ -1844,6 +1873,7 @@ test('a visitor sends a saved draft, inspects a solved sample, and moves to the 
   await expect(
     page.getByRole('article', { name: 'Agent reply' }),
   ).toContainText('Please resend the invitations.');
+  await openHistory(page);
   await expect(
     trail.getByText('Agent replied: Please resend the invitations.', {
       exact: true,

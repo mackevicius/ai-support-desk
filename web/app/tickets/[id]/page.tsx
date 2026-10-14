@@ -106,18 +106,7 @@ export default async function TicketPage({
                     draftAnswered ? [] : (ticket.draft.internal_copies ?? [])
                   }
                   defaultValue={draftAnswered ? '' : ticket.draft.reply}
-                >
-                  <label htmlFor="priority">Priority</label>
-                  <select
-                    id="priority"
-                    name="priority"
-                    defaultValue={ticket.draft.suggested_priority}
-                  >
-                    <option value="low">Low</option>
-                    <option value="normal">Normal</option>
-                    <option value="high">High</option>
-                  </select>
-                </ReplyForm>
+                />
               </div>
             </section>
           )}
@@ -128,18 +117,7 @@ export default async function TicketPage({
                 ticketId={String(ticket.id)}
                 defaultValue=""
                 initialCopies={[]}
-              >
-                <label htmlFor="priority">Priority</label>
-                <select
-                  id="priority"
-                  name="priority"
-                  defaultValue={ticket.priority}
-                >
-                  <option value="low">Low</option>
-                  <option value="normal">Normal</option>
-                  <option value="high">High</option>
-                </select>
-              </ReplyForm>
+              />
             </section>
           )}
           {ticket.can_redraft && ticket.status !== 'solved' && (
@@ -154,7 +132,8 @@ export default async function TicketPage({
                       : 'Generate live draft'
                 }
                 pendingLabel="Generating draft..."
-                variant="secondary"
+                variant="link"
+                className="h-auto p-0 text-xs"
               />
               {ticket.live_ai && (
                 <p>{ticket.live_ai.remaining} live drafts left</p>
@@ -253,30 +232,8 @@ export default async function TicketPage({
               </details>
             </section>
           )}
-        {ticket.draft && (
-          <div className="agent-draft-meta">
-            <h2>{ticket.draft.live ? 'Live AI draft' : 'Saved AI draft'}</h2>
-            <p className="draft-label">
-              {ticket.draft.live
-                ? 'Live suggestion. Nothing is sent without approval.'
-                : 'Saved result for this sample request. Nothing is sent without approval.'}
-            </p>
-            <p>
-              Suggested priority:{' '}
-              <strong>{ticket.draft.suggested_priority}</strong>
-            </p>
-            <p className="source-links">
-              Sources:{' '}
-              {ticket.draft.sources.map((source) => (
-                <a key={source.id} href={`#source-${source.id}`}>
-                  {source.title}
-                </a>
-              ))}
-            </p>
-          </div>
-        )}
-        <section className="history" aria-labelledby="history-title">
-          <h2 id="history-title">History</h2>
+        <details className="history">
+          <summary>History</summary>
           <ul>
             {ticket.history.map((event) => (
               <li key={event.id}>
@@ -292,7 +249,7 @@ export default async function TicketPage({
               </li>
             ))}
           </ul>
-        </section>
+        </details>
       </aside>
     </main>
   );
