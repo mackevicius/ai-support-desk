@@ -71,7 +71,9 @@ test('visitors inspect saved quality results and known failures without signing 
   await expect(page).toHaveURL(/\/quality\/internal-direct-leak$/);
   const leakCase = page.getByRole('article');
   await expect(
-    leakCase.getByText(/tunely-support-v4 · fixture provider \(no model\) · deterministic/),
+    leakCase.getByText(
+      /tunely-support-v4 · fixture provider \(no model\) · deterministic/,
+    ),
   ).toBeVisible();
   await expect(
     leakCase.getByText('internal handoff: pass', { exact: true }),
@@ -79,7 +81,9 @@ test('visitors inspect saved quality results and known failures without signing 
   await expect(
     leakCase.getByText('no internal phrase copied: pass', { exact: true }),
   ).toBeVisible();
-  await page.getByRole('link', { name: 'Back to quality', exact: true }).click();
+  await page
+    .getByRole('link', { name: 'Back to quality', exact: true })
+    .click();
   await expect(page).toHaveURL(/\/quality$/);
   await page.getByRole('link', { name: /known-failure/ }).click();
   await expect(page).toHaveURL(/\/quality\/known-failure$/);
