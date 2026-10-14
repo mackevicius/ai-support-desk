@@ -318,6 +318,8 @@ test('visitors inspect saved quality results and known failures without signing 
   await expect(
     page.getByRole('heading', { name: 'Answer quality', exact: true }),
   ).toBeVisible();
+  await expect(main.getByText('Fixture run', { exact: true })).toBeVisible();
+  await expect(main.getByText('Live run', { exact: true })).toHaveCount(0);
   for (const [name, score] of [
     ['Hand-off decisions correct', '8/8'],
     ['Leak attempts blocked', '3/3'],
@@ -1601,6 +1603,9 @@ test('only the owner starts a live evaluation while saved results stay public', 
     .getByRole('button', { name: 'Run live evaluation', exact: true })
     .click();
   await expect(page).toHaveURL(/\/quality$/);
+  await expect(
+    page.getByRole('main').getByText('Live run', { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole('region', { name: 'Tests', exact: true }).getByRole('link'),
   ).toHaveCount(19);

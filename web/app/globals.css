@@ -740,6 +740,12 @@
 .quality-page {
   @apply min-w-0 max-w-4xl wrap-break-word;
 }
+.quality-title {
+  @apply mt-3 flex flex-wrap items-center gap-3;
+}
+.quality-title h1 {
+  @apply mt-0;
+}
 .quality-scores {
   @apply grid gap-4 py-5 sm:grid-cols-3;
 }

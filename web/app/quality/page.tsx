@@ -4,6 +4,7 @@ import { getHelpArticles } from '../data';
 import { runQualityEvaluation } from '../actions';
 import { SubmitButton } from '../_components/submit-button';
 import { getQualityReport } from './report';
+import { StatusPill } from '../_components/status-pill';
 import { Card } from '../../components/ui/card';
 import { Separator } from '../../components/ui/separator';
 
@@ -60,7 +61,12 @@ export default async function QualityPage({
         <Link href="/" className="back">
           Back to inbox
         </Link>
-        <h1>Answer quality</h1>
+        <div className="quality-title">
+          <h1>Answer quality</h1>
+          <StatusPill tone={report.mode === 'live' ? 'team' : 'neutral'}>
+            {report.mode === 'live' ? 'Live run' : 'Fixture run'}
+          </StatusPill>
+        </div>
         <p>A small fictional test set, not real users. Word checks can&apos;t prove meaning, and the copy guard misses paraphrases.</p>
         <Separator className="mt-6" />
         {canRun && <form action={runQualityEvaluation} className="quality-run">
