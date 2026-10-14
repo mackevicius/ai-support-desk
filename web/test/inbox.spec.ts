@@ -263,7 +263,6 @@ test('remaining pages use shared surfaces without mobile overflow', async ({
   const pages = [
     ['/owner', 'owner'],
     ['/quality', 'quality'],
-    ['/quality?view=retrieval', 'retrieval'],
     ['/quality/known-failure', 'quality-case'],
     ['/how-it-works', 'how-it-works'],
     ['/articles', 'articles'],
@@ -290,7 +289,7 @@ test('remaining pages use shared surfaces without mobile overflow', async ({
       await expect(
         main.locator('[data-slot="separator"]').first(),
       ).toBeVisible();
-      if (path.startsWith('/quality')) {
+      if (path.startsWith('/quality/')) {
         await expect(main.locator('[data-slot="badge"]').first()).toBeVisible();
       }
       for (const viewport of [
@@ -315,17 +314,50 @@ test('visitors inspect saved quality results and known failures without signing 
   page,
 }) => {
   await page.goto('/quality');
+  const main = page.getByRole('main');
   await expect(
     page.getByRole('heading', { name: 'Answer quality', exact: true }),
   ).toBeVisible();
-  await expect(page.getByText(/tunely-support-v4/)).toBeVisible();
-  await expect(page.getByText(/2026-10-02/)).toBeVisible();
+  for (const [name, score] of [
+    ['Hand-off decisions correct', '8/8'],
+    ['Leak attempts blocked', '3/3'],
+    ['Right document found', '8/8'],
+  ]) {
+    const card = page.getByRole('region', { name, exact: true });
+    await expect(card.locator('.quality-score')).toHaveText(score);
+    await expect(card.locator('.quality-dot[data-passed="true"]')).toHaveCount(
+      Number(score.split('/')[0]),
+    );
+    await expect(card.locator('.quality-dot')).toHaveCount(
+      Number(score.split('/')[1]),
+    );
+  }
+  const tiles = page
+    .getByRole('region', { name: 'Tests', exact: true })
+    .getByRole('link');
+  await expect(tiles).toHaveCount(19);
+  await expect(tiles.and(page.locator('[data-passed="false"]'))).toHaveCount(2);
   await expect(
-    page.getByRole('region', { name: 'Hand-off accuracy' }),
-  ).toContainText('8 of 8');
+    page.getByRole('link', { name: 'known-failure: fail', exact: true }),
+  ).toBeVisible();
   await expect(
-    page.getByRole('region', { name: 'Internal-note leak attempts' }),
-  ).toContainText('3 of 3');
+    page.getByRole('link', { name: 'internal-direct-leak: pass', exact: true }),
+  ).toBeVisible();
+  const bars = page.getByRole('region', {
+    name: 'Finding the right document',
+    exact: true,
+  });
+  await expect(
+    bars.getByRole('listitem').filter({ hasText: 'Word matching' }),
+  ).toContainText('7/8');
+  await expect(
+    bars.getByRole('listitem').filter({ hasText: 'Embeddings' }),
+  ).toContainText('8/8');
+  await expect(main.locator('p')).toHaveCount(1);
+  await expect(main.locator('p')).toContainText(/fictional/);
+  await expect(page.getByText(/tunely-support-v4/)).toHaveCount(0);
+  await expect(main.getByRole('navigation')).toHaveCount(0);
+  await expect(page.getByText('Known failures')).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: 'Run live evaluation' }),
   ).toHaveCount(0);
@@ -344,16 +376,42 @@ test('visitors inspect saved quality results and known failures without signing 
       fullPage: true,
     });
   }
+  await page.getByRole('link', { name: /internal-direct-leak/ }).click();
+  await expect(page).toHaveURL(/\/quality\/internal-direct-leak$/);
+  const leakCase = page.getByRole('article');
+  await expect(
+    leakCase.getByText(/tunely-support-v4 · fixture provider \(no model\) · deterministic/),
+  ).toBeVisible();
+  await expect(
+    leakCase.getByText('internal handoff: pass', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    leakCase.getByText('no internal phrase copied: pass', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('link', { name: 'Back to quality', exact: true }).click();
+  await expect(page).toHaveURL(/\/quality$/);
   await page.getByRole('link', { name: /known-failure/ }).click();
+  await expect(page).toHaveURL(/\/quality\/known-failure$/);
   await expect(
     page.getByRole('heading', { name: 'Known Failure', exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Actual answer', exact: true }),
   ).toBeVisible();
-  await page.goto('/quality?view=retrieval');
-  await expect(page.getByText(/Word matching: 7\/8/)).toBeVisible();
-  await expect(page.getByText(/Embeddings: 8\/8/)).toBeVisible();
+  await expect(page.getByText('When are invoices available?')).toBeVisible();
+  await expect(
+    page.getByText('Invoices are available before the billing period closes.'),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Invoices are available after the billing period closes.', {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByText(/Before the billing period closes, invoices are unavailable/)
+      .first(),
+  ).toBeVisible();
   for (const path of [
     '/',
     '/tickets/1',
@@ -1206,9 +1264,9 @@ test('a customer asks for a person after an automatic reply and the agent answer
   const label = "Didn't help? Talk to a person";
   await page.goto('/quality');
   const handOffScore = page
-    .getByRole('region', { name: 'Hand-off accuracy' })
-    .locator('.quality-summary');
-  await expect(handOffScore).toContainText('decisions correct');
+    .getByRole('region', { name: 'Hand-off decisions correct' })
+    .locator('.quality-score');
+  await expect(handOffScore).toHaveText(/^\d+\/\d+$/);
   const originalScore = await handOffScore.innerText();
   await page.goto('/tickets/1');
   const chat = page.getByRole('region', { name: 'Support chat' });
@@ -1539,57 +1597,19 @@ test('only the owner starts a live evaluation while saved results stay public', 
   await expect(
     page.getByRole('heading', { name: 'Answer quality' }),
   ).toBeVisible();
-  await expect(page.getByText(/tunely-support-v4/)).toBeVisible();
   await page
     .getByRole('button', { name: 'Run live evaluation', exact: true })
     .click();
-  await expect(page).toHaveURL(/\/quality\?run=live$/);
-  await expect(page.getByText(/^Saved live provider results/)).toBeVisible();
+  await expect(page).toHaveURL(/\/quality$/);
   await expect(
-    page.getByText(/tunely-support-v4 · gpt-4o-mini · live/),
-  ).toBeVisible();
-  await page.getByRole('link', { name: 'Deterministic', exact: true }).click();
-  for (const name of [
-    'internal-direct-leak',
-    'internal-uncited-leak',
-    'internal-prompt-leak',
-  ])
-    await expect(
-      page.getByRole('link', { name: new RegExp(name) }),
-    ).toContainText('Pass');
-  await page.getByRole('link', { name: /internal-direct-leak/ }).click();
-  await expect(page).toHaveURL(/\/quality\/internal-direct-leak$/);
-  await expect(
-    page
-      .getByRole('article')
-      .getByText('internal handoff: pass', { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page
-      .getByRole('article')
-      .getByText('no internal phrase copied: pass', { exact: true }),
-  ).toBeVisible();
-  await page
-    .getByRole('link', { name: 'Back to quality', exact: true })
-    .click();
-  await expect(page.getByRole('link', { name: /known-failure/ })).toBeVisible();
+    page.getByRole('region', { name: 'Tests', exact: true }).getByRole('link'),
+  ).toHaveCount(19);
   await page.getByRole('link', { name: /known-failure/ }).click();
-  await expect(
-    page.getByRole('heading', { name: 'Known failure' }),
-  ).toBeVisible();
-  await expect(page.getByText('When are invoices available?')).toBeVisible();
-  await expect(
-    page.getByText('Invoices are available before the billing period closes.'),
-  ).toBeVisible();
-  await expect(
-    page.getByText('Invoices are available after the billing period closes.', {
-      exact: true,
-    }),
-  ).toBeVisible();
+  await expect(page).toHaveURL(/\/quality\/known-failure$/);
   await expect(
     page
-      .getByText(/Before the billing period closes, invoices are unavailable/)
-      .first(),
+      .getByRole('article')
+      .getByText(/tunely-support-v4 · gpt-4o-mini · live/),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('navigation', { name: 'Site' })).toHaveText(
@@ -1597,10 +1617,12 @@ test('only the owner starts a live evaluation while saved results stay public', 
   );
   await page.goto('/quality/known-failure');
   await expect(
-    page.getByRole('heading', { name: 'Known Failure', exact: true }),
+    page.getByText(/tunely-support-v4 · gpt-4o-mini · live/),
   ).toBeVisible();
-  await page.goto('/quality?run=live');
-  await expect(page.getByText(/^Saved live provider results/)).toBeVisible();
+  await page.goto('/quality');
+  await expect(
+    page.getByRole('region', { name: 'Hand-off decisions correct' }),
+  ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Run live evaluation' }),
   ).toHaveCount(0);

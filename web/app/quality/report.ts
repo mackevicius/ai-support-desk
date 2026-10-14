@@ -50,10 +50,7 @@ export type QualityReport = {
   };
 };
 
-export async function getQualityReport(
-  run?: string,
-): Promise<QualityReport | null> {
-  if (run !== 'live') return deterministic as QualityReport;
+export async function getQualityReport(): Promise<QualityReport> {
   try {
     const response = await fetch(`${process.env.API_URL ?? 'http://localhost:3001'}/quality/live`, {
       cache: 'no-store',
@@ -68,7 +65,7 @@ export async function getQualityReport(
       ),
     ) as QualityReport;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return deterministic as QualityReport;
     throw error;
   }
 }

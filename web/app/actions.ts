@@ -77,7 +77,7 @@ export async function runQualityEvaluation() {
   } catch {}
   if (status === 403) redirect('/owner');
   redirect(
-    `/quality?run=live${status === 200 ? '' : `&evaluation=${status === 429 ? 'limit' : 'unavailable'}`}`,
+    `/quality${status === 200 ? '' : `?evaluation=${status === 429 ? 'limit' : 'unavailable'}`}`,
   );
 }
 

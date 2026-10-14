@@ -5,20 +5,18 @@ import { Card } from '../../../components/ui/card';
 import { Separator } from '../../../components/ui/separator';
 import { priorityTone, StatusPill } from '../../_components/status-pill';
 
-export default async function QualityCasePage({ params, searchParams }: {
+export default async function QualityCasePage({ params }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ run?: string }>;
 }) {
-  const { run } = await searchParams;
   const { id } = await params;
-  const report = await getQualityReport(run);
-  const item = report?.cases.find((entry) => entry.id === id);
-  if (!report || !item) notFound();
+  const report = await getQualityReport();
+  const item = report.cases.find((entry) => entry.id === id);
+  if (!item) notFound();
 
   return (
     <main className="workspace focus-view">
       <article className="detail quality-page">
-        <Link href={`/quality${run === 'live' ? '?run=live' : ''}`} className="back">Back to quality</Link>
+        <Link href="/quality" className="back">Back to quality</Link>
         <h1>{item.id.split('-').map((word) => word[0].toUpperCase() + word.slice(1)).join(' ')}</h1>
         <p className="quality-meta">{report.dataset_version} · {report.model} · {report.mode} · <time dateTime={report.evaluated_at}>{report.evaluated_at?.slice(0, 10) ?? 'Date not recorded'}</time></p>
         <p>{item.categories.join(' · ')}</p>

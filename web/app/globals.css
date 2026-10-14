@@ -637,9 +637,7 @@
 .draft p {
   @apply leading-relaxed;
 }
-.quality-meta,
-.quality-checks,
-.quality-case small {
+.quality-meta {
   @apply text-sm text-muted-foreground;
 }
 .sources {
@@ -742,20 +740,20 @@
 .quality-page {
   @apply min-w-0 max-w-4xl wrap-break-word;
 }
-.quality-tabs {
-  @apply flex flex-wrap gap-5 py-5 text-sm;
+.quality-scores {
+  @apply grid gap-4 py-5 sm:grid-cols-3;
 }
-.quality-tabs a[aria-current='page'] {
-  @apply border-b-2 border-link font-bold text-link;
+.quality-score {
+  @apply text-4xl font-extrabold leading-none;
 }
-.quality-summary {
-  @apply font-extrabold;
+.quality-dots {
+  @apply flex flex-wrap gap-1.5;
 }
-.quality-metrics {
-  @apply grid gap-4 py-5 sm:grid-cols-2;
+.quality-dot {
+  @apply size-3 rounded-full bg-pass;
 }
-.quality-metrics h2 {
-  @apply text-base;
+.quality-dot[data-passed='false'] {
+  @apply bg-fail;
 }
 .quality-run {
   @apply flex flex-wrap items-center gap-3 py-3;
@@ -766,20 +764,26 @@
 .architecture-flow {
   @apply grid list-none gap-4 p-0 sm:grid-cols-2;
 }
-.quality-list {
-  @apply grid gap-3;
+.quality-tiles {
+  @apply m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-2 p-0;
 }
-.quality-case {
-  @apply min-w-0 gap-2 transition-colors;
+.quality-tile {
+  @apply flex h-full items-center gap-2 rounded-lg border-2 border-pass bg-ok p-3 text-sm font-bold text-ok-foreground wrap-anywhere transition-opacity hover:opacity-80;
 }
-a:hover > .quality-case {
-  @apply bg-secondary;
+.quality-tile[data-passed='false'] {
+  @apply border-fail bg-alert text-alert-foreground;
 }
-.quality-case-top {
-  @apply flex flex-wrap items-center justify-between gap-4;
+.quality-bars {
+  @apply m-0 grid list-none gap-3 p-0;
 }
-.quality-checks {
-  @apply flex flex-wrap gap-x-4 gap-y-2;
+.quality-bars li {
+  @apply grid grid-cols-[8rem_1fr_auto] items-center gap-3 text-sm;
+}
+.quality-bar {
+  @apply h-3 overflow-hidden rounded-full bg-muted;
+}
+.quality-bar > span {
+  @apply block h-full rounded-full bg-primary;
 }
 .quality-section {
   @apply py-7 wrap-break-word;

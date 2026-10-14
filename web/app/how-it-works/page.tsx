@@ -42,7 +42,7 @@ export default function HowItWorks() {
         <Separator />
         <section className="quality-section" aria-labelledby="evidence-heading">
           <h2 id="evidence-heading">Evidence and decisions</h2>
-          <p><Link href="/quality">Saved answer checks</Link> include hand-off decisions, internal-note leak attempts, and known failures. The <Link href="/quality?view=retrieval">retrieval comparison</Link> measures word matching against embeddings. These small benchmarks do not prove general accuracy or confidentiality.</p>
+          <p><Link href="/quality">Saved answer checks</Link> include hand-off decisions, internal-note leak attempts, and known failures. The <Link href="/quality">retrieval comparison</Link> measures word matching against embeddings. These small benchmarks do not prove general accuracy or confidentiality.</p>
           <p>Tunely is a fictional music streaming company. This portfolio demo uses fictional support requests and documents, with no real customers or production-scale claims.</p>
           <p>Each visitor gets a temporary private workspace. The owner alone can change shared documents and start paid live evaluations. Browsing saved cases and fixture results makes no paid AI calls. Replies stay in the conversation; no email is sent.</p>
           <ul>
