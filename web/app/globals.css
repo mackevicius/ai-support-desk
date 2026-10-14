@@ -753,7 +753,7 @@
   @apply size-3 rounded-full bg-pass;
 }
 .quality-dot[data-passed='false'] {
-  @apply bg-fail;
+  @apply border-2 border-fail bg-transparent;
 }
 .quality-run {
   @apply flex flex-wrap items-center gap-3 py-3;
@@ -768,7 +768,7 @@
   @apply m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-2 p-0;
 }
 .quality-tile {
-  @apply flex h-full items-center gap-2 rounded-lg border-2 border-pass bg-ok p-3 text-sm font-bold text-ok-foreground wrap-anywhere transition-opacity hover:opacity-80;
+  @apply flex h-full items-center gap-2 rounded-lg border-2 border-pass bg-ok p-3 text-sm font-bold text-ok-foreground wrap-anywhere hover:underline;
 }
 .quality-tile[data-passed='false'] {
   @apply border-fail bg-alert text-alert-foreground;
