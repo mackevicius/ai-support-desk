@@ -2,7 +2,15 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createServer } from 'node:http';
 import { createApp } from '../src/app.js';
-import { close, listening, readJson, sendJson, startInbox, withEnv, withProvider } from './helpers.js';
+import {
+  close,
+  listening,
+  readJson,
+  sendJson,
+  startInbox,
+  withEnv,
+  withProvider,
+} from './helpers.js';
 import { getConversation } from '../../web/app/data.js';
 
 const { pool, baseUrl } = await startInbox();
@@ -12,9 +20,11 @@ test('conversation loading starts ticket, list and allowance HTTP requests befor
   const server = createServer((request, response) => {
     pending.set(request.url!, response);
     if (pending.size === 3) {
-      pending.get('/tickets/1?view=customer')!.end(JSON.stringify({ id: 1 }));
+      pending.get('/tickets/1')!.end(JSON.stringify({ id: 1 }));
       pending.get('/tickets')!.end(JSON.stringify([{ id: 1 }]));
-      pending.get('/live-ai')!.end(JSON.stringify({ remaining: 4, paused: false }));
+      pending
+        .get('/live-ai')!
+        .end(JSON.stringify({ remaining: 4, paused: false }));
     }
   }).listen(0);
   const url = await listening(server);
@@ -24,7 +34,13 @@ test('conversation loading starts ticket, list and allowance HTTP requests befor
       const loaded = await Promise.race([
         getConversation('1', 'test-session', undefined, 'customer'),
         new Promise<never>((_resolve, reject) => {
-          timer = setTimeout(() => reject(new Error('Conversation reads waited for an earlier response')), 2000);
+          timer = setTimeout(
+            () =>
+              reject(
+                new Error('Conversation reads waited for an earlier response'),
+              ),
+            2000,
+          );
         }),
       ]);
       assert.equal(loaded.ticket?.id, 1);
@@ -57,26 +73,43 @@ test('a visitor can browse tickets through the API', async () => {
 });
 
 test('closed starter conversations are solved and cannot be reopened', async () => {
-  const response = await fetch(`${baseUrl}/tickets/5?view=customer`);
+  const response = await fetch(`${baseUrl}/tickets/5`);
   const cookie = response.headers.get('set-cookie')!.split(';')[0];
   const ticket = await response.json();
   assert.equal(ticket.status, 'solved');
   assert.equal(ticket.can_redraft, false);
   assert.equal(ticket.can_request_hand_off, false);
-  const solved = await (await fetch(`${baseUrl}/tickets?status=solved`, { headers: { cookie } })).json();
-  assert.deepEqual(solved.map((item: { id: number }) => item.id), [5]);
+  const solved = await (
+    await fetch(`${baseUrl}/tickets?status=solved`, { headers: { cookie } })
+  ).json();
+  assert.deepEqual(
+    solved.map((item: { id: number }) => item.id),
+    [5],
+  );
   for (const [path, body] of [
     ['review', { action: 'reopen' }],
     ['review', { action: 'reply', reply: 'A new answer' }],
     ['messages', { message: 'A new question' }],
   ] as const) {
-    assert.equal((await fetch(`${baseUrl}/tickets/5/${path}`, {
-      method: 'POST',
-      headers: { cookie, 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    })).status, 409);
+    assert.equal(
+      (
+        await fetch(`${baseUrl}/tickets/5/${path}`, {
+          method: 'POST',
+          headers: { cookie, 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+      ).status,
+      409,
+    );
   }
-  assert.equal((await (await fetch(`${baseUrl}/tickets/5`, { headers: { cookie } })).json()).status, 'solved');
+  assert.equal(
+    (
+      await (
+        await fetch(`${baseUrl}/tickets/5`, { headers: { cookie } })
+      ).json()
+    ).status,
+    'solved',
+  );
 });
 
 test('health reports database availability without exposing private details', async () => {
@@ -100,7 +133,9 @@ test('health reports database availability without exposing private details', as
 });
 
 test('a visitor can inspect a request and its history', async () => {
-  const response = await fetch(`${baseUrl}/tickets/1`);
+  const response = await fetch(`${baseUrl}/tickets/1`, {
+    headers: { cookie: 'demo_seat=agent' },
+  });
   assert.equal(response.status, 200);
   const ticket = await response.json();
   assert.equal(ticket.decision.kind, 'hand_off');
@@ -187,7 +222,9 @@ test('the inbox sorts reviewed tickets after open tickets and filters by status'
     [1, 2, 3, 4],
   );
   const waiting = await (
-    await fetch(`${baseUrl}/tickets?status=waiting_on_customer`, { headers: { cookie } })
+    await fetch(`${baseUrl}/tickets?status=waiting_on_customer`, {
+      headers: { cookie },
+    })
   ).json();
   assert.deepEqual(
     waiting.map((ticket: { id: number }) => ticket.id),
@@ -196,7 +233,10 @@ test('the inbox sorts reviewed tickets after open tickets and filters by status'
   const solved = await (
     await fetch(`${baseUrl}/tickets?status=solved`, { headers: { cookie } })
   ).json();
-  assert.deepEqual(solved.map((ticket: { id: number }) => ticket.id), [5]);
+  assert.deepEqual(
+    solved.map((ticket: { id: number }) => ticket.id),
+    [5],
+  );
   const replied = await fetch(`${baseUrl}/tickets/${id}/messages`, {
     method: 'POST',
     headers: { cookie, 'content-type': 'application/json' },

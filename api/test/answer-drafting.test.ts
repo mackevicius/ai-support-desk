@@ -43,7 +43,10 @@ test('a private help article fills a knowledge gap only for its visitor and redr
         (
           await fetch(`${baseUrl}/tickets`, {
             method: 'POST',
-            headers: { cookie: session, 'content-type': 'application/json' },
+            headers: {
+              cookie: `${session}; demo_seat=agent`,
+              'content-type': 'application/json',
+            },
             body: JSON.stringify({
               question: 'How do I make a collaborative playlist?',
             }),
@@ -70,7 +73,7 @@ test('a private help article fills a knowledge gap only for its visitor and redr
       const redraft = () =>
         fetch(`${baseUrl}/tickets/${ticket.id}/generate`, {
           method: 'POST',
-          headers: { cookie },
+          headers: { cookie: `${cookie}; demo_seat=agent` },
         });
       const drafted = await (await redraft()).json();
       assert.deepEqual(drafted.draft.sources, [article]);
@@ -124,7 +127,7 @@ test('filling the saved knowledge gap redrafts only that visitor copy', async ()
       const redraft = () =>
         fetch(`${baseUrl}/tickets/4/generate`, {
           method: 'POST',
-          headers: { cookie },
+          headers: { cookie: `${cookie}; demo_seat=agent` },
         });
       assert.equal((await redraft()).status, 403);
       await fetch(`${baseUrl}/visitor/help-articles`, {
@@ -144,12 +147,18 @@ test('filling the saved knowledge gap redrafts only that visitor copy', async ()
       assert.equal(ticket.draft.sources[0].title, 'Playlist imports');
       assert.equal(ticket.decision.reason_code, 'agent_review');
       assert.equal(ticket.live_ai.remaining, 4);
-      const other = await (await fetch(`${baseUrl}/tickets/4`)).json();
+      const other = await (
+        await fetch(`${baseUrl}/tickets/4`, {
+          headers: { cookie: 'demo_seat=agent' },
+        })
+      ).json();
       assert.equal(other.decision.reason_code, 'knowledge_gap');
       assert.deepEqual(other.draft.sources, []);
       await fetch(`${baseUrl}/reset`, { method: 'POST', headers: { cookie } });
       const reset = await (
-        await fetch(`${baseUrl}/tickets/4`, { headers: { cookie } })
+        await fetch(`${baseUrl}/tickets/4`, {
+          headers: { cookie: `${cookie}; demo_seat=agent` },
+        })
       ).json();
       assert.equal(reset.decision.reason_code, 'knowledge_gap');
       assert.deepEqual(reset.draft.sources, []);
@@ -266,7 +275,10 @@ test('fixed hand-off rules override confident provider output and weak coverage'
         }
         const response = await fetch(`${baseUrl}/tickets`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: {
+            cookie: 'demo_seat=agent',
+            'content-type': 'application/json',
+          },
           body: JSON.stringify({ question }),
         });
         const ticket = await response.json();
@@ -444,7 +456,10 @@ test('uncertain, risky, internal-note and invalid answers hand off without deliv
         ]) {
           const response = await fetch(`${baseUrl}/tickets`, {
             method: 'POST',
-            headers: { 'content-type': 'application/json' },
+            headers: {
+              cookie: 'demo_seat=agent',
+              'content-type': 'application/json',
+            },
             body: JSON.stringify({ question }),
           });
           assert.equal(response.status, 201);
@@ -471,7 +486,7 @@ test('uncertain, risky, internal-note and invalid answers hand off without deliv
           if (question === 'An internal answer') {
             const cookie = response.headers.get('set-cookie')!.split(';')[0];
             const customer = await (
-              await fetch(`${baseUrl}/tickets/${ticket.id}?view=customer`, {
+              await fetch(`${baseUrl}/tickets/${ticket.id}`, {
                 headers: { cookie },
               })
             ).json();
@@ -498,14 +513,20 @@ test('a delayed first draft cannot change a conversation after the customer resp
   for (const action of ['solve', 'messages']) {
     let announceGeneration: () => void = () => {};
     let releaseGeneration: () => void = () => {};
-    const started = new Promise<void>((resolve) => { announceGeneration = resolve; });
-    const held = new Promise<void>((resolve) => { releaseGeneration = resolve; });
+    const started = new Promise<void>((resolve) => {
+      announceGeneration = resolve;
+    });
+    const held = new Promise<void>((resolve) => {
+      releaseGeneration = resolve;
+    });
     await withProvider(
       async (request, response) => {
         const input = await readJson(request);
         announceGeneration();
         await held;
-        const article = input.articles.find((item: { title: string }) => item.title === 'Offline downloads');
+        const article = input.articles.find(
+          (item: { title: string }) => item.title === 'Offline downloads',
+        );
         sendJson(response, {
           reply: 'Open a playlist and tap Download.',
           suggested_priority: 'normal',
@@ -515,7 +536,9 @@ test('a delayed first draft cannot change a conversation after the customer resp
         });
       },
       async () => {
-        const cookie = (await fetch(`${baseUrl}/tickets`)).headers.get('set-cookie')!.split(';')[0];
+        const cookie = (await fetch(`${baseUrl}/tickets`)).headers
+          .get('set-cookie')!
+          .split(';')[0];
         const headers = { cookie, 'content-type': 'application/json' };
         const question = `How do I download music? delayed initial draft ${action}`;
         const pending = fetch(`${baseUrl}/tickets`, {
@@ -525,21 +548,41 @@ test('a delayed first draft cannot change a conversation after the customer resp
         });
         try {
           await started;
-          const tickets = await (await fetch(`${baseUrl}/tickets`, { headers })).json();
-          const ticket = tickets.find((item: { subject: string }) => item.subject === question);
+          const tickets = await (
+            await fetch(`${baseUrl}/tickets`, { headers })
+          ).json();
+          const ticket = tickets.find(
+            (item: { subject: string }) => item.subject === question,
+          );
           assert.ok(ticket);
-          const replied = await fetch(`${baseUrl}/tickets/${ticket.id}/review`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ action: 'reply', reply: 'I helped you set up downloads.' }),
-          });
+          const replied = await fetch(
+            `${baseUrl}/tickets/${ticket.id}/review`,
+            {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({
+                action: 'reply',
+                reply: 'I helped you set up downloads.',
+              }),
+            },
+          );
           assert.equal(replied.status, 200);
-          assert.equal((await fetch(`${baseUrl}/tickets/${ticket.id}/${action}`, {
-            method: 'POST',
-            headers,
-            ...(action === 'messages' ? { body: JSON.stringify({ message: 'I still need help.' }) } : {}),
-          })).status, 201);
-          const read = async () => (await fetch(`${baseUrl}/tickets/${ticket.id}`, { headers })).json();
+          assert.equal(
+            (
+              await fetch(`${baseUrl}/tickets/${ticket.id}/${action}`, {
+                method: 'POST',
+                headers,
+                ...(action === 'messages'
+                  ? { body: JSON.stringify({ message: 'I still need help.' }) }
+                  : {}),
+              })
+            ).status,
+            201,
+          );
+          const read = async () =>
+            (
+              await fetch(`${baseUrl}/tickets/${ticket.id}`, { headers })
+            ).json();
           const answered = await read();
           assert.equal(answered.status, action === 'solve' ? 'solved' : 'open');
           releaseGeneration();
@@ -560,10 +603,18 @@ test('a follow-up read before initial generation commits still returns the conve
   let announceMessage: () => void = () => {};
   let releaseMessage: () => void = () => {};
   let holdMessage = false;
-  const generationStarted = new Promise<void>((resolve) => { announceGeneration = resolve; });
-  const generationHeld = new Promise<void>((resolve) => { releaseGeneration = resolve; });
-  const messageStarted = new Promise<void>((resolve) => { announceMessage = resolve; });
-  const messageHeld = new Promise<void>((resolve) => { releaseMessage = resolve; });
+  const generationStarted = new Promise<void>((resolve) => {
+    announceGeneration = resolve;
+  });
+  const generationHeld = new Promise<void>((resolve) => {
+    releaseGeneration = resolve;
+  });
+  const messageStarted = new Promise<void>((resolve) => {
+    announceMessage = resolve;
+  });
+  const messageHeld = new Promise<void>((resolve) => {
+    releaseMessage = resolve;
+  });
   const server = createApp({
     query: pool.query.bind(pool),
     connect: async () => {
@@ -582,7 +633,9 @@ test('a follow-up read before initial generation commits still returns the conve
         const input = await readJson(request);
         announceGeneration();
         await generationHeld;
-        const article = input.articles.find((item: { title: string }) => item.title === 'Offline downloads');
+        const article = input.articles.find(
+          (item: { title: string }) => item.title === 'Offline downloads',
+        );
         sendJson(response, {
           reply: 'Open a playlist and tap Download.',
           suggested_priority: 'normal',
@@ -592,34 +645,58 @@ test('a follow-up read before initial generation commits still returns the conve
         });
       },
       async () => {
-        const cookie = (await fetch(`${url}/tickets`)).headers.get('set-cookie')!.split(';')[0];
+        const cookie = (await fetch(`${url}/tickets`)).headers
+          .get('set-cookie')!
+          .split(';')[0];
         const headers = { cookie, 'content-type': 'application/json' };
         const pending = fetch(`${url}/tickets`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ question: 'How do I download music? overlapping follow-up' }),
+          body: JSON.stringify({
+            question: 'How do I download music? overlapping follow-up',
+          }),
         });
         let message: Promise<Response> | undefined;
         try {
           await generationStarted;
-          const tickets = await (await fetch(`${url}/tickets`, { headers })).json();
-          const ticket = tickets.find((item: { subject: string }) => item.subject === 'How do I download music? overlapping follow-up');
+          const tickets = await (
+            await fetch(`${url}/tickets`, { headers })
+          ).json();
+          const ticket = tickets.find(
+            (item: { subject: string }) =>
+              item.subject === 'How do I download music? overlapping follow-up',
+          );
           assert.ok(ticket);
           holdMessage = true;
           message = fetch(`${url}/tickets/${ticket.id}/messages`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ message: 'I still need help with downloads.' }),
+            body: JSON.stringify({
+              message: 'I still need help with downloads.',
+            }),
           });
           await messageStarted;
           releaseGeneration();
           assert.equal((await pending).status, 201);
           releaseMessage();
           assert.equal((await message).status, 201);
-          const updated = await (await fetch(`${url}/tickets/${ticket.id}`, { headers })).json();
+          const updated = await (
+            await fetch(`${url}/tickets/${ticket.id}`, { headers })
+          ).json();
           assert.equal(updated.status, 'open');
-          assert.equal(updated.history.at(-1).description, 'Customer replied: I still need help with downloads.');
-          assert.equal((await fetch(`${url}/tickets/${ticket.id}/solve`, { method: 'POST', headers })).status, 409);
+          assert.equal(
+            updated.history.at(-1).description,
+            'Customer replied: I still need help with downloads.',
+          );
+          assert.equal(
+            (
+              await fetch(`${url}/tickets/${ticket.id}/solve`, {
+                method: 'POST',
+                headers,
+              })
+            ).status,
+            409,
+          );
         } finally {
           releaseGeneration();
           releaseMessage();
@@ -644,7 +721,9 @@ test('a visitor cannot request live generation', async () => {
   });
   assert.equal(response.status, 403);
   const ticket = await (
-    await fetch(`${baseUrl}/tickets/1`, { headers: { cookie } })
+    await fetch(`${baseUrl}/tickets/1`, {
+      headers: { cookie: `${cookie}; demo_seat=agent` },
+    })
   ).json();
   assert.equal(ticket.draft.state, 'saved');
 });
@@ -740,7 +819,7 @@ test('an owner generates a cited draft through Python without approving it', asy
         assert.equal(login.status, 204);
         const ownerCookie = login.headers.get('set-cookie')!.split(';')[0];
         const headers = {
-          cookie: `${cookie}; ${ownerCookie}`,
+          cookie: `${cookie}; ${ownerCookie}; demo_seat=agent`,
           'content-type': 'application/json',
         };
         const otherCookie = (await fetch(`${baseUrl}/tickets`)).headers
@@ -789,7 +868,7 @@ test('an owner generates a cited draft through Python without approving it', asy
         assert.equal(promptData.articles[0].id, 1);
         const signedOut = await (
           await fetch(`${baseUrl}/tickets/${id}`, {
-            headers: { cookie },
+            headers: { cookie: `${cookie}; demo_seat=agent` },
           })
         ).json();
         assert.equal(signedOut.draft.reply, ticket.draft.reply);
@@ -843,10 +922,15 @@ test('an owner generates a cited draft through Python without approving it', asy
         });
         const coveredTicket = await covered.json();
         assert.equal(coveredTicket.decision.kind, 'automatic_reply');
-        assert.equal((await fetch(`${baseUrl}/tickets/${coveredTicket.id}/solve`, {
-          method: 'POST',
-          headers: { cookie },
-        })).status, 201);
+        assert.equal(
+          (
+            await fetch(`${baseUrl}/tickets/${coveredTicket.id}/solve`, {
+              method: 'POST',
+              headers: { cookie },
+            })
+          ).status,
+          201,
+        );
         const callsBeforeSolved = calls.length;
         assert.equal(
           (

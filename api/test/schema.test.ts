@@ -108,7 +108,9 @@ test('an empty database starts with the fictional inbox and keeps visitor change
       const { id } = await submitted.json();
       await prepareDatabase(freshPool);
       const starter = await (
-        await fetch(`${url}/tickets/1`, { headers: { cookie } })
+        await fetch(`${url}/tickets/1`, {
+          headers: { cookie: `${cookie}; demo_seat=agent` },
+        })
       ).json();
       assert.ok(starter.draft.reply);
       assert.equal(starter.history.length, 2);
@@ -156,12 +158,18 @@ test('a Dayline-era inbox is replaced with saved Tunely cases only once', async 
     const cookie = inbox.headers.get('set-cookie')!.split(';')[0];
     assert.equal((await inbox.json()).length, 6);
     const detail = async () =>
-      (await fetch(`${url}/tickets/1`, { headers: { cookie } })).json();
+      (
+        await fetch(`${url}/tickets/1`, {
+          headers: { cookie: `${cookie}; demo_seat=agent` },
+        })
+      ).json();
     const before = await detail();
     assert.equal(before.subject, 'Family invitation keeps failing');
     assert.equal(before.draft.sources[0].title, 'Family plan invitations');
     const custom = await (
-      await fetch(`${url}/tickets/9`, { headers: { cookie } })
+      await fetch(`${url}/tickets/9`, {
+        headers: { cookie: `${cookie}; demo_seat=agent` },
+      })
     ).json();
     assert.equal(custom.draft.reply, 'Keep this saved reply');
     assert.equal(custom.draft.sources[0].body, 'Workspace invitations');

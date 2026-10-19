@@ -35,7 +35,10 @@ test('an uncited internal phrase prevents automatic delivery and warns the agent
       async () => {
         const response = await fetch(`${baseUrl}/tickets`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: {
+            cookie: 'demo_seat=agent',
+            'content-type': 'application/json',
+          },
           body: JSON.stringify({ question: 'Why does playback stop?' }),
         });
         const ticket = await response.json();
@@ -46,7 +49,7 @@ test('an uncited internal phrase prevents automatic delivery and warns the agent
         ]);
         const cookie = response.headers.get('set-cookie')!.split(';')[0];
         const customer = await (
-          await fetch(`${baseUrl}/tickets/${ticket.id}?view=customer`, {
+          await fetch(`${baseUrl}/tickets/${ticket.id}`, {
             headers: { cookie },
           })
         ).json();
@@ -138,7 +141,10 @@ test('an uncited internal phrase prevents automatic delivery and warns the agent
         const editedDuring = await (
           await fetch(`${baseUrl}/tickets`, {
             method: 'POST',
-            headers: { cookie, 'content-type': 'application/json' },
+            headers: {
+              cookie: `${cookie}; demo_seat=agent`,
+              'content-type': 'application/json',
+            },
             body: JSON.stringify({
               question: 'Playback still needs investigation.',
             }),
@@ -216,7 +222,7 @@ test('document reclassification redacts customer sources and prevents an in-flig
           "UPDATE help_articles SET kind = 'internal_note' WHERE id = 902",
         );
         const customer = await (
-          await fetch(`${baseUrl}/tickets/${automatic.id}?view=customer`, {
+          await fetch(`${baseUrl}/tickets/${automatic.id}`, {
             headers: { cookie },
           })
         ).json();
@@ -231,7 +237,10 @@ test('document reclassification redacts customer sources and prevents an in-flig
         const during = await (
           await fetch(`${baseUrl}/tickets`, {
             method: 'POST',
-            headers: { cookie, 'content-type': 'application/json' },
+            headers: {
+              cookie: `${cookie}; demo_seat=agent`,
+              'content-type': 'application/json',
+            },
             body: JSON.stringify({
               question: 'Explain the playback recovery steps.',
             }),

@@ -43,7 +43,9 @@ test('an agent reply is sent and leaves the ticket waiting on the customer', asy
   assert.deepEqual(
     again.history
       .map((event: { description: string }) => event.description)
-      .filter((description: string) => description.startsWith('Agent replied: ')),
+      .filter((description: string) =>
+        description.startsWith('Agent replied: '),
+      ),
     [
       'Agent replied: Please create a new invitation.',
       'Agent replied: Did the new link work?',
@@ -70,7 +72,10 @@ test('a risky live draft can be reviewed by the visitor acting as a support agen
     async () => {
       const response = await fetch(`${baseUrl}/tickets`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          cookie: 'demo_seat=agent',
+          'content-type': 'application/json',
+        },
         body: JSON.stringify({ question: 'Please refund my double charge.' }),
       });
       const cookie = response.headers.get('set-cookie')!.split(';')[0];
@@ -202,7 +207,7 @@ test('redrafting a handed-off automatic reply keeps an agent reply sent meanwhil
           `${baseUrl}/tickets/${ticket.id}/generate`,
           {
             method: 'POST',
-            headers,
+            headers: { cookie: `${cookie}; demo_seat=agent` },
           },
         );
         assert.equal(redraft.status, 200);
@@ -247,7 +252,8 @@ test('redrafting a handed-off automatic reply keeps an agent reply sent meanwhil
         assert.ok(
           saved.history.some(
             (event: { description: string }) =>
-              event.description === 'Agent replied: An agent checked this reply.',
+              event.description ===
+              'Agent replied: An agent checked this reply.',
           ),
         );
       } finally {
@@ -264,7 +270,7 @@ test('an agent reply stays in the visitor session', async () => {
   const secondCookie = second.headers.get('set-cookie')!.split(';')[0];
   const initial = await (
     await fetch(`${baseUrl}/tickets/1`, {
-      headers: { cookie: firstCookie },
+      headers: { cookie: `${firstCookie}; demo_seat=agent` },
     })
   ).json();
   assert.equal(initial.status, 'open');
@@ -347,7 +353,10 @@ test('only one simultaneous agent reply changes an unreviewed request', async ()
     fetch(`${baseUrl}/tickets/1/review`, {
       method: 'POST',
       headers: { cookie, 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'reply', reply: 'Our team is checking this.' }),
+      body: JSON.stringify({
+        action: 'reply',
+        reply: 'Our team is checking this.',
+      }),
     });
   const responses = await Promise.all([submit(), submit()]);
   const ticket = await (

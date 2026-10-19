@@ -191,15 +191,15 @@ export async function getTicket(
   id: string,
   sessionId?: string,
   ownerSession?: string,
-  view: 'agent' | 'customer' = 'agent',
+  seat: 'agent' | 'customer' = 'customer',
 ): Promise<Ticket | null> {
   const response = await fetch(
-    `${process.env.API_URL ?? 'http://localhost:3001'}/tickets/${encodeURIComponent(id)}?view=${view}`,
+    `${process.env.API_URL ?? 'http://localhost:3001'}/tickets/${encodeURIComponent(id)}`,
     {
       cache: 'no-store',
       headers: sessionId
         ? {
-            cookie: `demo_session=${sessionId}${ownerSession ? `; owner_session=${ownerSession}` : ''}`,
+            cookie: `demo_session=${sessionId}; demo_seat=${seat}${ownerSession ? `; owner_session=${ownerSession}` : ''}`,
           }
         : undefined,
     },
@@ -213,10 +213,10 @@ export async function getConversation(
   id: string,
   sessionId?: string,
   ownerSession?: string,
-  view: 'agent' | 'customer' = 'customer',
+  seat: 'agent' | 'customer' = 'customer',
 ) {
   const [ticket, tickets, allowance] = await Promise.all([
-    getTicket(id, sessionId, ownerSession, view),
+    getTicket(id, sessionId, ownerSession, seat),
     getTickets(sessionId),
     getLiveAllowance(sessionId),
   ]);

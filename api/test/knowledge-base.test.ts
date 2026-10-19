@@ -190,7 +190,7 @@ test('owner edits and retires help articles without changing the guest demo', as
           .split(';')[0];
         const before = await (
           await fetch(`${baseUrl}/tickets/1`, {
-            headers: { cookie: guestCookie },
+            headers: { cookie: `${guestCookie}; demo_seat=agent` },
           })
         ).json();
         assert.equal(
@@ -238,7 +238,7 @@ test('owner edits and retires help articles without changing the guest demo', as
         });
         const ownerCookie = login.headers.get('set-cookie')!.split(';')[0];
         const headers = {
-          cookie: `${guestCookie}; ${ownerCookie}`,
+          cookie: `${guestCookie}; ${ownerCookie}; demo_seat=agent`,
           'content-type': 'application/json',
         };
         const otherCookie = (await fetch(`${baseUrl}/tickets`)).headers
@@ -406,7 +406,7 @@ test('owner edits and retires help articles without changing the guest demo', as
         assert.equal(updatedSeed.status, 200);
         const guest = await (
           await fetch(`${baseUrl}/tickets/1`, {
-            headers: { cookie: guestCookie },
+            headers: { cookie: `${guestCookie}; demo_seat=agent` },
           })
         ).json();
         assert.deepEqual(guest.draft, before.draft);
