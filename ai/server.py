@@ -150,7 +150,7 @@ def _generate(question, articles, metadata_callback=None, question_embedding=Non
         )
         score, source_id, sentence = max(sentences, key=lambda item: item[0], default=(0, None, None))
         if score >= min(2, len(keywords)) and score > 0:
-            return {**topic, 'reply': sentence, 'suggested_priority': 'normal', 'source_ids': [source_id]}
+            return {**topic, 'reply': sentence, 'suggested_priority': answer['suggested_priority'], 'source_ids': [source_id]}
         return {
             **topic,
             'reply': 'Could you clarify your request? The available help articles do not support an answer yet.',

@@ -188,6 +188,66 @@ assert 'evaluation' not in sys.modules
                  'gpt-4o-mini-2026-07-18')
         self.assertGreater(measured['estimated_cost_usd'], 0)
 
+    def test_live_checks_accept_reworded_extra_cited_and_safely_declined_answers(self):
+        family = ('The Tunely family plan owner can invite members from Settings > Plan > Family. '
+                  'Members must live at the same address. Open the invitation link and sign in to join. '
+                  'Invitations expire after seven days.\n\nTunely Free includes ad-supported streaming. '
+                  'Individual includes ad-free music and offline downloads. '
+                  'Family includes the same listening features for up to six people at one address.')
+        declined = {'reply': 'Could you clarify your request? The available help articles do not support an answer yet.',
+                    'source_ids': [], 'suggested_priority': 'normal'}
+        answers = {
+            'priority': {'reply': 'Invitations for the family plan expire after seven days.',
+                         'source_ids': [1], 'suggested_priority': 'normal'},
+            'citations': {'reply': family, 'source_ids': [1, 7], 'suggested_priority': 'normal'},
+            'account-security': declined,
+            'internal-direct-leak': declined,
+            'internal-prompt-leak': declined,
+            'untrusted-question': {'reply': family, 'source_ids': [1, 7], 'suggested_priority': 'normal'},
+            'visitor-article-injection': {'reply': 'To import playlists from Spotify, open Settings > Music > Import.',
+                                          'source_ids': [101], 'suggested_priority': 'normal'},
+        }
+        for case_id, answer in answers.items():
+            def provider(_request, timeout, answer=answer):
+                return FakeResponse({'choices': [{'message': {'content': json.dumps(answer)}}]})
+
+            case = next(item for item in CASES if item['id'] == case_id)
+            with patch('evaluation.CASES', [case]), patch.dict('os.environ', {'OPENAI_API_KEY': 'fake-key'}), \
+                    patch('server.urlopen', provider):
+                checks = evaluate(live=True)['cases'][0]['checks']
+            self.assertTrue(all(checks.values()), (case_id, checks))
+
+    def test_live_checks_still_fail_missing_citations_and_wrong_priority(self):
+        answers = {
+            'citations': {'reply': 'Invitations expire after seven days.', 'source_ids': [7],
+                          'suggested_priority': 'normal'},
+            'urgent-priority': {'reply': 'A total outage blocks all Tunely playback.', 'source_ids': [21],
+                                'suggested_priority': 'normal'},
+        }
+        for case_id, answer in answers.items():
+            def provider(_request, timeout, answer=answer):
+                return FakeResponse({'choices': [{'message': {'content': json.dumps(answer)}}]})
+
+            case = next(item for item in CASES if item['id'] == case_id)
+            with patch('evaluation.CASES', [case]), patch.dict('os.environ', {'OPENAI_API_KEY': 'fake-key'}), \
+                    patch('server.urlopen', provider):
+                checks = evaluate(live=True)['cases'][0]['checks']
+            self.assertFalse(all(checks.values()), (case_id, checks))
+
+    def test_sentence_fallback_keeps_the_model_priority(self):
+        case = next(item for item in CASES if item['id'] == 'urgent-priority')
+        answer = {'reply': 'We are sorry: a total outage blocks all Tunely playback right now.',
+                  'source_ids': [21], 'suggested_priority': 'high'}
+
+        def provider(_request, timeout):
+            return FakeResponse({'choices': [{'message': {'content': json.dumps(answer)}}]})
+
+        with patch('evaluation.CASES', [case]), patch.dict('os.environ', {'OPENAI_API_KEY': 'fake-key'}), \
+                patch('server.urlopen', provider):
+            actual = evaluate(live=True)['cases'][0]['actual']
+        self.assertEqual(actual['reply'], 'A total outage blocks all Tunely playback.')
+        self.assertEqual(actual['suggested_priority'], 'high')
+
 
 class FakeResponse:
     def __init__(self, payload):
