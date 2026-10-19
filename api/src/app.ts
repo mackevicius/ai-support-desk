@@ -16,6 +16,24 @@ import {
   sourceKind,
   type InternalCopy,
 } from './internal-copy.js';
+import {
+  canRequestHandOff,
+  createTicketLifecycle,
+  ticketStatus,
+  type Outcome,
+  type TicketAction,
+  type Visitor,
+} from './ticket-lifecycle.js';
+
+const httpStatus: Record<Outcome['kind'], number> = {
+  ok: 201,
+  not_found: 404,
+  forbidden: 403,
+  invalid: 400,
+  unavailable: 409,
+  conflict: 409,
+  internal_copies: 409,
+};
 
 const ownerSessionAge = 8 * 60 * 60 * 1000;
 const statusOrder: Record<string, number> = {
@@ -80,6 +98,16 @@ function isOwner(cookie: string | undefined, session: string) {
   );
 }
 
+function visitorOf(request: express.Request, session: string): Visitor {
+  return {
+    session,
+    owner: isOwner(request.headers.cookie, session),
+    seat: /(?:^|;\s*)demo_seat=agent(?:;|$)/.test(request.headers.cookie ?? '')
+      ? 'agent'
+      : 'customer',
+  };
+}
+
 export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
   const app = express();
   app.use(express.json());
@@ -96,24 +124,6 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       ...internalDocuments(documents, sources),
       ...savedCopies.map((copy) => ({ body: copy.text })),
     ]);
-  }
-  function reviewedStatus(status: string, state?: string) {
-    if (status === 'solved') return status;
-    if (state === 'reopened') return 'open';
-    if (state === 'waiting_on_customer' || state === 'solved') return state;
-    return status;
-  }
-  function automaticReplyDelivered(
-    decision: { kind: string; documents?: { kind?: string }[] } | null | undefined,
-    history: { description: string }[],
-  ) {
-    return history.some((event) =>
-      event.description.startsWith('Automatic reply: ') ||
-      event.description.startsWith('Automatic in-app reply: '),
-    ) || (
-      decision?.kind === 'automatic_reply' &&
-      !decision.documents?.some((source) => source.kind === 'internal_note')
-    );
   }
   async function detail(id: string, session: string, owner = false) {
     const ticket = await pool.query(
@@ -204,7 +214,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         ? (live.rows[0]?.reply ?? draft.rows[0]?.reply)
         : null) ??
       null;
-    const status = reviewedStatus(ticket.rows[0].status, current?.state);
+    const status = ticketStatus(ticket.rows[0].status, current?.state);
     return {
       ...ticketFields,
       is_sample: ticketSession === null,
@@ -215,13 +225,12 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
             ? originalDecision?.reason_code === 'knowledge_gap' &&
               privateArticles.rows.length > 0
             : Boolean(decision))),
-      can_request_hand_off:
-        automaticReplyDelivered(decision, events.rows) &&
-        Boolean(approvedReply) &&
-        status === 'waiting_on_customer' &&
-        !events.rows.some((event: { description: string }) =>
-          event.description.startsWith('Agent replied: '),
-        ),
+      can_request_hand_off: canRequestHandOff(
+        decision,
+        events.rows,
+        approvedReply,
+        status,
+      ),
       ...(decision
         ? { decision, live_ai: await liveAllowance(pool, session) }
         : {}),
@@ -258,29 +267,10 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
       history: events.rows,
     };
   }
-  async function archiveAutomaticReply(
-    ticket: NonNullable<Awaited<ReturnType<typeof detail>>>,
-    id: string,
-    session: string,
-    database: Pick<Pool, 'query'>,
-  ) {
-    if (
-      !automaticReplyDelivered(ticket.decision, ticket.history) ||
-      !ticket.approved_reply ||
-      ticket.history.some((event: { description: string }) =>
-        event.description.startsWith('Automatic in-app reply: '),
-      )
-    ) return;
-    const deliveredAt = ticket.history.find((event: { description: string }) =>
-      event.description.startsWith('Automatic reply: '),
-    )?.created_at ?? ticket.created_at;
-    await database.query(
-      `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at, occurred_at)
-       VALUES (nextval('ticket_event_ids'), $1, $2, $3, $4, $5)
-       ON CONFLICT DO NOTHING`,
-      [id, session, `Automatic in-app reply: ${ticket.approved_reply}`, new Date().toISOString(), deliveredAt],
-    );
-  }
+  const lifecycle = createTicketLifecycle(pool, {
+    read: detail,
+    checkCopies: checkedCopies,
+  });
   app.use((request, response, next) => {
     const session = request.headers.cookie?.match(
       /(?:^|;\s*)demo_session=([0-9a-f-]{36})(?:;|$)/,
@@ -354,7 +344,10 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
 
   app.get('/quality/live', async (_request, response, next) => {
     try {
-      const saved = await pool.query('SELECT report FROM quality_reports WHERE mode = $1', ['live']);
+      const saved = await pool.query(
+        'SELECT report FROM quality_reports WHERE mode = $1',
+        ['live'],
+      );
       if (!saved.rows.length) {
         response.sendStatus(404);
         return;
@@ -376,7 +369,10 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     }
     try {
       const day = new Date().toISOString().slice(0, 10);
-      await pool.query('INSERT INTO generation_usage (day, requests) VALUES ($1, 0) ON CONFLICT (day) DO NOTHING', [day]);
+      await pool.query(
+        'INSERT INTO generation_usage (day, requests) VALUES ($1, 0) ON CONFLICT (day) DO NOTHING',
+        [day],
+      );
       const allowance = await pool.query(
         'UPDATE generation_usage SET requests = requests + 20 WHERE day = $1 AND requests <= 180 AND paused = false RETURNING requests',
         [day],
@@ -395,7 +391,11 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
         return;
       }
       const rawReport = await result.json();
-      if (rawReport.mode !== 'live' || !Array.isArray(rawReport.cases) || rawReport.cases.length > 20) {
+      if (
+        rawReport.mode !== 'live' ||
+        !Array.isArray(rawReport.cases) ||
+        rawReport.cases.length > 20
+      ) {
         response.sendStatus(503);
         return;
       }
@@ -665,7 +665,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
             return review
               ? {
                   ...ticket,
-                  status: reviewedStatus(ticket.status, review.state),
+                  status: ticketStatus(ticket.status, review.state),
                   priority: review.priority,
                   review_state: review.state,
                 }
@@ -835,208 +835,40 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
     }
   });
 
-  app.post('/tickets/:id/solve', async (request, response, next) => {
-    if (request.headers.cookie?.match(/(?:^|;\s*)demo_seat=agent(?:;|$)/)) {
-      response.sendStatus(403);
-      return;
-    }
-    try {
-      const ticket = /^\d+$/.test(request.params.id)
-        ? await detail(request.params.id, response.locals.session)
-        : null;
-      if (!ticket) {
-        response.sendStatus(404);
-        return;
-      }
-      if (ticket.status !== 'waiting_on_customer') {
-        response.sendStatus(409);
-        return;
-      }
-      const client = await pool.connect();
+  function customerRoute(
+    action: (body: { message?: unknown } | undefined) => TicketAction,
+  ): express.RequestHandler<{ id: string }> {
+    return async (request, response, next) => {
       try {
-        await client.query('BEGIN');
-        await client.query(
-          'SELECT id FROM support_tickets WHERE id = $1 FOR NO KEY UPDATE',
-          [request.params.id],
+        const outcome = await lifecycle.apply(
+          request.params.id,
+          visitorOf(request, response.locals.session),
+          action(request.body),
         );
-        const changed = ticket.review_state === null
-          ? await client.query(
-              `INSERT INTO ticket_reviews (session_id, ticket_id, state, priority, approved_reply)
-               VALUES ($1, $2, 'solved', $3, $4)
-               RETURNING ticket_id`,
-              [response.locals.session, request.params.id, ticket.priority, ticket.approved_reply],
-            )
-          : await client.query(
-              `UPDATE ticket_reviews SET state = 'solved'
-               WHERE session_id = $1 AND ticket_id = $2 AND state = $3 RETURNING ticket_id`,
-              [response.locals.session, request.params.id, ticket.review_state],
-            );
-        if (!changed.rows.length) {
-          await client.query('ROLLBACK');
-          response.sendStatus(409);
+        if (outcome.kind === 'invalid') {
+          response
+            .status(400)
+            .json({ error: 'Enter a message of up to 5000 characters.' });
           return;
         }
-        await archiveAutomaticReply(ticket, request.params.id, response.locals.session, client);
-        await client.query(
-          `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
-           VALUES (nextval('ticket_event_ids'), $1, $2, 'Customer marked conversation solved', $3)`,
-          [request.params.id, response.locals.session, new Date().toISOString()],
-        );
-        await client.query('COMMIT');
-        response.sendStatus(201);
+        response.sendStatus(httpStatus[outcome.kind]);
       } catch (error) {
-        await client.query('ROLLBACK');
-        if ((error as { code?: string }).code === '23505') {
-          response.sendStatus(409);
-          return;
-        }
-        throw error;
-      } finally {
-        client.release();
+        next(error);
       }
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.post('/tickets/:id/hand-off', async (request, response, next) => {
-    if (request.headers.cookie?.match(/(?:^|;\s*)demo_seat=agent(?:;|$)/)) {
-      response.sendStatus(403);
-      return;
-    }
-    try {
-      const ticket = /^\d+$/.test(request.params.id)
-        ? await detail(request.params.id, response.locals.session)
-        : null;
-      if (!ticket) {
-        response.sendStatus(404);
-        return;
-      }
-      if (!ticket.can_request_hand_off) {
-        response.sendStatus(409);
-        return;
-      }
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        await client.query(
-          'SELECT id FROM support_tickets WHERE id = $1 FOR NO KEY UPDATE',
-          [request.params.id],
-        );
-        const reopened = ticket.review_state === null
-          ? await client.query(
-              `INSERT INTO ticket_reviews (session_id, ticket_id, state, priority, approved_reply)
-               VALUES ($1, $2, 'reopened', $3, $4) RETURNING ticket_id`,
-              [response.locals.session, request.params.id, ticket.priority, ticket.approved_reply],
-            )
-          : await client.query(
-              `UPDATE ticket_reviews SET state = 'reopened'
-               WHERE session_id = $1 AND ticket_id = $2 AND state = $3 RETURNING ticket_id`,
-              [response.locals.session, request.params.id, ticket.review_state],
-            );
-        if (!reopened.rows.length) {
-          await client.query('ROLLBACK');
-          response.sendStatus(409);
-          return;
-        }
-        await archiveAutomaticReply(ticket, request.params.id, response.locals.session, client);
-        await client.query(
-          `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
-           VALUES (nextval('ticket_event_ids'), $1, $2, $3, $4)`,
-          [request.params.id, response.locals.session, 'Customer asked for a person', new Date().toISOString()],
-        );
-        await client.query('COMMIT');
-        response.sendStatus(201);
-      } catch (error) {
-        await client.query('ROLLBACK');
-        if ((error as { code?: string }).code === '23505') {
-          response.sendStatus(409);
-          return;
-        }
-        throw error;
-      } finally {
-        client.release();
-      }
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.post('/tickets/:id/messages', async (request, response, next) => {
-    if (request.headers.cookie?.match(/(?:^|;\s*)demo_seat=agent(?:;|$)/)) {
-      response.sendStatus(403);
-      return;
-    }
-    const message = request.body?.message;
-    if (typeof message !== 'string' || !message.trim() || message.length > 5000) {
-      response.status(400).json({ error: 'Enter a message of up to 5000 characters.' });
-      return;
-    }
-    try {
-      const ticket = /^\d+$/.test(request.params.id)
-        ? await detail(request.params.id, response.locals.session)
-        : null;
-      if (!ticket) {
-        response.sendStatus(404);
-        return;
-      }
-      if (ticket.status === 'solved') {
-        response.sendStatus(409);
-        return;
-      }
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        const locked = await client.query(
-          'SELECT status FROM support_tickets WHERE id = $1 FOR NO KEY UPDATE',
-          [request.params.id],
-        );
-        if (!locked.rows.length) {
-          await client.query('ROLLBACK');
-          response.sendStatus(404);
-          return;
-        }
-        await client.query(
-          `INSERT INTO ticket_reviews (session_id, ticket_id, state, priority, approved_reply)
-           VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT (session_id, ticket_id) DO NOTHING`,
-          [
-            response.locals.session,
-            request.params.id,
-            ticket.status !== 'open' ? 'reopened' : (ticket.review_state ?? 'saved'),
-            ticket.priority,
-            ticket.approved_reply,
-          ],
-        );
-        const changed = await client.query(
-          `UPDATE ticket_reviews
-           SET state = CASE WHEN state = 'waiting_on_customer' OR $3 = 'waiting_on_customer' THEN 'reopened' ELSE state END
-           WHERE session_id = $1 AND ticket_id = $2 AND state <> 'solved' RETURNING state`,
-          [response.locals.session, request.params.id, locked.rows[0].status],
-        );
-        if (!changed.rows.length) {
-          await client.query('ROLLBACK');
-          response.sendStatus(409);
-          return;
-        }
-        await archiveAutomaticReply(ticket, request.params.id, response.locals.session, client);
-        await client.query(
-          `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
-           VALUES (nextval('ticket_event_ids'), $1, $2, $3, $4)`,
-          [request.params.id, response.locals.session, `Customer replied: ${message.trim()}`, new Date().toISOString()],
-        );
-        await client.query('COMMIT');
-        response.sendStatus(201);
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally {
-        client.release();
-      }
-    } catch (error) {
-      next(error);
-    }
-  });
+    };
+  }
+  app.post(
+    '/tickets/:id/solve',
+    customerRoute(() => ({ type: 'solve' })),
+  );
+  app.post(
+    '/tickets/:id/hand-off',
+    customerRoute(() => ({ type: 'hand_off' })),
+  );
+  app.post(
+    '/tickets/:id/messages',
+    customerRoute((body) => ({ type: 'message', text: body?.message })),
+  );
 
   app.post('/tickets/:id/check', async (request, response, next) => {
     try {
@@ -1067,135 +899,49 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
 
   app.post('/tickets/:id/review', async (request, response, next) => {
     try {
-      if (!/^\d+$/.test(request.params.id)) {
-        response.sendStatus(404);
-        return;
-      }
-      const owner = isOwner(request.headers.cookie, response.locals.session);
-      const ticket = await detail(
-        request.params.id,
-        response.locals.session,
-        owner,
-      );
-      if (!ticket) {
-        response.sendStatus(404);
-        return;
-      }
-      const { action, reply, priority } = request.body ?? {};
-      const state = ticket.review_state ?? ticket.draft?.state ?? 'saved';
-      if (
-        ticket.status === 'solved' ||
-        !(
-          action === 'reply' ||
-          (action === 'priority' &&
-            state === 'saved' &&
-            ticket.draft &&
-            priority === ticket.draft.suggested_priority &&
-            priority !== ticket.priority)
-        )
-      ) {
+      const { action, reply, priority, internal_confirmed } =
+        request.body ?? {};
+      if (action !== 'reply' && action !== 'priority') {
         response.status(409).json({ error: 'Review action is not available' });
         return;
       }
-      if (
-        action === 'reply' &&
-        (typeof reply !== 'string' || !reply.trim() || reply.length > 5000)
-      ) {
-        response.status(400).json({ error: 'Enter a reply' });
+      const visitor = visitorOf(request, response.locals.session);
+      const outcome = await lifecycle.apply(
+        request.params.id,
+        visitor,
+        action === 'reply'
+          ? {
+              type: 'reply',
+              text: reply,
+              internalConfirmed: internal_confirmed,
+            }
+          : { type: 'priority', priority },
+      );
+      if (outcome.kind === 'ok') {
+        response.json(
+          await detail(request.params.id, visitor.session, visitor.owner),
+        );
         return;
       }
-      const newState =
-        action === 'reply' ? 'waiting_on_customer' : 'saved';
-      const newPriority = action === 'priority' ? priority : ticket.priority;
-      const description =
-        action === 'reply'
-          ? `Agent replied: ${reply.trim()}`
-          : `Human approved ${priority} priority suggestion`;
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        await client.query(
-          'SELECT id FROM support_tickets WHERE id = $1 FOR NO KEY UPDATE',
-          [request.params.id],
-        );
-        if (action === 'reply') {
-          const copies = await checkedCopies(
-            reply.trim(),
-            ticket.draft?.sources ?? [],
-            client,
-            ticket.draft?.internal_copies ?? [],
-          );
-          if (
-            copies.length &&
-            request.body.internal_confirmed !== reply.trim()
-          ) {
-            await client.query('ROLLBACK');
-            response.status(409).json({
+      if (outcome.kind === 'not_found') {
+        response.sendStatus(404);
+        return;
+      }
+      response.status(httpStatus[outcome.kind]).json(
+        outcome.kind === 'internal_copies'
+          ? {
               error:
                 'Internal text copied. Review the highlighted text before delivery.',
-              internal_copies: copies,
-            });
-            return;
-          }
-        }
-        const changed =
-          ticket.review_state === null
-            ? await client.query(
-                `INSERT INTO ticket_reviews (session_id, ticket_id, state, priority, approved_reply)
-              VALUES ($1, $2, $3, $4, $5) RETURNING state`,
-                [
-                  response.locals.session,
-                  request.params.id,
-                  newState,
-                  newPriority,
-                  ticket.approved_reply,
-                ],
-              )
-            : await client.query(
-                `UPDATE ticket_reviews SET state = $3, priority = $4, approved_reply = $5
-              WHERE session_id = $1 AND ticket_id = $2 AND state = $6 RETURNING state`,
-                [
-                  response.locals.session,
-                  request.params.id,
-                  newState,
-                  newPriority,
-                  ticket.approved_reply,
-                  ticket.review_state,
-                ],
-              );
-        if (!changed.rows.length) {
-          await client.query('ROLLBACK');
-          response
-            .status(409)
-            .json({ error: 'Review action is no longer available' });
-          return;
-        }
-        await archiveAutomaticReply(ticket, request.params.id, response.locals.session, client);
-        await client.query(
-          `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
-          VALUES (nextval('ticket_event_ids'), $1, $2, $3, $4)`,
-          [
-            request.params.id,
-            response.locals.session,
-            description,
-            new Date().toISOString(),
-          ],
-        );
-        await client.query('COMMIT');
-      } catch (error) {
-        await client.query('ROLLBACK');
-        if ((error as { code?: string }).code === '23505') {
-          response
-            .status(409)
-            .json({ error: 'Review action is no longer available' });
-          return;
-        }
-        throw error;
-      } finally {
-        client.release();
-      }
-      response.json(
-        await detail(request.params.id, response.locals.session, owner),
+              internal_copies: outcome.copies,
+            }
+          : {
+              error:
+                outcome.kind === 'invalid'
+                  ? 'Enter a reply'
+                  : outcome.kind === 'conflict'
+                    ? 'Review action is no longer available'
+                    : 'Review action is not available',
+            },
       );
     } catch (error) {
       next(error);
