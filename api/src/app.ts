@@ -24,6 +24,7 @@ import {
   type TicketAction,
   type Visitor,
 } from './ticket-lifecycle.js';
+import { readHistory, recordHistory } from './ticket-history.js';
 
 const httpStatus: Record<Outcome['kind'], number> = {
   ok: 201,
@@ -196,12 +197,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
           sourceKind(source, articles.rows) === 'help_article',
       );
     }
-    const events = await pool.query(
-      `SELECT id, description, COALESCE(occurred_at, created_at) AS created_at FROM ticket_events
-       WHERE ticket_id = $1 AND (session_id IS NULL OR session_id = $2)
-       ORDER BY COALESCE(occurred_at, created_at), id`,
-      [id, session],
-    );
+    const history = await readHistory(pool, id, session);
     const current = review.rows[0];
     const {
       decision: storedDecision,
@@ -227,7 +223,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
             : Boolean(decision))),
       can_request_hand_off: canRequestHandOff(
         decision,
-        events.rows,
+        history,
         approvedReply,
         status,
       ),
@@ -264,7 +260,7 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
               ),
             }
           : null,
-      history: events.rows,
+      history,
     };
   }
   const lifecycle = createTicketLifecycle(pool, {
@@ -725,11 +721,12 @@ export function createApp(pool: Pick<Pool, 'query' | 'connect'>) {
           createdAt,
         ],
       );
-      await client.query(
-        `INSERT INTO ticket_events (id, ticket_id, description, created_at)
-         VALUES (nextval('ticket_event_ids'), $1, 'Request received', $2)
-         RETURNING id, description, created_at`,
-        [ticket.rows[0].id, createdAt],
+      await recordHistory(
+        client,
+        ticket.rows[0].id,
+        null,
+        { kind: 'request_received' },
+        { createdAt },
       );
       await client.query('COMMIT');
       ticketId = String(ticket.rows[0].id);

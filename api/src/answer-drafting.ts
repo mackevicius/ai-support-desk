@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { generateDraft, type Generation } from './generation.js';
+import { recordHistory } from './ticket-history.js';
 
 type Generated = Awaited<ReturnType<typeof generateDraft>>;
 type Database = Pick<Pool, 'query'>;
@@ -139,18 +140,16 @@ async function recordDecision(
   else
     await database.query(
       'UPDATE support_tickets SET status = $1, decision = $2 WHERE id = $3',
-      [automatic ? 'waiting_on_customer' : 'open', JSON.stringify(decision), ticketId],
+      [
+        automatic ? 'waiting_on_customer' : 'open',
+        JSON.stringify(decision),
+        ticketId,
+      ],
     );
-  await database.query(
-    `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
-     VALUES (nextval('ticket_event_ids'), $1, $2, $3, $4)`,
-    [
-      ticketId,
-      session,
-      `${automatic ? 'Automatic reply' : 'Hand-off'}: ${decision.reason}`,
-      new Date().toISOString(),
-    ],
-  );
+  await recordHistory(database, ticketId, session, {
+    kind: automatic ? 'automatic_reply_decided' : 'hand_off_decided',
+    text: decision.reason,
+  });
 }
 
 // First answer for a newly submitted support ticket: reply automatically or hand off.
@@ -172,7 +171,11 @@ export async function draftAnswer(
       'SELECT state FROM ticket_reviews WHERE ticket_id = $1 AND session_id = $2',
       [ticket.id, session],
     );
-    if (!locked.rows.length || locked.rows[0].status === 'solved' || review.rows.length) {
+    if (
+      !locked.rows.length ||
+      locked.rows[0].status === 'solved' ||
+      review.rows.length
+    ) {
       await client.query('ROLLBACK');
       return;
     }
@@ -254,11 +257,9 @@ export async function redraftAnswer(
         decide(ticket.question, generated, true),
         ticket.is_sample,
       );
-    await client.query(
-      `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
-       VALUES (nextval('ticket_event_ids'), $1, $2, 'Agent requested a new answer draft', $3)`,
-      [ticket.id, session, new Date().toISOString()],
-    );
+    await recordHistory(client, ticket.id, session, {
+      kind: 'redraft_requested',
+    });
     await client.query('COMMIT');
     return 'drafted';
   } catch (error) {

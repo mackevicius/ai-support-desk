@@ -2,6 +2,7 @@ import type { Pool } from 'pg';
 import { readFileSync } from 'node:fs';
 import { sourceKind } from './internal-copy.js';
 import { embedDocument, embeddingModel } from './embeddings.js';
+import { automaticReplyPattern, recordHistory } from './ticket-history.js';
 
 const starter = JSON.parse(
   readFileSync(new URL('../starter-data.json', import.meta.url), 'utf8'),
@@ -81,10 +82,7 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
       'embedding_usage',
       'model text NOT NULL, operation text NOT NULL, session_id text, cached boolean NOT NULL, succeeded boolean NOT NULL, latency_ms integer NOT NULL, created_at timestamptz NOT NULL DEFAULT NOW()',
     ],
-    [
-      'quality_reports',
-      'mode text PRIMARY KEY, report text NOT NULL',
-    ],
+    ['quality_reports', 'mode text PRIMARY KEY, report text NOT NULL'],
   ]) {
     try {
       await pool.query(`CREATE TABLE ${table} (${columns})`);
@@ -108,7 +106,7 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
   await pool.query(
     `CREATE UNIQUE INDEX IF NOT EXISTS ticket_automatic_reply
      ON ticket_events (ticket_id, session_id)
-     WHERE description LIKE 'Automatic in-app reply: %'`,
+     WHERE description LIKE '${automaticReplyPattern}'`,
   );
   await pool.query(
     'ALTER TABLE ticket_reviews ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT NOW()',
@@ -351,15 +349,14 @@ export async function prepareDatabase(pool: Pick<Pool, 'query'>) {
       'DELETE FROM ticket_events WHERE ticket_id = $1 AND session_id IS NULL',
       [ticket.id],
     );
-    for (const description of [
-      'Request received',
-      `${automatic ? 'Automatic reply' : 'Hand-off'}: ${ticket.reason}`,
-    ]) {
-      await pool.query(
-        `INSERT INTO ticket_events (id, ticket_id, description, created_at)
-        VALUES (nextval('ticket_event_ids'), $1, $2, $3)`,
-        [ticket.id, description, created],
-      );
+    for (const entry of [
+      { kind: 'request_received' },
+      {
+        kind: automatic ? 'automatic_reply_decided' : 'hand_off_decided',
+        text: ticket.reason,
+      },
+    ] as const) {
+      await recordHistory(pool, ticket.id, null, entry, { createdAt: created });
     }
   }
   const maximum = (

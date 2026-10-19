@@ -45,6 +45,14 @@ An AI-suggested response to a support ticket, with references to the knowledge b
 A message a support agent sends to the customer: the answer draft as-is, an edited version of it, or their own text. Answering and asking for details are the same act.
 _Avoid_: Approved reply
 
+**Customer message**:
+A message the customer sends in their support ticket after the original question, such as a follow-up or extra details.
+_Avoid_: Customer reply
+
+**Ticket history**:
+The ordered record of what happened on a support ticket: its messages (customer messages, automatic replies, agent replies) and its other events (hand-offs, redraft requests, being solved).
+_Avoid_: Transcript, event log
+
 **Waiting on customer**:
 A support ticket where Tunely has replied and the next move is the customer's.
 

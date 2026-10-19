@@ -53,12 +53,8 @@ export default async function TicketPage({
     (item) => item.id !== ticket.id && item.status === 'open',
   );
   const draftAnswered =
-    ticket.history.findLastIndex((event) =>
-      event.description.startsWith('Agent replied: '),
-    ) >
-    ticket.history.findLastIndex(
-      (event) => event.description === 'Agent requested a new answer draft',
-    );
+    ticket.history.findLastIndex((event) => event.kind === 'agent_reply') >
+    ticket.history.findLastIndex((event) => event.kind === 'redraft_requested');
 
   return (
     <main className="workspace focus-view agent-workspace">
@@ -213,7 +209,7 @@ export default async function TicketPage({
             </p>
           </li>
           {ticket.history.some(
-            (event) => event.description === 'Customer asked for a person',
+            (event) => event.kind === 'customer_hand_off',
           ) && (
             <li>
               <h3>Handed off to a person</h3>

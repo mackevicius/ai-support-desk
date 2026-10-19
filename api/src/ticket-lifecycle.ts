@@ -1,8 +1,13 @@
 import type { Pool, PoolClient } from 'pg';
 import type { InternalCopy } from './internal-copy.js';
+import {
+  recordHistory,
+  type HistoryEntry,
+  type HistoryEvent,
+} from './ticket-history.js';
 
 type Database = Pick<Pool, 'query'>;
-type Event = { description: string; created_at?: string };
+type Event = Pick<HistoryEvent, 'kind' | 'created_at'>;
 type Decision =
   | { kind: string; documents?: { kind?: string }[] }
   | null
@@ -78,8 +83,8 @@ function automaticReplyDelivered(decision: Decision, history: Event[]) {
   return (
     history.some(
       (event) =>
-        event.description.startsWith('Automatic reply: ') ||
-        event.description.startsWith('Automatic in-app reply: '),
+        event.kind === 'automatic_reply_decided' ||
+        event.kind === 'automatic_reply',
     ) ||
     (decision?.kind === 'automatic_reply' &&
       !decision.documents?.some((source) => source.kind === 'internal_note'))
@@ -96,7 +101,7 @@ export function canRequestHandOff(
     automaticReplyDelivered(decision, history) &&
     Boolean(approvedReply) &&
     status === 'waiting_on_customer' &&
-    !history.some((event) => event.description.startsWith('Agent replied: '))
+    !history.some((event) => event.kind === 'agent_reply')
   );
 }
 
@@ -137,26 +142,18 @@ export function createTicketLifecycle(
     if (
       !automaticReplyDelivered(ticket.decision, ticket.history) ||
       !ticket.approved_reply ||
-      ticket.history.some((event) =>
-        event.description.startsWith('Automatic in-app reply: '),
-      )
+      ticket.history.some((event) => event.kind === 'automatic_reply')
     )
       return;
     const deliveredAt =
-      ticket.history.find((event) =>
-        event.description.startsWith('Automatic reply: '),
-      )?.created_at ?? ticket.created_at;
-    await client.query(
-      `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at, occurred_at)
-       VALUES (nextval('ticket_event_ids'), $1, $2, $3, $4, $5)
-       ON CONFLICT DO NOTHING`,
-      [
-        id,
-        session,
-        `Automatic in-app reply: ${ticket.approved_reply}`,
-        new Date().toISOString(),
-        deliveredAt,
-      ],
+      ticket.history.find((event) => event.kind === 'automatic_reply_decided')
+        ?.created_at ?? ticket.created_at;
+    await recordHistory(
+      client,
+      id,
+      session,
+      { kind: 'automatic_reply', text: ticket.approved_reply },
+      { occurredAt: deliveredAt },
     );
   }
 
@@ -241,15 +238,15 @@ export function createTicketLifecycle(
     ticket: Ticket,
     action: TicketAction,
     lockedStatus: string,
-  ): Promise<{ event: string } | Outcome> {
+  ): Promise<{ event: HistoryEntry } | Outcome> {
     switch (action.type) {
       case 'solve':
         return (await moveReview(client, id, session, ticket, 'solved'))
-          ? { event: 'Customer marked conversation solved' }
+          ? { event: { kind: 'solved' } }
           : { kind: 'conflict' };
       case 'hand_off':
         return (await moveReview(client, id, session, ticket, 'reopened'))
-          ? { event: 'Customer asked for a person' }
+          ? { event: { kind: 'customer_hand_off' } }
           : { kind: 'conflict' };
       case 'message':
         return (await reopenForMessage(
@@ -259,7 +256,12 @@ export function createTicketLifecycle(
           ticket,
           lockedStatus,
         ))
-          ? { event: `Customer replied: ${(action.text as string).trim()}` }
+          ? {
+              event: {
+                kind: 'customer_message',
+                text: (action.text as string).trim(),
+              },
+            }
           : { kind: 'conflict' };
       case 'reply': {
         const reply = (action.text as string).trim();
@@ -279,7 +281,7 @@ export function createTicketLifecycle(
           'waiting_on_customer',
           ticket.priority,
         ))
-          ? { event: `Agent replied: ${reply}` }
+          ? { event: { kind: 'agent_reply', text: reply } }
           : { kind: 'conflict' };
       }
       case 'priority':
@@ -291,7 +293,12 @@ export function createTicketLifecycle(
           'saved',
           action.priority as string,
         ))
-          ? { event: `Human approved ${action.priority} priority suggestion` }
+          ? {
+              event: {
+                kind: 'priority_approved',
+                text: action.priority as string,
+              },
+            }
           : { kind: 'conflict' };
     }
   }
@@ -337,11 +344,7 @@ export function createTicketLifecycle(
         return result;
       }
       await archiveAutomaticReply(client, id, visitor.session, ticket);
-      await client.query(
-        `INSERT INTO ticket_events (id, ticket_id, session_id, description, created_at)
-         VALUES (nextval('ticket_event_ids'), $1, $2, $3, $4)`,
-        [id, visitor.session, result.event, new Date().toISOString()],
-      );
+      await recordHistory(client, id, visitor.session, result.event);
       await client.query('COMMIT');
       return { kind: 'ok' };
     } catch (error) {

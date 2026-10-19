@@ -94,8 +94,27 @@ export type Ticket = TicketSummary & {
     sources: { id: number; title: string; body: string; kind?: string }[];
     internal_copies?: InternalCopy[];
   };
-  history: { id: number; description: string; created_at: string }[];
+  history: {
+    id: number;
+    kind: HistoryKind;
+    text?: string;
+    description: string;
+    created_at: string;
+  }[];
 };
+
+type HistoryKind =
+  | 'request_received'
+  | 'automatic_reply_decided'
+  | 'hand_off_decided'
+  | 'automatic_reply'
+  | 'customer_message'
+  | 'agent_reply'
+  | 'customer_hand_off'
+  | 'solved'
+  | 'redraft_requested'
+  | 'priority_approved'
+  | 'other';
 
 export type InternalCopy = { start: number; end: number; text: string };
 
@@ -225,20 +244,31 @@ export async function submitQuestion(
   return ticket.id;
 }
 
-export async function postCustomerMessage(id: string, sessionId: string, message: string) {
+export async function postCustomerMessage(
+  id: string,
+  sessionId: string,
+  message: string,
+) {
   const response = await fetch(
     `${process.env.API_URL ?? 'http://localhost:3001'}/tickets/${encodeURIComponent(id)}/messages`,
     {
       method: 'POST',
-      headers: { 'content-type': 'application/json', cookie: `demo_session=${sessionId}; demo_seat=customer` },
+      headers: {
+        'content-type': 'application/json',
+        cookie: `demo_session=${sessionId}; demo_seat=customer`,
+      },
       body: JSON.stringify({ message }),
       cache: 'no-store',
     },
   );
-  if (!response.ok) throw new Error('Could not send your message. Please try again.');
+  if (!response.ok)
+    throw new Error('Could not send your message. Please try again.');
 }
 
-export async function solveCustomerConversation(id: string, sessionId: string): Promise<string | null> {
+export async function solveCustomerConversation(
+  id: string,
+  sessionId: string,
+): Promise<string | null> {
   const response = await fetch(
     `${process.env.API_URL ?? 'http://localhost:3001'}/tickets/${encodeURIComponent(id)}/solve`,
     {
@@ -253,7 +283,10 @@ export async function solveCustomerConversation(id: string, sessionId: string): 
   return 'Could not mark this conversation solved. Please try again.';
 }
 
-export async function requestCustomerHandOff(id: string, sessionId: string): Promise<string | null> {
+export async function requestCustomerHandOff(
+  id: string,
+  sessionId: string,
+): Promise<string | null> {
   const response = await fetch(
     `${process.env.API_URL ?? 'http://localhost:3001'}/tickets/${encodeURIComponent(id)}/hand-off`,
     {

@@ -11,8 +11,8 @@ export function ConversationUpdates({
   agent?: boolean;
   reply: ReactNode;
 }) {
-  const automaticReply = history.find((event) =>
-    event.description.startsWith('Automatic in-app reply: '),
+  const automaticReply = history.find(
+    (event) => event.kind === 'automatic_reply',
   );
   const currentReply =
     agent && reply ? (
@@ -26,14 +26,14 @@ export function ConversationUpdates({
     <>
       {!automaticReply && currentReply}
       {history.map((event) => {
-        if (event.description.startsWith('Automatic in-app reply: ')) {
+        if (event.kind === 'automatic_reply') {
           return (
             <div key={event.id} className="conversation-current-reply">
               {currentReply}
             </div>
           );
         }
-        if (event.description.startsWith('Customer replied: ')) {
+        if (event.kind === 'customer_message') {
           return (
             <ChatBubble
               key={event.id}
@@ -41,11 +41,11 @@ export function ConversationUpdates({
               own={!agent}
               aria-label={agent ? 'Customer message' : 'Your message'}
             >
-              {event.description.slice('Customer replied: '.length)}
+              {event.text}
             </ChatBubble>
           );
         }
-        if (event.description.startsWith('Agent replied: ')) {
+        if (event.kind === 'agent_reply') {
           return (
             <ChatBubble
               key={event.id}
@@ -54,7 +54,7 @@ export function ConversationUpdates({
               label="Tunely team"
               aria-label="Agent reply"
             >
-              {event.description.slice('Agent replied: '.length)}
+              {event.text}
             </ChatBubble>
           );
         }
