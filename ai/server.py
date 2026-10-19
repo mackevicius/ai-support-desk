@@ -11,6 +11,10 @@ from retrieval import retrieve, selected_method, terms
 
 
 STAFF_REVIEW_REPLY = 'A Tunely team member needs to review this request.'
+CLARIFICATION_REPLY = 'Could you clarify your request? The available help articles do not support an answer yet.'
+
+def clarification(topic):
+    return {**topic, 'reply': CLARIFICATION_REPLY, 'suggested_priority': 'normal', 'source_ids': []}
 
 
 def copies_internal_phrase(reply, articles):
@@ -50,11 +54,7 @@ def _generate(question, articles, metadata_callback=None, question_embedding=Non
     method = selected_method() if question_embedding is not None else 'word_matching'
     relevant = retrieve(question, articles, method, question_embedding)
     if not relevant:
-        return {
-            'reply': 'Could you clarify your request? The available help articles do not support an answer yet.',
-            'suggested_priority': 'normal',
-            'source_ids': [],
-        }
+        return clarification({})
 
     key = os.environ.get('OPENAI_API_KEY')
     if not key:
@@ -113,20 +113,8 @@ def _generate(question, articles, metadata_callback=None, question_embedding=Non
     cited_text = ' '.join(f"{article['title']} {article['body']}" for article in relevant if article['id'] in sources)
     topic = {'topic': answer['topic']} if 'topic' in answer else {}
     staff_sources = any(article.get('kind') == 'internal_note' and article['id'] in sources for article in relevant)
-    if not sources:
-        return {
-            **topic,
-            'reply': 'Could you clarify your request? The available help articles do not support an answer yet.',
-            'suggested_priority': 'normal',
-            'source_ids': [],
-        }
-    if is_instruction(answer['reply']):
-        return {
-            **topic,
-            'reply': 'Could you clarify your request? The available help articles do not support an answer yet.',
-            'suggested_priority': 'normal',
-            'source_ids': [],
-        }
+    if not sources or is_instruction(answer['reply']):
+        return clarification(topic)
     if not terms(answer['reply']).issubset(terms(cited_text)):
         if staff_sources:
             return {**topic, 'reply': STAFF_REVIEW_REPLY, 'suggested_priority': answer['suggested_priority'],
@@ -151,12 +139,7 @@ def _generate(question, articles, metadata_callback=None, question_embedding=Non
         score, source_id, sentence = max(sentences, key=lambda item: item[0], default=(0, None, None))
         if score >= min(2, len(keywords)) and score > 0:
             return {**topic, 'reply': sentence, 'suggested_priority': answer['suggested_priority'], 'source_ids': [source_id]}
-        return {
-            **topic,
-            'reply': 'Could you clarify your request? The available help articles do not support an answer yet.',
-            'suggested_priority': 'normal',
-            'source_ids': [],
-        }
+        return clarification(topic)
     if staff_sources:
         answer['clearly_covered'] = False
         answer['requires_team'] = True
