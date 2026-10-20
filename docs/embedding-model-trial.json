@@ -1,0 +1,1122 @@
+{
+  "schema_version": 1,
+  "environment": {
+    "recorded_at": "2026-10-20T12:10:00.668Z",
+    "node": "v24.21.0",
+    "replayed_from": "/Users/poleymore/Desktop/teachme/docs/embedding-model-trial.json",
+    "platform": "darwin",
+    "architecture": "x64",
+    "cpu": "Apple M4 Pro",
+    "logical_cpus": 14,
+    "transformers": "3.8.1",
+    "cache_dir": "/var/folders/f4/x39128ms0blg5bfjwlzfs22m0000gn/T/tunely-embedding-trial-UEymFa"
+  },
+  "dataset": {
+    "article_count": 20,
+    "cases": [
+      {
+        "id": "family",
+        "question": "How can I invite family members?",
+        "expected_id": 1
+      },
+      {
+        "id": "invoices",
+        "question": "Where can I download invoices?",
+        "expected_id": 2
+      },
+      {
+        "id": "playback",
+        "question": "Music stops playing. What should I try?",
+        "expected_id": 3
+      },
+      {
+        "id": "profile",
+        "question": "How do I change my display name?",
+        "expected_id": 4
+      },
+      {
+        "id": "offline",
+        "question": "How can I download albums for offline listening?",
+        "expected_id": 5
+      },
+      {
+        "id": "security",
+        "question": "How do I enable two-factor authentication?",
+        "expected_id": 9
+      },
+      {
+        "id": "cancel",
+        "question": "How can I cancel my paid plan?",
+        "expected_id": 11
+      },
+      {
+        "id": "semantic-paraphrase",
+        "question": "Terminate subscription",
+        "expected_id": 11
+      },
+      {
+        "id": "semantic-receipt",
+        "question": "Where can I get a receipt for my subscription?",
+        "expected_id": 2
+      },
+      {
+        "id": "semantic-nickname",
+        "question": "Where can I edit my nickname?",
+        "expected_id": 4
+      },
+      {
+        "id": "semantic-audio-quality",
+        "question": "How can I adjust the sound fidelity?",
+        "expected_id": 6
+      }
+    ],
+    "negatives": [
+      {
+        "id": "passport",
+        "question": "How do I renew my passport?"
+      },
+      {
+        "id": "weather",
+        "question": "What is the weather in Tokyo tomorrow?"
+      },
+      {
+        "id": "tax",
+        "question": "Can you help me file my income tax return?"
+      },
+      {
+        "id": "bread",
+        "question": "How long should I bake sourdough bread?"
+      },
+      {
+        "id": "plumbing",
+        "question": "How do I fix a leaking kitchen tap?"
+      },
+      {
+        "id": "mortgage",
+        "question": "Where do I apply for a mortgage?"
+      }
+    ],
+    "fingerprints": {
+      "starter_sha256": "5e8809a59df0a1f649b6c1bf7309d1d2bfbf66bc59a94aad2bc9dfb4d24d09c0",
+      "cases_sha256": "540ecc97861b1fcb7ae720a2003e009b0a9c6b0161e65625dc0c836f2cc6f528"
+    }
+  },
+  "metric": "hit@3",
+  "word_matching": {
+    "hits": 7,
+    "total": 11,
+    "cases": [
+      {
+        "id": "family",
+        "question": "How can I invite family members?",
+        "expected_id": 1,
+        "found_ids": [
+          1,
+          17,
+          7
+        ],
+        "hit": true
+      },
+      {
+        "id": "invoices",
+        "question": "Where can I download invoices?",
+        "expected_id": 2,
+        "found_ids": [
+          2,
+          5,
+          6
+        ],
+        "hit": true
+      },
+      {
+        "id": "playback",
+        "question": "Music stops playing. What should I try?",
+        "expected_id": 3,
+        "found_ids": [
+          3,
+          7,
+          10
+        ],
+        "hit": true
+      },
+      {
+        "id": "profile",
+        "question": "How do I change my display name?",
+        "expected_id": 4,
+        "found_ids": [
+          4
+        ],
+        "hit": true
+      },
+      {
+        "id": "offline",
+        "question": "How can I download albums for offline listening?",
+        "expected_id": 5,
+        "found_ids": [
+          5,
+          7,
+          10
+        ],
+        "hit": true
+      },
+      {
+        "id": "security",
+        "question": "How do I enable two-factor authentication?",
+        "expected_id": 9,
+        "found_ids": [
+          9
+        ],
+        "hit": true
+      },
+      {
+        "id": "cancel",
+        "question": "How can I cancel my paid plan?",
+        "expected_id": 11,
+        "found_ids": [
+          11,
+          5,
+          1
+        ],
+        "hit": true
+      },
+      {
+        "id": "semantic-paraphrase",
+        "question": "Terminate subscription",
+        "expected_id": 11,
+        "found_ids": [],
+        "hit": false
+      },
+      {
+        "id": "semantic-receipt",
+        "question": "Where can I get a receipt for my subscription?",
+        "expected_id": 2,
+        "found_ids": [],
+        "hit": false
+      },
+      {
+        "id": "semantic-nickname",
+        "question": "Where can I edit my nickname?",
+        "expected_id": 4,
+        "found_ids": [],
+        "hit": false
+      },
+      {
+        "id": "semantic-audio-quality",
+        "question": "How can I adjust the sound fidelity?",
+        "expected_id": 6,
+        "found_ids": [],
+        "hit": false
+      }
+    ]
+  },
+  "models": [
+    {
+      "config": {
+        "key": "minilm",
+        "model": "Xenova/all-MiniLM-L6-v2",
+        "revision": "751bff37182d3f1213fa05d7196b954e230abad9",
+        "pooling": "mean",
+        "query_prefix": "",
+        "dtype": "q8",
+        "normalize": true,
+        "dimensions": 384,
+        "max_length": 512
+      },
+      "measurements": {
+        "fresh_process": true,
+        "cache_bytes_before_load": 0,
+        "load_ms": 3736.3,
+        "first_embedding_ms": 34.7,
+        "document_median_ms": 18.53,
+        "question_median_ms": 5.17,
+        "warm_query_median_ms": 4.5,
+        "warm_query_repeats": 5,
+        "peak_rss_mib": 280.1,
+        "model_cache_bytes": 23685047,
+        "q8_onnx_bytes": 22972370,
+        "snapshot_agreement": {
+          "compared": 31,
+          "max_absolute_difference": 0,
+          "tolerance": 1e-05,
+          "missing_question_ids": [],
+          "passed": true
+        }
+      },
+      "current": {
+        "threshold": 0.25,
+        "hits": 10,
+        "total": 11,
+        "negative_matches": 0,
+        "negative_total": 6,
+        "cases": [
+          {
+            "id": "family",
+            "question": "How can I invite family members?",
+            "expected_id": 1,
+            "found_ids": [
+              1,
+              19,
+              17
+            ],
+            "hit": true
+          },
+          {
+            "id": "invoices",
+            "question": "Where can I download invoices?",
+            "expected_id": 2,
+            "found_ids": [
+              2
+            ],
+            "hit": true
+          },
+          {
+            "id": "playback",
+            "question": "Music stops playing. What should I try?",
+            "expected_id": 3,
+            "found_ids": [
+              3,
+              13,
+              10
+            ],
+            "hit": true
+          },
+          {
+            "id": "profile",
+            "question": "How do I change my display name?",
+            "expected_id": 4,
+            "found_ids": [
+              4
+            ],
+            "hit": true
+          },
+          {
+            "id": "offline",
+            "question": "How can I download albums for offline listening?",
+            "expected_id": 5,
+            "found_ids": [
+              5,
+              10,
+              14
+            ],
+            "hit": true
+          },
+          {
+            "id": "security",
+            "question": "How do I enable two-factor authentication?",
+            "expected_id": 9,
+            "found_ids": [
+              9
+            ],
+            "hit": true
+          },
+          {
+            "id": "cancel",
+            "question": "How can I cancel my paid plan?",
+            "expected_id": 11,
+            "found_ids": [
+              11,
+              8,
+              5
+            ],
+            "hit": true
+          },
+          {
+            "id": "semantic-paraphrase",
+            "question": "Terminate subscription",
+            "expected_id": 11,
+            "found_ids": [
+              11,
+              10,
+              5
+            ],
+            "hit": true
+          },
+          {
+            "id": "semantic-receipt",
+            "question": "Where can I get a receipt for my subscription?",
+            "expected_id": 2,
+            "found_ids": [
+              2,
+              5,
+              15
+            ],
+            "hit": true
+          },
+          {
+            "id": "semantic-nickname",
+            "question": "Where can I edit my nickname?",
+            "expected_id": 4,
+            "found_ids": [],
+            "hit": false
+          },
+          {
+            "id": "semantic-audio-quality",
+            "question": "How can I adjust the sound fidelity?",
+            "expected_id": 6,
+            "found_ids": [
+              6
+            ],
+            "hit": true
+          }
+        ],
+        "negatives": [
+          {
+            "id": "passport",
+            "question": "How do I renew my passport?",
+            "found_ids": []
+          },
+          {
+            "id": "weather",
+            "question": "What is the weather in Tokyo tomorrow?",
+            "found_ids": []
+          },
+          {
+            "id": "tax",
+            "question": "Can you help me file my income tax return?",
+            "found_ids": []
+          },
+          {
+            "id": "bread",
+            "question": "How long should I bake sourdough bread?",
+            "found_ids": []
+          },
+          {
+            "id": "plumbing",
+            "question": "How do I fix a leaking kitchen tap?",
+            "found_ids": []
+          },
+          {
+            "id": "mortgage",
+            "question": "Where do I apply for a mortgage?",
+            "found_ids": []
+          }
+        ]
+      },
+      "calibrated": {
+        "threshold": 0.25,
+        "hits": 10,
+        "total": 11,
+        "negative_matches": 0,
+        "negative_total": 6,
+        "cases": [
+          {
+            "id": "family",
+            "question": "How can I invite family members?",
+            "expected_id": 1,
+            "found_ids": [
+              1,
+              19,
+              17
+            ],
+            "hit": true
+          },
+          {
+            "id": "invoices",
+            "question": "Where can I download invoices?",
+            "expected_id": 2,
+            "found_ids": [
+              2
+            ],
+            "hit": true
+          },
+          {
+            "id": "playback",
+            "question": "Music stops playing. What should I try?",
+            "expected_id": 3,
+            "found_ids": [
+              3,
+              13,
+              10
+            ],
+            "hit": true
+          },
+          {
+            "id": "profile",
+            "question": "How do I change my display name?",
+            "expected_id": 4,
+            "found_ids": [
+              4
+            ],
+            "hit": true
+          },
+          {
+            "id": "offline",
+            "question": "How can I download albums for offline listening?",
+            "expected_id": 5,
+            "found_ids": [
+              5,
+              10,
+              14
+            ],
+            "hit": true
+          },
+          {
+            "id": "security",
+            "question": "How do I enable two-factor authentication?",
+            "expected_id": 9,
+            "found_ids": [
+              9
+            ],
+            "hit": true
+          },
+          {
+            "id": "cancel",
+            "question": "How can I cancel my paid plan?",
+            "expected_id": 11,
+            "found_ids": [
+              11,
+              8,
+              5
+            ],
+            "hit": true
+          },
+          {
+            "id": "semantic-paraphrase",
+            "question": "Terminate subscription",
+            "expected_id": 11,
+            "found_ids": [
+              11,
+              10,
+              5
+            ],
+            "hit": true
+          },
+          {
+            "id": "semantic-receipt",
+            "question": "Where can I get a receipt for my subscription?",
+            "expected_id": 2,
+            "found_ids": [
+              2,
+              5,
+              15
+            ],
+            "hit": true
+          },
+          {
+            "id": "semantic-nickname",
+            "question": "Where can I edit my nickname?",
+            "expected_id": 4,
+            "found_ids": [],
+            "hit": false
+          },
+          {
+            "id": "semantic-audio-quality",
+            "question": "How can I adjust the sound fidelity?",
+            "expected_id": 6,
+            "found_ids": [
+              6
+            ],
+            "hit": true
+          }
+        ],
+        "negatives": [
+          {
+            "id": "passport",
+            "question": "How do I renew my passport?",
+            "found_ids": []
+          },
+          {
+            "id": "weather",
+            "question": "What is the weather in Tokyo tomorrow?",
+            "found_ids": []
+          },
+          {
+            "id": "tax",
+            "question": "Can you help me file my income tax return?",
+            "found_ids": []
+          },
+          {
+            "id": "bread",
+            "question": "How long should I bake sourdough bread?",
+            "found_ids": []
+          },
+          {
+            "id": "plumbing",
+            "question": "How do I fix a leaking kitchen tap?",
+            "found_ids": []
+          },
+          {
+            "id": "mortgage",
+            "question": "Where do I apply for a mortgage?",
+            "found_ids": []
+          }
+        ]
+      },
+      "thresholds": [
+        {
+          "threshold": 0.25,
+          "hits": 10,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.3,
+          "hits": 10,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.35,
+          "hits": 9,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.4,
+          "hits": 9,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.45,
+          "hits": 7,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.5,
+          "hits": 7,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.55,
+          "hits": 5,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.6,
+          "hits": 4,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.65,
+          "hits": 4,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.7,
+          "hits": 3,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.75,
+          "hits": 1,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.8,
+          "hits": 0,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.85,
+          "hits": 0,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.9,
+          "hits": 0,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.95,
+          "hits": 0,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        }
+      ]
+    },
+    {
+      "config": {
+        "key": "bge",
+        "model": "Xenova/bge-small-en-v1.5",
+        "revision": "ea104dacec62c0de699686887e3f920caeb4f3e3",
+        "pooling": "cls",
+        "query_prefix": "Represent this sentence for searching relevant passages: ",
+        "dtype": "q8",
+        "normalize": true,
+        "dimensions": 384,
+        "max_length": 512
+      },
+      "measurements": {
+        "fresh_process": true,
+        "cache_bytes_before_load": 0,
+        "load_ms": 4705.06,
+        "first_embedding_ms": 49.48,
+        "document_median_ms": 34.92,
+        "question_median_ms": 16.86,
+        "warm_query_median_ms": 15.46,
+        "warm_query_repeats": 5,
+        "peak_rss_mib": 281.84,
+        "model_cache_bytes": 34726871,
+        "q8_onnx_bytes": 34014426,
+        "snapshot_agreement": null
+      },
+      "current": {
+        "threshold": 0.25,
+        "hits": 11,
+        "total": 11,
+        "negative_matches": 6,
+        "negative_total": 6,
+        "cases": [
+          {
+            "id": "family",
+            "question": "How can I invite family members?",
+            "expected_id": 1,
+            "found_ids": [
+              1,
+              19,
+              17
+            ],
+            "hit": true
+          },
+          {
+            "id": "invoices",
+            "question": "Where can I download invoices?",
+            "expected_id": 2,
+            "found_ids": [
+              2,
+              14,
+              5
+            ],
+            "hit": true
+          },
+          {
+            "id": "playback",
+            "question": "Music stops playing. What should I try?",
+            "expected_id": 3,
+            "found_ids": [
+              3,
+              13,
+              10
+            ],
+            "hit": true
+          },
+          {
+            "id": "profile",
+            "question": "How do I change my display name?",
+            "expected_id": 4,
+            "found_ids": [
+              4,
+              8,
+              6
+            ],
+            "hit": true
+          },
+          {
+            "id": "offline",
+            "question": "How can I download albums for offline listening?",
+            "expected_id": 5,
+            "found_ids": [
+              5,
+              10,
+              7
+            ],
+            "hit": true
+          },
+          {
+            "id": "security",
+            "question": "How do I enable two-factor authentication?",
+            "expected_id": 9,
+            "found_ids": [
+              9,
+              20,
+              17
+            ],
+            "hit": true
+          },
+          {
+            "id": "cancel",
+            "question": "How can I cancel my paid plan?",
+            "expected_id": 11,
+            "found_ids": [
+              11,
+              8,
+              2
+            ],
+            "hit": true
+          },
+          {
+            "id": "semantic-paraphrase",
+            "question": "Terminate subscription",
+            "expected_id": 11,
+            "found_ids": [
+              11,
+              1,
+              5
+            ],
+            "hit": true
+          },
+          {
+            "id": "semantic-receipt",
+            "question": "Where can I get a receipt for my subscription?",
+            "expected_id": 2,
+            "found_ids": [
+              2,
+              15,
+              5
+            ],
+            "hit": true
+          },
+          {
+            "id": "semantic-nickname",
+            "question": "Where can I edit my nickname?",
+            "expected_id": 4,
+            "found_ids": [
+              4,
+              19,
+              8
+            ],
+            "hit": true
+          },
+          {
+            "id": "semantic-audio-quality",
+            "question": "How can I adjust the sound fidelity?",
+            "expected_id": 6,
+            "found_ids": [
+              6,
+              3,
+              4
+            ],
+            "hit": true
+          }
+        ],
+        "negatives": [
+          {
+            "id": "passport",
+            "question": "How do I renew my passport?",
+            "found_ids": [
+              19,
+              1,
+              9
+            ]
+          },
+          {
+            "id": "weather",
+            "question": "What is the weather in Tokyo tomorrow?",
+            "found_ids": [
+              14,
+              16,
+              19
+            ]
+          },
+          {
+            "id": "tax",
+            "question": "Can you help me file my income tax return?",
+            "found_ids": [
+              2,
+              15,
+              9
+            ]
+          },
+          {
+            "id": "bread",
+            "question": "How long should I bake sourdough bread?",
+            "found_ids": [
+              16,
+              1,
+              19
+            ]
+          },
+          {
+            "id": "plumbing",
+            "question": "How do I fix a leaking kitchen tap?",
+            "found_ids": [
+              3,
+              13,
+              16
+            ]
+          },
+          {
+            "id": "mortgage",
+            "question": "Where do I apply for a mortgage?",
+            "found_ids": [
+              1,
+              2,
+              19
+            ]
+          }
+        ]
+      },
+      "calibrated": {
+        "threshold": 0.6,
+        "hits": 11,
+        "total": 11,
+        "negative_matches": 0,
+        "negative_total": 6,
+        "cases": [
+          {
+            "id": "family",
+            "question": "How can I invite family members?",
+            "expected_id": 1,
+            "found_ids": [
+              1,
+              19
+            ],
+            "hit": true
+          },
+          {
+            "id": "invoices",
+            "question": "Where can I download invoices?",
+            "expected_id": 2,
+            "found_ids": [
+              2
+            ],
+            "hit": true
+          },
+          {
+            "id": "playback",
+            "question": "Music stops playing. What should I try?",
+            "expected_id": 3,
+            "found_ids": [
+              3,
+              13,
+              10
+            ],
+            "hit": true
+          },
+          {
+            "id": "profile",
+            "question": "How do I change my display name?",
+            "expected_id": 4,
+            "found_ids": [
+              4
+            ],
+            "hit": true
+          },
+          {
+            "id": "offline",
+            "question": "How can I download albums for offline listening?",
+            "expected_id": 5,
+            "found_ids": [
+              5,
+              10,
+              7
+            ],
+            "hit": true
+          },
+          {
+            "id": "security",
+            "question": "How do I enable two-factor authentication?",
+            "expected_id": 9,
+            "found_ids": [
+              9
+            ],
+            "hit": true
+          },
+          {
+            "id": "cancel",
+            "question": "How can I cancel my paid plan?",
+            "expected_id": 11,
+            "found_ids": [
+              11,
+              8,
+              2
+            ],
+            "hit": true
+          },
+          {
+            "id": "semantic-paraphrase",
+            "question": "Terminate subscription",
+            "expected_id": 11,
+            "found_ids": [
+              11
+            ],
+            "hit": true
+          },
+          {
+            "id": "semantic-receipt",
+            "question": "Where can I get a receipt for my subscription?",
+            "expected_id": 2,
+            "found_ids": [
+              2
+            ],
+            "hit": true
+          },
+          {
+            "id": "semantic-nickname",
+            "question": "Where can I edit my nickname?",
+            "expected_id": 4,
+            "found_ids": [
+              4
+            ],
+            "hit": true
+          },
+          {
+            "id": "semantic-audio-quality",
+            "question": "How can I adjust the sound fidelity?",
+            "expected_id": 6,
+            "found_ids": [
+              6,
+              3
+            ],
+            "hit": true
+          }
+        ],
+        "negatives": [
+          {
+            "id": "passport",
+            "question": "How do I renew my passport?",
+            "found_ids": []
+          },
+          {
+            "id": "weather",
+            "question": "What is the weather in Tokyo tomorrow?",
+            "found_ids": []
+          },
+          {
+            "id": "tax",
+            "question": "Can you help me file my income tax return?",
+            "found_ids": []
+          },
+          {
+            "id": "bread",
+            "question": "How long should I bake sourdough bread?",
+            "found_ids": []
+          },
+          {
+            "id": "plumbing",
+            "question": "How do I fix a leaking kitchen tap?",
+            "found_ids": []
+          },
+          {
+            "id": "mortgage",
+            "question": "Where do I apply for a mortgage?",
+            "found_ids": []
+          }
+        ]
+      },
+      "thresholds": [
+        {
+          "threshold": 0.25,
+          "hits": 11,
+          "total": 11,
+          "negative_matches": 6,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.3,
+          "hits": 11,
+          "total": 11,
+          "negative_matches": 6,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.35,
+          "hits": 11,
+          "total": 11,
+          "negative_matches": 6,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.4,
+          "hits": 11,
+          "total": 11,
+          "negative_matches": 6,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.45,
+          "hits": 11,
+          "total": 11,
+          "negative_matches": 5,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.5,
+          "hits": 11,
+          "total": 11,
+          "negative_matches": 3,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.55,
+          "hits": 11,
+          "total": 11,
+          "negative_matches": 2,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.6,
+          "hits": 11,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.65,
+          "hits": 8,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.7,
+          "hits": 8,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.75,
+          "hits": 5,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.8,
+          "hits": 4,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.85,
+          "hits": 0,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.9,
+          "hits": 0,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        },
+        {
+          "threshold": 0.95,
+          "hits": 0,
+          "total": 11,
+          "negative_matches": 0,
+          "negative_total": 6
+        }
+      ]
+    }
+  ]
+}

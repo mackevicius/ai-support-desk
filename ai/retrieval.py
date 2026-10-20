@@ -20,7 +20,7 @@ def terms(text):
     return {word.rstrip('s') for word in re.findall(r'[a-z]{3,}|\d+', text.lower()) if word not in STOP_WORDS}
 
 
-def retrieve(question, articles, method='word_matching', question_embedding=None):
+def retrieve(question, articles, method='word_matching', question_embedding=None, embedding_threshold=0.25):
     active = [article for article in articles if not article.get('retired')]
     if method == 'embeddings':
         def score(article):
@@ -29,7 +29,7 @@ def retrieve(question, articles, method='word_matching', question_embedding=None
                 return 0
             denominator = math.sqrt(sum(value * value for value in vector) * sum(value * value for value in question_embedding))
             return sum(left * right for left, right in zip(vector, question_embedding)) / denominator if denominator else 0
-        threshold = 0.25
+        threshold = embedding_threshold
     else:
         keywords = terms(question)
         def score(article):

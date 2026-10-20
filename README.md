@@ -165,4 +165,5 @@ Tests use a fake AI provider, so they cost nothing.
 
 - [Feature details](docs/features.md): how each screen and rule behaves.
 - [Setup and operations](docs/setup.md): Kubernetes test run, live AI setup, Vercel deployment, quality reports, and test options.
+- [Embedding model trial](docs/embedding-model-trial.md): measured MiniLM versus BGE-small results and a replayable experiment.
 - [Glossary](CONTEXT.md) and [decision records](docs/adr/).

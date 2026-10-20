@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "prepare:embeddings": "node --import tsx scripts/prepare-embeddings.ts",
     "snapshot:embeddings": "node --import tsx scripts/save-embeddings.ts",
+    "trial:embeddings": "node --import tsx scripts/trial-embeddings.ts",
     "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
