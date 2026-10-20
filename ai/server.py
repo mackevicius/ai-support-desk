@@ -175,7 +175,14 @@ def generate_request(authorization, content_length, body_stream):
         if error.code == 429:
             try:
                 code = json.loads(error.read(65536)).get('error', {}).get('code')
-                if code in ('insufficient_quota', 'billing_hard_limit_reached'):
+                if code in (
+                    'insufficient_quota',
+                    'billing_hard_limit_reached',
+                    'credit_balance_exhausted',
+                    'project_spend_limit_exceeded',
+                    'organization_spend_limit_exceeded',
+                    'organization_usage_limit_exceeded',
+                ):
                     return 402, None
             except (ValueError, TypeError, AttributeError):
                 pass

@@ -290,6 +290,47 @@ class FakeProvider(BaseHTTPRequestHandler):
 
 
 class ServiceTests(unittest.TestCase):
+    def test_provider_errors_distinguish_billing_limits_from_transient_failures(self):
+        body = json.dumps({
+            'question': 'How can I resend invitations?',
+            'articles': [{'id': 1, 'title': 'Invitations', 'body': 'Resend invitations from Settings > Team.'}],
+        }).encode()
+        cases = [
+            (429, json.dumps({'error': {'code': code, 'type': 'insufficient_quota'}}).encode(), 402)
+            for code in (
+                'insufficient_quota',
+                'billing_hard_limit_reached',
+                'credit_balance_exhausted',
+                'project_spend_limit_exceeded',
+                'organization_spend_limit_exceeded',
+                'organization_usage_limit_exceeded',
+            )
+        ]
+        cases += [
+            (402, b'', 402),
+            (429, b'{"error":{"code":"rate_limit_exceeded","type":"rate_limit_error"}}', 503),
+            (429, b'{"error":{"code":"slow_down","type":"rate_limit_error"}}', 503),
+            (429, b'{"error":{"code":"unknown_code","type":"insufficient_quota"}}', 503),
+            (429, b'{"error":{"type":"insufficient_quota"}}', 503),
+            (429, b'not json', 503),
+            (429, b'{}', 503),
+            (429, b'null', 503),
+            (429, b'{"error":null}', 503),
+            (429, b'{"error":{"code":[]}}', 503),
+            (503, b'{"error":{"code":"credit_balance_exhausted"}}', 503),
+        ]
+        for provider_status, provider_body, expected_status in cases:
+            with self.subTest(status=provider_status, body=provider_body):
+                error = HTTPError('https://provider.test/v1/chat/completions', provider_status,
+                                  'Provider error', None, io.BytesIO(provider_body))
+                with patch.dict('os.environ', {'AI_SERVICE_SECRET': 'test-secret', 'OPENAI_API_KEY': 'fake-key'}), \
+                        patch('server.urlopen', side_effect=error) as provider:
+                    self.assertEqual(
+                        generate_request('Bearer test-secret', str(len(body)), io.BytesIO(body)),
+                        (expected_status, None),
+                    )
+                    provider.assert_called_once()
+
     def test_live_evaluation_http_route_requires_service_secret_and_returns_dated_results(self):
         from app import app
 
