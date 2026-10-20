@@ -9,3 +9,12 @@ web/playwright-report/
 web/app/quality/live-results.json
 __pycache__/
 web/prototype-tunely.html
+
+/MISSION.md
+/NOTES.md
+/RESOURCES.md
+/learning-records/
+/lessons/
+/reference/
+/assets/course.css
+/assets/lesson.js
