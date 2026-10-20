@@ -53,7 +53,8 @@ assert 'evaluation' not in sys.modules
                            cwd=bundle / 'ai', check=True, capture_output=True, env={'PATH': '/usr/bin:/bin'})
             report = json.loads(output.read_text())
             self.assertEqual(len(report['cases']), 19)
-            self.assertEqual(report['retrieval']['embeddings']['hits'], 8)
+            self.assertEqual(report['retrieval']['embeddings']['hits'], 10)
+            self.assertEqual(report['retrieval']['embeddings']['total'], 11)
 
     def test_saved_report_has_a_date_and_balanced_hand_off_examples(self):
         report = evaluate()
@@ -71,9 +72,16 @@ assert 'evaluation' not in sys.modules
         retrieval = report['retrieval']
         self.assertGreater(retrieval['embeddings']['hit_rate'], retrieval['word_matching']['hit_rate'])
         self.assertEqual(retrieval['selected_method'], 'embeddings')
-        paraphrase = next(case for case in retrieval['cases'] if case['id'] == 'semantic-paraphrase')
-        self.assertFalse(paraphrase['word_matching_hit'])
-        self.assertTrue(paraphrase['embeddings_hit'])
+        for case_id, embedding_hit in (
+            ('semantic-paraphrase', True),
+            ('semantic-receipt', True),
+            ('semantic-nickname', False),
+            ('semantic-audio-quality', True),
+        ):
+            with self.subTest(case=case_id):
+                paraphrase = next(case for case in retrieval['cases'] if case['id'] == case_id)
+                self.assertFalse(paraphrase['word_matching_hit'])
+                self.assertEqual(paraphrase['embeddings_hit'], embedding_hit)
 
     def test_evaluation_uses_the_demo_tunely_knowledge_base(self):
         starter = json.loads((Path(__file__).parent.parent / 'api' / 'starter-data.json').read_text())

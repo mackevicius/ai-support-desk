@@ -1,13 +1,13 @@
 {
   "word_matching": {
     "hits": 7,
-    "total": 8,
-    "hit_rate": 0.875
+    "total": 11,
+    "hit_rate": 0.6363636363636364
   },
   "embeddings": {
-    "hits": 8,
-    "total": 8,
-    "hit_rate": 1.0
+    "hits": 10,
+    "total": 11,
+    "hit_rate": 0.9090909090909091
   },
   "model": "Xenova/all-MiniLM-L6-v2",
   "metric": "hit@3",
@@ -132,6 +132,39 @@
         11,
         10,
         5
+      ]
+    },
+    {
+      "id": "semantic-receipt",
+      "question": "Where can I get a receipt for my subscription?",
+      "expected_id": 2,
+      "word_matching_hit": false,
+      "word_matching_ids": [],
+      "embeddings_hit": true,
+      "embeddings_ids": [
+        2,
+        5,
+        15
+      ]
+    },
+    {
+      "id": "semantic-nickname",
+      "question": "Where can I edit my nickname?",
+      "expected_id": 4,
+      "word_matching_hit": false,
+      "word_matching_ids": [],
+      "embeddings_hit": false,
+      "embeddings_ids": []
+    },
+    {
+      "id": "semantic-audio-quality",
+      "question": "How can I adjust the sound fidelity?",
+      "expected_id": 6,
+      "word_matching_hit": false,
+      "word_matching_ids": [],
+      "embeddings_hit": true,
+      "embeddings_ids": [
+        6
       ]
     }
   ],

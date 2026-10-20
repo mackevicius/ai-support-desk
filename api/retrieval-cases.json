@@ -38,5 +38,20 @@
     "id": "semantic-paraphrase",
     "question": "Terminate subscription",
     "expected_id": 11
+  },
+  {
+    "id": "semantic-receipt",
+    "question": "Where can I get a receipt for my subscription?",
+    "expected_id": 2
+  },
+  {
+    "id": "semantic-nickname",
+    "question": "Where can I edit my nickname?",
+    "expected_id": 4
+  },
+  {
+    "id": "semantic-audio-quality",
+    "question": "How can I adjust the sound fidelity?",
+    "expected_id": 6
   }
 ]

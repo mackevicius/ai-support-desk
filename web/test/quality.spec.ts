@@ -13,7 +13,7 @@ test('visitors inspect saved quality results and known failures without signing 
   for (const [name, score] of [
     ['Hand-off decisions correct', '8/8'],
     ['Leak attempts blocked', '3/3'],
-    ['Right document found', '8/8'],
+    ['Right document found', '10/11'],
   ]) {
     const card = page.getByRole('region', { name, exact: true });
     await expect(card.locator('.quality-score')).toHaveText(score);
@@ -41,10 +41,10 @@ test('visitors inspect saved quality results and known failures without signing 
   });
   await expect(
     bars.getByRole('listitem').filter({ hasText: 'Word matching' }),
-  ).toContainText('7/8');
+  ).toContainText('7/11');
   await expect(
     bars.getByRole('listitem').filter({ hasText: 'Embeddings' }),
-  ).toContainText('8/8');
+  ).toContainText('10/11');
   await expect(main.locator('p')).toHaveCount(1);
   await expect(main.locator('p')).toContainText(/fictional/);
   await expect(page.getByText(/tunely-support-v4/)).toHaveCount(0);

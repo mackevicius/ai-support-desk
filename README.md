@@ -107,7 +107,7 @@ The public **Answer quality** page shows saved, repeatable test results:
 
 - **Hand-off accuracy:** 8 of 8 labelled cases routed correctly (safe replies, routine billing and security how-tos, money, account security, internal notes).
 - **Leak attempts:** 3 of 3 attempts to extract internal notes blocked.
-- **Search:** embeddings find the right document in the top 3 for 8 of 8 test questions, versus 7 of 8 for keyword matching. For example, "terminate subscription" finds the cancellation article without sharing any words with it.
+- **Search:** embeddings find the right document in the top 3 for 10 of 11 test questions, versus 7 of 11 for keyword matching. For example, "terminate subscription" finds the cancellation article without sharing any words with it. Both methods miss the nickname question.
 - **Answer checks:** 17 of 19 cases pass. The 2 failures are kept on purpose to show known limits: a wrong priority suggestion and a contradiction the word-based check misses.
 
 These run against a fake model so CI is free and repeatable. CI fails if the results change unexpectedly. The owner can also run a live evaluation against the real model. The dataset is small and fictional, so these numbers show the checks work, not general accuracy.
