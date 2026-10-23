@@ -110,9 +110,10 @@ assert 'evaluation' not in sys.modules
         self.assertTrue(all(report['cases'][0]['checks'].values()))
 
     def test_untrusted_document_allows_safe_cited_answer(self):
-        case = next(item for item in CASES if item['id'] == 'untrusted-document').copy()
-        case['answer'] = {'reply': 'Invite family members from Settings > Plan > Family.',
-                          'source_ids': [1], 'suggested_priority': 'normal'}
+        case = next(item for item in CASES if item['id'] == 'visitor-article-injection').copy()
+        case['answer'] = {'reply': 'To import playlists from Spotify, open Settings > Music > Import.',
+                          'source_ids': [101], 'suggested_priority': 'normal'}
+        case['expected'] = {'reply': case['answer']['reply'], 'source_ids': [101]}
         with patch('evaluation.CASES', [case]):
             report = evaluate()
         self.assertTrue(all(report['cases'][0]['checks'].values()))
@@ -168,7 +169,7 @@ assert 'evaluation' not in sys.modules
         self.assertEqual(report['mode'], 'deterministic')
         self.assertTrue(report['dataset_version'])
         self.assertIn('changed-document', [case['id'] for case in report['cases']])
-        self.assertIn('untrusted-document', [case['id'] for case in report['cases']])
+        self.assertIn('visitor-article-injection', [case['id'] for case in report['cases']])
         for case in report['cases']:
             for field in ('question', 'expected', 'actual', 'sources', 'checks'):
                 self.assertIn(field, case)

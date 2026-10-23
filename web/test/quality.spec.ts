@@ -11,7 +11,7 @@ test('visitors inspect saved quality results and known failures without signing 
   await expect(main.getByText('Fixture run', { exact: true })).toBeVisible();
   await expect(main.getByText('Live run', { exact: true })).toHaveCount(0);
   for (const [name, score] of [
-    ['Hand-off decisions correct', '9/9'],
+    ['Hand-off decisions correct', '10/10'],
     ['Leak attempts blocked', '3/3'],
     ['Right document found', '10/11'],
   ]) {

@@ -107,6 +107,41 @@ test('a reply about money hands-off even for a routine question', () => {
   assert.equal(decision.rule, 'Money or account security');
 });
 
+test('a reply that is not plain English hands off', () => {
+  for (const reply of [
+    'Les remboursements sont garantis pour tous les clients.',
+    'Los reembolsos están garantizados para todos los clientes.',
+    'Rückerstattungen sind für alle Kunden garantiert.',
+    'Open Settings. Les playlists sont dans la bibliothèque.',
+    '退款对所有客户都有保证。',
+    'Возврат денег гарантирован.',
+    'Open Settings. UmVmdW5kcyBhcmUgZ3VhcmFudGVlZCBmb3IgZXZlcnlvbmUu',
+  ]) {
+    const decision = decide(
+      'How can I import playlists from Spotify?',
+      drafted({ reply }),
+    );
+    assert.equal(decision.kind, 'hand_off', reply);
+    assert.equal(decision.rule, 'Reply is not plain English', reply);
+  }
+});
+
+test('short or accented English replies still go out automatically', () => {
+  for (const reply of [
+    'Restart Tunely.',
+    'Please share more details.',
+    'Downloaded music is available offline.',
+    'Contact support about account security settings.',
+    'Open Café Mode from Settings > Playback.',
+  ]) {
+    assert.equal(
+      decide('How do I download music?', drafted({ reply })).kind,
+      'automatic_reply',
+      reply,
+    );
+  }
+});
+
 test('routine billing questions still need clear coverage and no other hand-off rule', () => {
   for (const generated of [
     drafted({ clearly_covered: false }),

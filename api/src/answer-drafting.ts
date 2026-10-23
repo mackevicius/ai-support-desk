@@ -5,6 +5,18 @@ import { recordHistory } from './ticket-history.js';
 type Generated = Awaited<ReturnType<typeof generateDraft>>;
 type Database = Pick<Pool, 'query'>;
 
+// Words shared by English and other languages ("a", "in", "is") are in neither list.
+const englishWords = new Set(
+  'the and but of for to you your are be can if with from this that it at by not does how when then after before about all any as have has need what which please more our we will'.split(
+    ' ',
+  ),
+);
+const otherLanguageWords = new Set(
+  'le les des du un une est et pour sont dans pas qui avec el los las del una es y para por todos que der das und ist nicht mit sind für ein eine il che di non sono gli het een van zijn niet och att det är för inte ett'.split(
+    ' ',
+  ),
+);
+
 export function decide(
   question: string,
   generated: Generated,
@@ -31,12 +43,23 @@ export function decide(
   );
   const copied = !!draft?.internal_copies.length;
   const covered = draft?.clearly_covered === true && draft.sources.length > 0;
+  const reply = draft?.reply ?? '';
+  const replyWords = reply.toLowerCase().match(/\p{L}+/gu) ?? [];
+  const english = replyWords.filter((word) => englishWords.has(word)).length;
+  const other = replyWords.filter((word) =>
+    otherLanguageWords.has(word),
+  ).length;
+  const notEnglish =
+    /(?=\p{L})\P{Script=Latin}/u.test(reply) ||
+    /[A-Za-z0-9+/=_-]{32,}/.test(reply) ||
+    (other >= 2 && other > english);
   const automatic =
     covered &&
     draft?.requires_team === false &&
     !internal &&
     !copied &&
     !risky &&
+    !notEnglish &&
     !agentReview;
   const outcome =
     generated.error === 'paused'
@@ -75,19 +98,26 @@ export function decide(
                   reason:
                     'A team member needs to check this question before we can answer.',
                 }
-              : agentReview
+              : notEnglish
                 ? {
-                    reason_code: 'agent_review',
-                    rule: 'Agent review required',
+                    reason_code: 'not_english',
+                    rule: 'Reply is not plain English',
                     reason:
-                      'An agent requested a new draft; it needs approval before delivery.',
+                      'A team member needs to check this answer before we can send it.',
                   }
-                : {
-                    reason_code: 'well_supported',
-                    rule: 'Clearly covered by public help articles',
-                    reason:
-                      'A help article clearly covers your question, and it does not need a team member to check it.',
-                  };
+                : agentReview
+                  ? {
+                      reason_code: 'agent_review',
+                      rule: 'Agent review required',
+                      reason:
+                        'An agent requested a new draft; it needs approval before delivery.',
+                    }
+                  : {
+                      reason_code: 'well_supported',
+                      rule: 'Clearly covered by public help articles',
+                      reason:
+                        'A help article clearly covers your question, and it does not need a team member to check it.',
+                    };
   return {
     kind: automatic ? 'automatic_reply' : 'hand_off',
     ...outcome,
