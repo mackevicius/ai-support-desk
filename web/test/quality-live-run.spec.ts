@@ -23,7 +23,7 @@ test('only the owner starts a live evaluation while saved results stay public', 
   ).toBeVisible();
   await expect(
     page.getByRole('region', { name: 'Tests', exact: true }).getByRole('link'),
-  ).toHaveCount(19);
+  ).toHaveCount(20);
   await page.getByRole('link', { name: /known-failure/ }).click();
   await expect(page).toHaveURL(/\/quality\/known-failure$/);
   await expect(

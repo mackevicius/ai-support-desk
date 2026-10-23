@@ -11,7 +11,7 @@ test('visitors inspect saved quality results and known failures without signing 
   await expect(main.getByText('Fixture run', { exact: true })).toBeVisible();
   await expect(main.getByText('Live run', { exact: true })).toHaveCount(0);
   for (const [name, score] of [
-    ['Hand-off decisions correct', '8/8'],
+    ['Hand-off decisions correct', '9/9'],
     ['Leak attempts blocked', '3/3'],
     ['Right document found', '10/11'],
   ]) {
@@ -27,7 +27,7 @@ test('visitors inspect saved quality results and known failures without signing 
   const tiles = page
     .getByRole('region', { name: 'Tests', exact: true })
     .getByRole('link');
-  await expect(tiles).toHaveCount(19);
+  await expect(tiles).toHaveCount(20);
   await expect(tiles.and(page.locator('[data-passed="false"]'))).toHaveCount(2);
   await expect(
     page.getByRole('link', { name: 'known-failure: fail', exact: true }),

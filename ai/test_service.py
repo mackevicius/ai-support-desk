@@ -52,7 +52,7 @@ assert 'evaluation' not in sys.modules
             subprocess.run([sys.executable, 'evaluation.py', '--deterministic', '--output', str(output)],
                            cwd=bundle / 'ai', check=True, capture_output=True, env={'PATH': '/usr/bin:/bin'})
             report = json.loads(output.read_text())
-            self.assertEqual(len(report['cases']), 19)
+            self.assertEqual(len(report['cases']), len(CASES))
             self.assertEqual(report['retrieval']['embeddings']['hits'], 10)
             self.assertEqual(report['retrieval']['embeddings']['total'], 11)
 

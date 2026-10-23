@@ -11,7 +11,8 @@ export function decide(
   agentReview = false,
 ) {
   const draft = generated.draft;
-  const securityProblems = question.replace(
+  const checked = `${question}\n${draft?.reply ?? ''}`;
+  const securityProblems = checked.replace(
     /\bhow (?:do|can|should) (?:i|we) (?:protect (?:my|our) accounts? (?:from|against)|prevent (?:my|our) accounts? from being|prevent|avoid) (?:fraud|hacking|hacked|compromised)\b/gi,
     '',
   );
@@ -20,10 +21,10 @@ export function decide(
       securityProblems,
     ) ||
     /\b(?:charg(?:e|ed|es|ing)|bill(?:ed|s|ing)?|pay(?:ment|ments|ing)?|paid)\b.*\b(?:twice|two times|double|duplicate|unexpected|incorrect|wrong|extra|unrecogni[sz]ed)\b|\b(?:twice|two times|double|duplicate|unexpected|incorrect|wrong|extra|unrecogni[sz]ed)\b.*\b(?:charg(?:e|ed|es|ing)|bill(?:ed|s|ing)?|pay(?:ment|ments|ing)?|paid)\b/i.test(
-      question,
+      checked,
     ) ||
     /\b(?:price|cost)\b.*\bincreas(?:e|ed)\b|\b(?:cannot|can't|unable to)\s+(?:log[ -]?in|sign[ -]?in)\b|\bverification code\b.*\b(?:never|not)\b/i.test(
-      question,
+      checked,
     );
   const internal = draft?.sources.some(
     (source) => source.kind !== 'help_article',

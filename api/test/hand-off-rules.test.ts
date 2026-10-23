@@ -98,13 +98,25 @@ test('problems with money or account security always hand off', () => {
   }
 });
 
+test('a reply about money hands-off even for a routine question', () => {
+  const decision = decide(
+    'How can I import playlists from spotify?',
+    drafted({ reply: 'Refunds are guaranteed for every customer.' }),
+  );
+  assert.equal(decision.kind, 'hand_off');
+  assert.equal(decision.rule, 'Money or account security');
+});
+
 test('routine billing questions still need clear coverage and no other hand-off rule', () => {
   for (const generated of [
     drafted({ clearly_covered: false }),
     drafted({ requires_team: true }),
     drafted({ sources: [internalNote], source_ids: [900] }),
   ]) {
-    assert.equal(decide('How do I cancel my plan?', generated).kind, 'hand_off');
+    assert.equal(
+      decide('How do I cancel my plan?', generated).kind,
+      'hand_off',
+    );
   }
 });
 
