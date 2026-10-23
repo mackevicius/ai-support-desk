@@ -470,6 +470,9 @@ test('a visitor sends a saved draft, inspects a solved sample, and moves to the 
 
 test('Send stays disabled while a reply is in flight', async ({ page }) => {
   await page.goto('/');
+  const hydrated = page.waitForResponse((response) =>
+    response.url().endsWith('/tickets/1/check'),
+  );
   await page.getByRole('button', { name: 'Agent', exact: true }).click();
   await expect(page).toHaveURL(/\/tickets\/1$/);
   let releaseRequest: () => void = () => {};
@@ -484,6 +487,7 @@ test('Send stays disabled while a reply is in flight', async ({ page }) => {
     }
     await route.continue();
   });
+  await hydrated;
 
   try {
     await page
